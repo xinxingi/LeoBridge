@@ -15,6 +15,7 @@ import { FileThemeStore } from './file-theme-store.ts';
 import { seedBundled } from '../themes/bundled.ts';
 import { Site } from '../app/site.ts';
 import { loadRuntimeEnv } from './environment.ts';
+import { sourceSocket } from './source-socket.ts';
 import { readNodeRuntimeConfig,nodeRequest,isTrustedProxy,isLoopback } from './node-request.ts';
 
 process.umask(0o077);
@@ -42,8 +43,9 @@ const connect=(sourceConfig:typeof config)=>()=>new Promise<Socket>((accept,reje
   if(shuttingDown){reject(new BridgeError('SHUTTING_DOWN',503,'服务正在停止。'));return;}
   const url=new URL('/api/public/probe-ws',sourceConfig.baseUrl);url.protocol=url.protocol==='https:'?'wss:':'ws:';
   const source=new WebSocket(url,{headers:{'X-MMwx-Probe-Token':sourceConfig.token},handshakeTimeout:sourceConfig.timeoutMs,maxPayload:12_000_000,followRedirects:false,agent:transport.webSocket});
+  const adapted=sourceSocket(source);
   sources.add(source);source.once('close',()=>sources.delete(source));
-  source.once('open',()=>accept(socket(source)));source.on('error',()=>reject(new BridgeError('UPSTREAM_WS',502,'上游实时连接失败。')));
+  source.once('open',()=>accept(adapted));source.on('error',()=>reject(new BridgeError('UPSTREAM_WS',502,'上游实时连接失败。')));
 });
 async function body(req:IncomingMessage){
   if(req.method==='GET'||req.method==='HEAD')return undefined;
