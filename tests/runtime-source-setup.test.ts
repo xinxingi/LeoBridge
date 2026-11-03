@@ -58,7 +58,10 @@ test('Node empty setup, API configuration, stable IDs, WS replacement and restar
   await new Promise<void>(done=>ws.once('open',done));ws.send(JSON.stringify({type:'subscribe',scope:'all',ids:[]}));
   await Promise.race([frame,delay(4000).then(()=>{throw new Error('no realtime frame')})]);
   const downstreamClosed=new Promise<void>(done=>ws.once('close',()=>done()));snapshot={...snapshot,servers:[{name:'node-one',cpu_pct:77}]};
-  await configure('');await downstreamClosed;assert.ok(closed>0);
+  await configure('');await downstreamClosed;
+  // The peer observes upstream closure asynchronously, independently of downstream close.
+  for(let i=0;i<100&&closed===0;i++)await delay(10);
+  assert.ok(closed>0);
   assert.equal((await store.state()).source!.bindings[0]!.id,identity);
   response=await fetch(origin+'/api/servers');assert.ok((await response.text()).includes('77'));
   await stop(child);child=await launch();assert.equal((await api('source')).version,2);

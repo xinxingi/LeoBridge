@@ -2,12 +2,7 @@ name: leobridge
 
 services:
   app:
-    image: ${LEOBRIDGE_IMAGE:-leobridge:local}
-    build:
-      context: ../..
-      dockerfile: deploy/docker/Dockerfile
-      args:
-        NODE_IMAGE: ${NODE_IMAGE:-node:24-bookworm-slim}
+    image: ${LEOBRIDGE_IMAGE:?Set the published Docker Hub image and version}
     restart: unless-stopped
     init: true
     read_only: true

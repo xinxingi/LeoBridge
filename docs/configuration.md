@@ -46,26 +46,28 @@ Token 不在任何管理响应或主题响应中回显。同一主控留空保�
 
 ## 协议与数据语义
 
-CFSM版本站提供`/api/config`、`/api/servers`、`/api/server?id=…`、`/api/history/all?id=…&hours=…`、`/api/ws`；默认前台旗帜和系统图标本地构建。Komari版本站提供JSON-RPC 2.0 `POST /api/rpc2`及同路径WebSocket，包含节点、公开设置、最新状态、近期观察、系统历史与Ping历史所需方法，并提供有限只读REST兼容。协议按安装版本选择，不把CFSM JSON直接交给Komari。single根站的`/admin`提供管理；版本/预览站拒绝`/admin`和`/manage`；管理接口用于主题和桥接数据源配置，不包含主控服务器管理或远程控制。
+CFSM版本站提供`/api/config`、`/api/servers`、`/api/server?id=…`、`/api/history/all?id=…&hours=…`、`/api/ws`；静态资源由各安装包提供。Komari版本站提供JSON-RPC 2.0 `POST /api/rpc2`及同路径WebSocket，包含节点、公开设置、最新状态、近期观察、系统历史与Ping历史所需方法，并提供有限只读REST兼容。协议按安装版本选择，不把CFSM JSON直接交给Komari。single根站的`/admin`提供管理；版本/预览站拒绝`/admin`和`/manage`；管理接口用于主题和桥接数据源配置，不包含主控服务器管理或远程控制。
 
 - 统一模型采用byte、B/s、百分比；CFSM容量转MiB，速度仍B/s；Komari接收字节，主题自行格式化。缺失为未知值，实际0保留；上游故障、过期和服务器离线分开。在线时间戳是桥接观察时间，启动时间由uptime推算。
 - 系统及Ping真实支持1h/6h/24h/7d；其他已开放小范围从上一级真实聚合裁剪。七天依据`history_days`及真实`range=7d`验证，不足七天不补齐。
 - 1h/6h/24h/7d源桶宽为300/600/1800/7200秒，小范围不会提高源精度。Ping -1为无数据，明确100%丢包且无有效RTT才可表示超时。未采样不造点，历史容量不拿当前值回填。
-- boot/计费/网卡累计口径不混用；累计/月流量、计费、Swap、GPU、磁盘IO、进程数等未确认能力不填造，显示“—”或空图。
-- 本次源端9个Ping目标，显式配置最多8个；未选目标不展示，不能声称全目标兼容。
+- boot/计费/网卡累计口径不混用；累计/月流量、计费、Swap、GPU、磁盘IO、进程数等未确认能力不填造，协议返回未知或明确不支持；商店主题如何显示需单独验收。
+- 源端Ping目标数量可变，显式配置最多8个；未选目标不展示，不能声称全目标兼容。
 
 ## 实时、缓存与故障
 
 快照缓存3秒并合并并发；历史缓存30秒、最多100项，命中后仍校验身份。源HTTP总预算30秒，收到响应头前的传输失败最多重试一次，HTTP错误/响应体失败不重试；历史前后校验使客户端预算为110秒。缓存revision防止迟到HTTP覆盖名称隐藏、移除服务器或关闭探针等新策略。单访客WS断线不清空其他协议的有效缓存或中断其历史查询；源数据无效和身份冲突仍使旧状态失效。失败不伪造成功或为旧数据重标采样时间。
 
-CFSM实时订阅和Komari RPC实时请求各自管理协议生命周期；关闭页面释放连接和定时器。CFSM上游重连1至30秒退避，45秒无新帧标过期并重连，10分钟更新连接。本次原生完整帧曾约31秒，不能承诺每5秒到达；15秒无完整帧时每5秒检查并通过共享HTTP缓存回退，成功才发真实观察，恢复后停止轮询。Komari主题每5秒读取最新状态并根据源观察时间去重。WebSocket open或HTTP回退均不等于原生WS新采样已验证。
+CFSM实时订阅和Komari RPC实时请求各自管理协议生命周期；关闭页面释放连接和定时器。CFSM上游重连1至30秒退避，45秒无新帧标过期并重连，10分钟更新连接。本次原生完整帧曾约31秒，不能承诺每5秒到达；15秒无完整帧时每5秒检查并通过共享HTTP缓存回退，成功才发真实观察，恢复后停止轮询。历史验收的Komari适配包每5秒读取最新状态并根据源观察时间去重；商店原包的轮询行为由各主题决定。WebSocket open或HTTP回退均不等于原生WS新采样已验证。
 
-Node最多50个访客实时连接；Workers无跨isolate共享限流，DO当前仅用于管理状态事务。适用于小规模监控，公开高流量站需先评估连接、请求、CPU和费用。
+Node最多50个访客实时连接；Workers无跨isolate共享限流，DO保存管理状态事务及私有数据源配置。适用于小规模监控，公开高流量站需先评估连接、请求、CPU和费用。
 
 `BRIDGE_DEV_PROXY`用于Node开发环境的HTTP与WebSocket代理。Wrangler CLI使用代理不代表workerd出站使用同一代理；需要本机代理时使用Node。生产环境应配置目标机器可访问的网络，不要沿用开发机的127.0.0.1代理地址。
 
 
-## Node VPS运行参数
+## Node运行参数
+
+本地用`./leobridge.sh start`后台运行，修改监听或环境配置后用`./leobridge.sh restart`生效，完整命令见[本地部署](deployment/local.md)。脚本以项目根目录解析相对路径，不保存启动命令里的临时环境变量；需要重启后沿用的参数请放在私有配置文件中。
 
 | 参数 | 行为 |
 | --- | --- |
@@ -76,9 +78,11 @@ Node最多50个访客实时连接；Workers无跨isolate共享限流，DO当前�
 | `BRIDGE_ENV_FILE` | 显式私有Node dotenv路径；环境变量优先。proxy/direct默认不读.dev.vars，路径错误拒绝启动 |
 | `BRIDGE_ASSETS_DIR` | 内置资源目录，默认dist/bundled；不是主题状态目录 |
 
+域名解析由部署者在DNS服务商处配置，域名对应的站点反代、HTTPS终止、证书及续期交给nginx或Caddy。LeoBridge只监听HTTP端口；origin配置用于来源校验和链接生成，不用于管理域名或证书。反向代理需保留Host、Origin、Cookie及WebSocket升级头。
+
 proxy要求三个origin全部HTTPS，并拒绝BRIDGE_DEV_PROXY。Host必须匹配配置范围；Forwarded和X-Forwarded-Host不用于生成站点地址。只有受信任代理的单一X-Forwarded-Proto=https和单IP X-Real-IP有效。HTTP与WS一致校验，客户端伪造CF-Connecting-IP无法绕过登录节流。
 
-Docker的.env由Compose解析并传环境，systemd的runtime.env由Node解析；不要将两个不同用途的文件直接互换。不要同时让多个解析器重复解释引号和JSON。完整示例见[VPS部署](deployment/vps.md)。
+Docker的.env由Compose解析并传环境，本地部署的私有dotenv文件由Node解析；不要将两个不同用途的文件直接互换。不要同时让多个解析器重复解释引号和JSON。完整示例见[Docker部署](deployment/docker.md)。
 
 ## 管理密码持久化
 
@@ -86,4 +90,4 @@ Docker的.env由Compose解析并传环境，systemd的runtime.env由Node解析�
 
 Node将随机盐和PBKDF2-SHA256摘要（600,000次）写入状态目录的 `state.json`，不保存新密码明文，公开状态API排除凭据和会话。备份和迁移必须包含整个状态目录；删除状态目录会同时丢失主题管理状态和已更改的密码，不能作为常规改密方法。已有部署在升级后首次登录也需完成一次改密；不重置其自定义初始密码。
 
-根入口直接提供当前主题资源，不跳转版本域；根资源禁用长期缓存。启用/回退主题时关闭根入口旧实时连接，刷新后使用新协议。版本/预览主机仍绑定安装版本；自定义公网预览需配置相应DNS和反向代理，且可共用同一应用端口。direct校验配置的精确Host，不信任转发身份头；建议正式部署使用HTTPS的proxy模式。
+single模式根入口直接提供当前主题资源，不跳转版本域；根资源禁用长期缓存。启用/回退主题时关闭根入口旧实时连接，刷新后使用新协议。版本/预览主机仍绑定安装版本；自定义公网预览需配置相应DNS和反向代理，且可共用同一应用端口。direct校验配置的精确Host，不信任转发身份头；建议正式部署使用HTTPS的proxy模式。

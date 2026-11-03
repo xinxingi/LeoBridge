@@ -1,49 +1,37 @@
 # ADR 001：双生态主题与协议边界
 
-2026-11-03更新：当前产品不内置第三方主题，历史适配副本及专用构建依赖已移除，来源/许可/补丁档案移至`docs/references/retired-themes/`。默认空实例显示安装引导；商店分准备查看和主动确认安装，确认绑定会话、固定版本、包摘要及文案版本，15分钟有效并持久化。许可信息缺失不单独拒绝，不作授权判断；安全检查、用户决定和实际兼容性各自独立。已有安装与指针保留。下文保留此前设计及验收背景，涉及内置包的描述不再是当前交付方式。
+决定日期：2026-11-02；更新：2026-11-03。状态：已实现，本地检查范围见[兼容清单](../research/compatibility.md)，Workers云端尚未验收。
 
-日期：2026-11-02。状态：已实现并完成本地整合，云端待部署验收。
+## 产品与协议
 
-## 产品决定
+LeoBridge提供轻量管理后台和CFSM、Komari两个商店，采集及服务器管理留在妙妙屋X。单站同一时刻启用一个主题，资源与protocolProfile一起固定。默认不交付第三方主题，已有安装保留；历史适配包的来源和补丁见[档案](../references/retired-themes/README.md)。
 
-LeoBridge提供独立轻量管理站和CFSM、Komari两个商店入口，服务器管理与采集留在妙妙屋X。一个站点同一时刻启用一个主题；主题资源与对应protocolProfile一起固定，安装、预览、启用和回退无需修改代码或重新部署。
+上游访问、中立模型、两套输出协议及运行时分离，依赖矩阵以[架构约定](../development/architecture.md)为准。两协议共享上游事实、身份检查及缓存，不互相转换响应。历史仍由妙妙屋X保存；不新增Agent、完整主控后端或指标数据库。
 
-内置CFSM默认前台及经过适配的Komari官方默认前台（`bed58b5`）是当前真实浏览器验收对象；旧Adhesive Note安装继续保留其协议。官方前台许可为NOASSERTION，来源与本地使用依据见第三方声明。商店可发现、包可安装、协议已验证兼容是三个独立状态；第三方包安装后默认`unverified`，明确确认启用也不自动提升兼容状态。当前v0.1不承诺所有第三方主题兼容。
+源接口缺少不可变ID，历史查询前后核对整组身份顺序只能发现部分竞态。历史读取期间不得调整公开列表或身份属性，不能静默映射歧义节点。Token、源地址及身份选择条件保留在服务端。
 
-## 数据与协议边界
+## 安装与发布
 
-- `src/upstream/client.ts`只访问配置的妙妙屋源，负责鉴权、超时、快照缓存；`src/core/identity.ts`负责公开描述信息到稳定桥接ID的显式绑定，不把历史下标当永久ID。
-- `src/core/model.ts`使用字节、字节/秒、百分比和nullable状态；CFSM和Komari序列化各自独立，不把CFSM响应当作Komari输入。源端历史仍由妙妙屋保存，不新增采集或历史数据库。
-- `src/protocols/cfsm/service.ts`、`cfsm.ts`及`realtime.ts`提供CFSM展示契约；`src/protocols/komari/service.ts`、`komari.ts`及`komari-realtime.ts`提供Komari只读JSON-RPC与有限REST/实时契约。适配器共享上游事实与缓存，各自处理输出和连接生命周期。
-- `src/app/protocols.ts`创建协议应用，`src/app/site.ts`按不可变安装主机选择profile并分发静态资源、API和WS；Node/Worker只处理运行时监听、网络和存储。
-- `web/themes/cfsm/`和`web/themes/komari/`是独立前台应用副本，保留来源、许可证、原始文件摘要及补丁清单；固定参考目录不作为应用运行，也未修改参考源码。
+1. `src/themes/catalog.ts`分别解析两个官方目录，将main解析为具体SHA，缓存60秒；刷新重新解析。安装携带用户看到的catalogRevision。
+2. `src/themes/package.ts`将CFSM构建分支固定到commit，按目录SHA-256核验Komari ZIP。检查来源、路径、配额、清单及静态资源引用，只接收静态包，不执行包内构建或服务端代码。
+3. 管理员先查看固定版本、来源和许可文件，再主动确认。准备记录绑定会话、版本、摘要及文案版本，15分钟有效并持久化；安装重新下载核验，最终提交再校验记录。缺少许可明确提示，不作授权判断。
+4. 资产完整写入后才公布安装元数据，失败不替换active。记录生态、来源、版本、许可资料、确认信息、入口、兼容状态及profile。
+5. 启用与回退要求最新generation，冲突时刷新后重试。发现、安装与实测兼容独立；确认安装或启用都不自动将unverified提升为verified。
 
-源端公开接口缺稳定ID的约束仍存在。历史查询前后核对整组身份与顺序只能检测部分竞态；历史读取期间不得调整公开列表或身份属性。上游Token、源地址及绑定仅在服务端，主题只能看到已授权公开的数据。
+包限制与用户操作统一维护在[主题管理](../themes.md)，不在本ADR重复维护数值。尚无主题配置编辑、卸载及孤立资源清理UI，Komari raw/redirect配置拒绝，managed使用默认值。
 
-## 安装与版本路由
+## 路由与隔离
 
-1. `catalog.ts`分别读取官方CFSM、Komari索引。管理站将最新main解析为具体SHA后展示，缓存60秒，显式刷新重新解析；安装携带用户看到的catalogRevision。固定参考索引仍可用于可复现离线测试。
-2. `theme-package.ts`将CFSM分支固定到commit，对Komari ZIP检查目录SHA-256、清单身份、路径、压缩结构及许可证。只允许静态资产，不执行任意包内构建或服务端代码。静态引用能检查到的缺文件/外部依赖拒绝，动态引用仍需浏览器验证。
-3. 安装资产完整写入后才发布元数据；文件清单、大小、类型及入口必须一致。失败保留active指针。每个安装记录ecosystem、来源、版本、许可证、入口、compatibility和protocolProfile。
-4. 不可变地址采用`t-<32hex>.<displayDomain>`；预览采用`p-<32hex>.<previewOrigin主机名>`。使用独立主机保留主题原生绝对`/api`和`/assets`路径，避免靠正则改写压缩JS或让两种协议共用含糊路径。
-5. 根展示入口307到当前active版本并保留路径/查询。启用与回退使用generation前置条件，冲突要求刷新。已打开的旧版本页面和WS继续对应旧资源/协议；不会中途把Komari响应发送给CFSM连接。回退只改变active/previous指针。
+- 默认single模式在同一端口以`/`展示、`/admin/`管理。根入口直接供应活动主题，切换或回退关闭根入口旧实时连接，刷新后加载新版本。同源路径不隔离第三方脚本，只应启用可信主题。
+- isolated模式使用独立管理源，展示根入口307跳转当前版本。不可变展示地址为`t-<32hex>.<displayDomain>`，预览为`p-<32hex>.<previewOrigin主机名>`；旧版本页面及WS继续使用原协议。
+- 版本主机保留主题原有绝对`/api`、`/assets`路径，避免改写压缩JS。预览与管理始终使用不同主机名，不能只靠端口或路径隔离。
+- 会话为host-only、HttpOnly、SameSite=Strict；HTTPS下single使用`__Secure-`及`Path=/admin`，isolated使用`__Host-`及`Path=/`。写操作验证Origin/CSRF，退出或改密撤销会话；初始凭据和强制改密见[配置参考](../configuration.md#管理密码持久化)。
+- 展示Basic Auth与管理认证独立。主题CSP限制同源资源和连接，阻断iframe、Worker/Service Worker及外部依赖；静态校验不能代替浏览器验收。预览可读取已授权展示数据。
 
-当前静态包限制为16,000,000字节压缩包、32,000,000字节展开总量、8,000,000字节单文件、1200条目和200倍压缩比。没有主题配置编辑UI：Komari raw/redirect拒绝，managed仅保留当前默认行为。没有卸载或孤立资产自动清理界面，运行维护不能删除仍被active/previous或旧页面使用的包。
+## 存储与运行时
 
-## 存储决定
+Node使用`FileThemeStore`保存不可变资源，以临时文件原子替换及文件锁提交状态。按单站、单进程、单副本部署，不能据文件锁推断可多主机共享写入。状态包括安装、active/previous、管理会话、密码摘要及后台保存的数据源凭据，须整体私有备份。
 
-Node采用`FileThemeStore`：默认`work/theme-store`，资源不可变写入，元数据临时文件原子rename，通过文件锁串行化不同进程的写入。管理会话也在该私有状态中，不能提交或公开。
+Workers在R2中为每个安装保存一个拼接静态对象，按offset/size读取资源；单站`ThemeCoordinator` Durable Object以事务管理元数据、会话及数据源配置。`ASSETS`仅提供自有管理界面和空主题清单。DO用于管理一致性，R2/DO不保存指标历史，不引入D1。
 
-Workers采用`WorkerThemeStore`：每个安装在R2中保存一个拼接静态包对象，以元数据中的offset/size进行range读取单个资源。单站`ThemeCoordinator` Durable Object以事务串行化安装元数据、active/previous版本及管理会话。内置包和可信管理UI由`ASSETS`引导初始化。单对象包写入减少大量小资源初始化请求，不改变每资源路径与MIME。
-
-DO的依据是主题管理事务与会话一致性，不是预先建设监控数据库；没有D1，DO/R2不持久化指标或历史。目前也没有跨isolate共享上游实时连接或全局限流，公开规模需按实际请求、CPU、连接、R2读写及DO成本评估。
-
-Wrangler本地模拟已验证内置初始化和R2/DO路径。云R2资源尚未创建，DO迁移及正式部署尚未执行；本地模拟、dry-run均不能替代云端数据持久性、网络与成本验收。
-
-## 管理与第三方脚本隔离
-
-管理源使用独立主机名，HTTPS会话cookie为`__Host-`、Secure、HttpOnly、SameSite=Strict且无Domain；本机HTTP使用单独名称。非GET管理操作要求准确Origin及CSRF，退出删除服务端会话；无密码时拒绝登录。展示站Basic Auth与管理认证独立，上游Token不参与管理登录。
-
-展示与预览使用不同主机，均不能共享管理cookie、管理脚本或安装权限。管理源不嵌入第三方主题；主题资源CSP限定同源资源与连接，禁止iframe、Worker/Service Worker及外部网络依赖，不开放带凭据通配CORS。第三方脚本仍能读取用户授权给该展示站的数据，预览不是不读取数据的沙盒。
-
-Node默认管理8786、展示8787、预览8789且仅回环HTTP；Workers本地模拟采用不同主机同一8787端口。正式Worker部署必须覆盖根展示源、`*.displayDomain`、管理源和`*.previewOrigin`的DNS、路由及TLS，不能仅靠路径隔离。云资源、域名与部署需明确目标环境和授权；当前仍为待部署验收。
+本地workerd曾验证历史双主题R2/DO路径；这不证明当前版本云端运行、持久性、网络或费用已验收。Workers没有跨isolate共享实时连接或全局限流，目标域名、TLS、R2/DO及额度的验证留待[Workers后续适配](../deployment/workers.md)，不作为当前交付要求。

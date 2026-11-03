@@ -1,5 +1,7 @@
 # LeoBridge adaptations of Adhesive Note
 
+Historical archive: the application copy and its build scripts have been removed. Paths below refer to that former copy, not files in this archive.
+
 Source: stqfdyr/komari-theme-adhesive-note v1.0.0, immutable commit `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914`. Original MIT license and THIRD_PARTY attribution are retained; `UPSTREAM.json` records copied files' pre-edit SHA-256. The actual paper layout, rendering, assets, routes and charts originate from that theme. No official komari-web code (which lacks a repository license) was copied into this application.
 
 Local changes:
@@ -12,6 +14,4 @@ Local changes:
 - Removed the theme's link to a nonexistent Komari administration UI. It runs only the read-only public protocol; LeoBridge administration is on a separate origin.
 - Existing self-hosted fonts and Twemoji flags are retained. Full OFL/CC-BY text is added in licenses/. Source license URLs were retrieved 2026-11-02: Google Fonts `ofl/architectsdaughter/OFL.txt`, lxgw/LxgwWenKai `OFL.txt`, jdecked/twemoji `LICENSE-GRAPHICS`; these texts are supplemental attribution, not evidence of a different asset origin.
 
-Build: `node scripts/build-komari.mjs`, output `dist/komari-public/`. The generated manifest is `LeoBridgeAdhesiveNote`, version `1.0.0-leobridge.1`, so adapted bytes are not confused with the official ZIP digest. Original author and source URL remain intact. The build includes licenses and provenance files. It never runs upstream font generators or installs dependencies in reference material.
-
-Checks: `node node_modules/typescript/bin/tsc --noEmit -p komari-frontend/tsconfig.app.json`; `node --test komari-frontend/tests/*.test.mjs`. Unit/build success does not mean real-browser or cloud acceptance.
+The historical manifest was `LeoBridgeAdhesiveNote`, version `1.0.0-leobridge.1`; its adapted bytes differ from the official ZIP. Current builds do not recreate it. See the [consumer contract](../../../research/komari-frontend.md) for the applicable protocol and historical behavior.

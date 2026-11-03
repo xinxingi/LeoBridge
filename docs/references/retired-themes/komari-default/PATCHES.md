@@ -1,5 +1,7 @@
 # LeoBridge adaptations of the official Komari frontend
 
+Historical archive: the application copy and build scripts have been removed. The following describes the former adapted package, not the current store package.
+
 Source: komari-monitor/komari-web, commit `bed58b589da63232a17681b1dbaed9eab2423078` (radix). Original file hashes are in UPSTREAM.json. Upstream has no standalone LICENSE; see SOURCE_TERMS.md and the unmodified UPSTREAM_README.md. The root project's MIT license does not cover this frontend.
 
 - Copied the public homepage, node cards/table, details, metric dashboard, public contexts and their static dependencies. Administration, terminal, installation/recovery routes and PWA registration are excluded from the public entry point.

@@ -1,4 +1,6 @@
-/** Build first: docker build -f deploy/docker/Dockerfile -t leobridge:acceptance .
+/** Historical two-theme acceptance: requires fixture installations and initialized admin state.
+ * Build: docker build -f deploy/docker/Dockerfile -t leobridge:acceptance .
+ * For --amd64: add --platform linux/amd64 and use -t leobridge:acceptance-amd64.
  * Runs only an isolated local Docker Compose project with synthetic data.
  * Does not read .dev.vars, connect to a real controller, publish images, or deploy.
  */
@@ -21,7 +23,7 @@ const project = `leobridge-acceptance-${Date.now()}`;
 const originalVolume = `${project}-store`, restoredVolume = `${project}-restored`;
 const reservationName = `${project}-old-ip`;
 assert.ok(process.argv.slice(2).every(argument => argument === '--amd64'), 'Only --amd64 is supported');
-const image = process.argv.includes('--amd64') ? 'leobridge:vps-test-amd64' : 'leobridge:acceptance';
+const image = process.argv.includes('--amd64') ? 'leobridge:acceptance-amd64' : 'leobridge:acceptance';
 const records = [], commands = [];
 const admin = 'admin.container.test', display = 'monitor.container.test';
 const password = 'Synthetic-container-admin-password';

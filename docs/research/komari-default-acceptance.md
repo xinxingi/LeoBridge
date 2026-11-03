@@ -1,6 +1,6 @@
 # Komari 官方默认前台验收
 
-2026-11-03，本地 Node 环境。上游为 `komari-monitor/komari-web@bed58b589da63232a17681b1dbaed9eab2423078`（radix）；应用源码在 `web/themes/komari-default/`。官方视觉与实际组件经过适配，不是仿制页面。来源、原始文件摘要、原始 README、补丁及未明确的再分发许可分别保留；不将其标为 MIT。
+2026-11-03，本地 Node 环境。上游为 `komari-monitor/komari-web@bed58b589da63232a17681b1dbaed9eab2423078`（radix）；当时应用副本位于 `web/themes/komari-default/`，现已移除；来源及补丁见[档案](../references/retired-themes/README.md)。官方视觉与实际组件经过适配，不是仿制页面。来源、原始文件摘要、原始 README、补丁及未明确的再分发许可分别保留；不将其标为 MIT。
 
 ## 实际验证
 
@@ -23,7 +23,7 @@
 - 内置包 `LeoBridgeKomariDefault / bed58b5-leobridge.1`，profile `komari-default-bed58b5`。图表核心真实验收构建ID为 `37d855810ac9a83d91948a952fb7d687`；收尾调整页面宽度、空地区统计、失败摘要和丢包率标签后，最终构建ID为 `ce7cd6be070789c50997c0d216992c4b`，合成卡片/表格、故障恢复及手机检查覆盖最终包。
 - 使用 `common:getNodes`、最新状态及公开指标查询；历史从中立数据层独立投影，保留字节、B/s、百分比、源桶时间与null。
 - 不提供完整Komari后台、Agent、远程控制、任意日期区间或任意聚合算法；不推算逐包计数/分位数。源桶丢包率使用独立百分比曲线。
-- 已安装的旧便签纸版本继续保留；升级后从管理页面启用新的官方默认包。商店原包与此内置适配包不同，其他版本仍需实际验证。
+- 当时保留旧便签纸安装并新增官方适配包；当前构建已不再提供这两个包，已有安装仍保留。商店原包与此内置适配包不同，其他版本仍需实际验证。
 - 官方源码没有独立LICENSE。README说明二次开发和主题打包，不能将该说明改写成MIT或声称已解决公开再分发范围。
 
 上述验收阶段未执行VPS更新、镜像发布、GitHub推送或Cloudflare部署。构建存在上游大体积JS警告（主JS约1.44MB，gzip约447KB），不代表性能或大规模并发验收。

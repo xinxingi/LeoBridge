@@ -8,6 +8,7 @@
 !tsconfig.json
 !scripts/
 !scripts/build-*.mjs
+!scripts/local-service.ts
 !src/
 !src/**
 !web/

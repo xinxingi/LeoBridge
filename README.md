@@ -24,13 +24,13 @@ LeoBridge 只读访问妙妙屋X探针 API，提供独立的 CFSM / Komari 展�
 
 ## 快速开始
 
-本地运行需要 Node.js 24 和 pnpm 11.25.0。在项目目录执行：
+普通用户选择[预编译运行包](docs/deployment/local.md)或[Docker Hub 镜像](docs/deployment/docker.md)。目前公开发行包和镜像尚未发布；发布后，下载对应平台运行包并解压，在目录中执行：
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm build
-pnpm dev
+./leobridge.sh start
 ```
+
+运行包自带运行环境，无需安装 Node 或 pnpm，启动时不会下载依赖或编译。默认后台运行，关闭终端后继续运行。用 `./leobridge.sh stop`、`restart`、`status`、`logs` 管理服务；加 `--quiet` 可隐藏正常输出。
 
 1. 打开 [管理后台](http://127.0.0.1:8787/admin/)，首次使用 `admin` / `admin` 登录，按提示设置新密码并重新登录。
 2. 进入「数据源设置」，填写妙妙屋X主控地址和探针 Token。点击「检查连接」，核对节点身份与 Ping 目标后保存。
@@ -39,13 +39,13 @@ pnpm dev
 
 已有配置、管理密码和节点身份继续保留；首次在后台保存数据源后，以后台配置为准。高级配置及旧环境变量用法见[配置参考](docs/configuration.md)。
 
-部署到服务器推荐使用 VPS / Node.js，也可使用 Docker 从源码构建。域名、HTTPS、访问控制、持久化及升级步骤见 [VPS 部署指南](docs/deployment/vps.md)。Cloudflare Workers 为[实验性运行方式](docs/deployment/workers.md)，尚未完成云端部署验证。
+需要修改代码或自行制作产物时，使用[开发构建指南](docs/development/build.md)。Cloudflare Workers仍为后续适配方向。
 
 ## 文档与贡献
 
 | 需要做什么 | 文档 |
 | --- | --- |
-| 部署、备份或升级 | [VPS 部署](docs/deployment/vps.md) |
+| 部署、备份或升级 | [Docker Hub镜像](docs/deployment/docker.md) · [运行包](docs/deployment/local.md) |
 | 配置数据源、节点身份和访问策略 | [配置参考](docs/configuration.md) |
 | 安装、预览、启用或回退主题 | [主题管理](docs/themes.md) |
 | 了解兼容范围与数据限制 | [兼容说明](docs/research/compatibility.md) |

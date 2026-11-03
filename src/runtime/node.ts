@@ -20,7 +20,7 @@ let env,config,management,runtime;
 try{
   env=await loadRuntimeEnv(process.env);config=readConfig(env,true);management=managementConfig(env);runtime=readNodeRuntimeConfig(env);
   if(runtime.mode!=='local'&&(config.access==='local'||!management.password))throw new Error('Production requires explicit display access and independent admin credentials.');
-}catch{console.error('LeoBridge configuration is invalid. See docs/configuration.md and docs/deployment/vps.md.');process.exit(1);}
+}catch{console.error('LeoBridge configuration is invalid. See docs/configuration.md and docs/deployment/local.md.');process.exit(1);}
 const transport=createDevTransport(env.BRIDGE_DEV_PROXY,config.timeoutMs);setGlobalDispatcher(transport.http);
 if(transport.proxied)console.log('Local development proxy enabled for HTTP and WebSocket.');
 const assets=resolve(env.BRIDGE_ASSETS_DIR||'dist/bundled');
@@ -48,6 +48,7 @@ async function body(req:IncomingMessage){
   return chunks.length?Buffer.concat(chunks):undefined;
 }
 const ports=runtime.mode!=='local'||management.routing==='single'?[runtime.port]:[...new Set([management.displayOrigin,management.adminOrigin,management.previewOrigin].map(origin=>Number(new URL(origin).port||80)))];
+let listening=0;
 const servers=ports.map(port=>{
   const server=createServer(async(req,res)=>{
     let response:Response;
@@ -73,11 +74,15 @@ const servers=ports.map(port=>{
     }catch{connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');}
   });
   server.once('error',()=>{console.error('LeoBridge listener failed; check address and port availability.');process.exitCode=1;shutdown();});
-  server.listen(port,runtime.host,()=>console.log(`LeoBridge ${runtime.mode} listener: ${runtime.host}:${port}`));return server;
+  server.listen(port,runtime.host,()=>{
+    console.log(`LeoBridge ${runtime.mode} listener: ${runtime.host}:${port}`);
+    if(++listening===ports.length&&!shuttingDown)process.send?.({type:'ready',admin:management.adminOrigin+(management.routing==='single'?'/admin/':'/')});
+  });return server;
 });
 console.log(`Display: ${management.displayOrigin}; administration: ${management.adminOrigin}${management.routing==='single'?'/admin/':'/'}`);
 function shutdown(){
   if(shuttingDown)return;shuttingDown=true;
+  if(process.connected)process.disconnect();
   for(const session of sessions)session.close();
   for(const source of sources)source.terminate();
   wss.close();for(const server of servers)server.close();
@@ -86,3 +91,5 @@ function shutdown(){
   const deadline=setTimeout(()=>{for(const ws of wss.clients)ws.terminate();for(const server of servers)server.closeAllConnections();},5000);deadline.unref();
 }
 process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
+// The local manager owns this process. Do not leave an orphan writer if it dies.
+if(process.connected)process.on('disconnect',shutdown);

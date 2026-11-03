@@ -1,6 +1,6 @@
 # 架构与目录约定
 
-LeoBridge保持一个TypeScript项目、一个pnpm锁文件。推荐在VPS上部署单实例Node服务；Worker入口为实验性实现。按现有职责分层，不引入Monorepo框架、依赖注入容器或新数据库。
+LeoBridge保持一个TypeScript项目、一个pnpm锁文件。用户交付采用Docker Hub镜像及自带Node的运行包两种方式；Worker入口保留供后续适配。按现有职责分层，不引入Monorepo框架、依赖注入容器或新数据库。
 
 ## 数据流与组合
 
@@ -38,9 +38,11 @@ flowchart LR
 
 `pnpm check:architecture`用TypeScript AST读取import、export、import type和字面量动态import，拒绝跨层/跨生态依赖、缺失模块、依赖环和无法检查的动态模块加载。Node内置模块及Node专用传输依赖仅允许在runtime；Worker入口会递归检查可达依赖，避免误带Node能力。它是项目内约束检查，不代替类型、行为测试或供应链审查。
 
-## VPS运行边界
+## Node运行与反向代理边界
 
-反向代理由部署环境选择。应用约定HTTPS来源、Host及可信客户端IP的传递方式，不依赖nginx或Caddy的产品接口；仓库部署模板是该约定的一种配置示例。
+本地Node部署负责应用进程、HTTP监听及持久化，不管理域名或证书。DNS由部署者配置，站点反向代理、HTTPS终止和证书生命周期交给nginx或Caddy。应用约定HTTPS来源、Host及可信客户端IP的传递方式，不依赖nginx或Caddy的产品接口；仓库部署模板是该约定的一种配置示例。
+
+`leobridge.sh`只运行已有产物，使用包内Node或开发者已有Node，不下载、安装依赖或构建。`scripts/local-service.ts`编译为`dist/local-service.js`，使用Node内置模块管理后台进程、日志和启停；控制记录位于`work/local`，不混入主题业务存储。`scripts/package-local.ts`只供开发/发行阶段使用，按白名单打包Node、应用、生产依赖及许可证，省略源码、开发工具和私有状态；构建流程见[开发构建指南](build.md)。管理进程通过IPC等待Node入口全部端口就绪；应用在管理IPC断开时退出，避免遗留写入者。回环控制端口使用私有令牌，不按持久化PID直接终止进程；控制逻辑不进入Worker或协议层。
 
 Node默认single路由只开一个监听端口，local使用回环HTTP，direct用于显式配置的临时HTTP测试，proxy用于HTTPS反代。旧local+isolated配置保留多端口行为。只有允许的代理IP/CIDR可以提供单值`X-Forwarded-Proto=https`和`X-Real-IP`。Host必须匹配配置源或有效版本域；HTTP与WS使用同一验证函数。来自客户的Forwarded/X-Forwarded-Host/CF-Connecting-IP不能改变路由或绕过管理节流。
 
@@ -49,7 +51,7 @@ Node默认single路由只开一个监听端口，local使用回环HTTP，direct�
 ## 修改与验证
 
 - 修改中立事实/单位时跑两个协议的转换和历史测试；身份约束不得因主题变化而降级。
-- 修改主题源码时保留来源、许可证和PATCHES；最终兼容结论需要浏览器验收。目录搬迁必须检查构建输出和资源摘要。
+- 修改主题包处理或协议时，保留固定来源、摘要及兼容限制；最终兼容结论需要实际浏览器验收。历史主题档案不参与构建，目录搬迁仍须核对资源摘要。
 - 修改Node入口时验证HTTP/WS反代、Origin/CSRF、客户端地址和持久化重启；反代模拟不等于真实nginx/TLS或VPS通过。
 - 新上游适配实现中立模型；新主题生态实现独立协议。不得让协议之间通过互相调用响应转换来“兼容”。
 - 运行`pnpm check`；Worker维护另运行`pnpm build:worker`。CI和本地实际结果分别记录。

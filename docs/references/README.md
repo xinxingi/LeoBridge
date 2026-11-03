@@ -1,6 +1,6 @@
 # 开发资料索引
 
-整理日期：2026-11-02（Asia/Shanghai）。先读本文与兼容清单，再按需查原文。
+参考材料固定于2026-11-02，索引复查于2026-11-03（Asia/Shanghai）。接口结论以[兼容清单](../research/compatibility.md)和实际消费者审计为准，再按需查原文。
 
 ## 已保存资料
 
@@ -14,10 +14,11 @@ CFSM 固定提交：`609cc0b0998793510453be8eadced2064b28ad7d`。
 | CFSM 许可证 | [MIT](upstream/cfsm-LICENSE) | 代码和资料复用署名 |
 | CFSM 关键源码 | [路径清单](source-map.md) | 对照实际消费者和服务端实现 |
 | 妙妙屋X探针说明 | [人工整理摘录](mmwx-probe-notes.md) | 输入数据契约；不是完整原文或实测响应 |
+| 历史主题来源 | [档案索引](retired-themes/README.md) | 已移除适配包的来源摘要、补丁及许可；不参与构建 |
 | 文件来源与摘要 | [manifest.json](manifest.json) | 固定 URL、Git blob SHA 与本地 SHA-256 |
 | 合成输入样例 | [样例说明](../fixtures/README.md) | 在线、离线、零值、隐藏名称及身份歧义；不是实测响应 |
 
-CFSM 原始文件按固定提交下载并保持内容不变。源码目录只有选定参考文件，**不是完整可运行的前端副本**。API 文档中的历史修订日期和版本号可能落后于当前提交，应交叉核验。
+CFSM 原始文件按固定提交下载并保持内容不变。原文中的相对链接基于上游仓库，未保存的文件应从[固定源码树](https://github.com/huilang-me/CF-Server-Monitor/tree/609cc0b0998793510453be8eadced2064b28ad7d)查看，不属于LeoBridge本地导航。源码目录只有选定参考文件，**不是完整可运行的前端副本**。API 文档中的历史修订日期和版本号可能落后于当前提交，应交叉核验。
 
 妙妙屋X页面于本次通过浏览器读取，页面标记最近更新为 2026-10-31。命令行抓取返回 HTTP 403，因此保存的是标明来源的人工整理摘录，未声称持有完整网页快照或 OpenAPI 定义。
 
@@ -26,10 +27,9 @@ CFSM 原始文件按固定提交下载并保持内容不变。源码目录只有
 ## 在线入口
 
 - [妙妙屋X探针 API](https://miaomiaowux.com/docs/probe-api/)
-- [妙妙屋X外置探针](https://miaomiaowux.com/docs/install-external-probe)：本次未审阅，鉴权与外置部署实现前补读。
 - [CFSM固定源码树](https://github.com/huilang-me/CF-Server-Monitor/tree/609cc0b0998793510453be8eadced2064b28ad7d)
-- [CFSM主题市场](https://github.com/huilang-me/CFSM-Theme-Store)：主题规范指向此项目，本次未选取第三方主题。
-- [Komari](https://github.com/komari-monitor/komari)：已审计公开RPC2/WS及主题契约，固定版本、当前官方默认前台及旧Adhesive Note来源、许可边界见[双生态调查](../research/theme-ecosystems.md)及[Komari前台](../research/komari-frontend.md)。
+- [CFSM主题市场](https://github.com/huilang-me/CFSM-Theme-Store)：CFSM商店目录来源，格式与固定审计版本见[双生态调查](../research/theme-ecosystems.md)。
+- [Komari](https://github.com/komari-monitor/komari)：已审计公开RPC2/WS及主题契约，固定版本、历史官方默认前台及Adhesive Note适配包来源、许可边界见[双生态调查](../research/theme-ecosystems.md)及[Komari前台](../research/komari-frontend.md)。
 
 ## 维护方式
 

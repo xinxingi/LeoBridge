@@ -12,6 +12,6 @@
 | [src/handlers/dashboard.js](upstream/cfsm-source/src/handlers/dashboard.js) | CFSM公开REST响应实现 | [查看](https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/src/handlers/dashboard.js) |
 | [wrangler.toml](upstream/cfsm-source/wrangler.toml) | 原项目Worker配置；不可直接当桥接器配置使用 | [查看](https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/wrangler.toml) |
 
-下一轮审计需继续定位：HTTP封装与认证、前台路由及入口、容量/网速格式化、图表组件、静态构建脚本、锁文件和flags/os-icons资源。通过固定提交的目录树定位后下载，不猜路径，也不宣称当前副本是完整前端。
+默认前台的后续审计结果见[消费者契约](../research/frontend-contract.md)。此处仅索引留存片段；完整历史复制清单及补丁见[来源档案](retired-themes/README.md)，不代表当前仍分发或构建前台。
 
 以上材料适用上游 MIT 许可证。更新时统一更新提交、文件及 manifest。
