@@ -62,7 +62,7 @@ node scripts/verify-release.mjs image leobridge:local
 
 默认基础镜像为`node:24-bookworm-slim`。需要可复现发行时，用`--build-arg NODE_IMAGE=<已审查的tag@sha256摘要>`固定基础镜像，记录源码提交、锁文件和镜像摘要。`.dockerignore`使用白名单，私有配置、原始响应、Git历史及参考源码不进入构建上下文。
 
-自行构建的镜像也可使用同一Compose配置：在配置文件中将`LEOBRIDGE_IMAGE`设为`leobridge:local`，其余选项默认即可本机访问，按需调整应用端口和访问策略后，运行`docker compose up -d --pull never`。Compose本身没有build步骤；普通部署文档使用发布的Docker Hub固定版本镜像。
+自行构建的镜像也可使用同一Compose配置：在`compose.yaml`中将`services.app.image`改为`leobridge:local`，其余选项默认即可本机访问，按需调整应用端口和访问策略后，运行`docker compose up -d --pull never`。Compose本身没有build步骤；普通部署文档使用发布的Docker Hub固定版本镜像。
 
 ## 验证与发布状态
 

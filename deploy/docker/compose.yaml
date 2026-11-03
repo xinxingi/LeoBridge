@@ -2,7 +2,7 @@ name: leobridge
 
 services:
   app:
-    image: ${LEOBRIDGE_IMAGE:?Set the published Docker Hub image and version}
+    image: staractive/leobridge:0.2.0
     restart: unless-stopped
     init: true
     read_only: true

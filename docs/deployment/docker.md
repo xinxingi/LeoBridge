@@ -8,18 +8,20 @@ Docker Compose只启动LeoBridge应用，映射HTTP端口并保存数据卷。�
 
 准备Docker Engine和Docker Compose v2，从[v0.2.0 Release](https://github.com/xinxingi/LeoBridge/releases/tag/v0.2.0)下载`compose.yaml`和`docker.env.example`到新建的部署目录。也可从同一Git标签的`deploy/docker/compose.yaml`和`deploy/docker/.env.example`取得模板，后者在Release附件中重命名为`docker.env.example`。不要用开发分支模板覆盖已有部署配置。
 
-模板下载受GitHub仓库权限控制，私有仓库需先登录有访问权限的账号；拉取Docker镜像不需要GitHub账号。升级时编辑原`.env`，不要重新复制示例覆盖配置。
+模板下载受GitHub仓库权限控制，私有仓库需先登录有访问权限的账号；拉取Docker镜像不需要GitHub账号。运行参数按需编辑原`.env`，不要重新复制示例覆盖配置；镜像版本直接在`compose.yaml`的`services.app.image`中修改。
 
 ```sh
 cd /path/to/leobridge-deploy
 cp docker.env.example .env
 chmod 600 .env
-# 编辑 .env，设置 LEOBRIDGE_IMAGE=staractive/leobridge:0.2.0
+# 检查 compose.yaml 中 services.app.image 为 staractive/leobridge:0.2.0。
 docker compose config --quiet
 docker compose pull app
 docker compose up -d --no-build
 docker compose ps
 ```
+
+当前仓库的Compose直接指定`image: staractive/leobridge:0.2.0`，镜像地址不放入`.env`。已经发布的v0.2.0附件不会随仓库修改自动更新；使用该旧附件时，将`services.app.image`的变量表达式替换为上述镜像地址，并删除`.env`中旧的镜像变量。
 
 ### 首次打开后台
 
@@ -90,7 +92,7 @@ docker compose up -d
 
 ## 升级与回退
 
-1. 记录当前应用镜像ID/固定标签、配置和完整卷备份。将`.env`中的`LEOBRIDGE_IMAGE`改为已发布的新版本，执行`docker compose pull app`。
+1. 记录当前应用镜像ID/固定标签、配置和完整卷备份。将`compose.yaml`中`services.app.image`改为已发布的新版本或摘要，执行`docker compose pull app`。
 2. 新镜像拉取完成后停止旧app，执行`docker compose up -d --no-build`，以同一持久卷单实例启动新镜像。不能仅替换`dist/node.js`而继续使用过期管理资源或依赖。
 3. 完成下方验收后保留回退窗口。启动不导入第三方主题，也不更改已有启用版本；在管理站显式审查并切换。
 4. 应用回退时停止新容器，恢复先前镜像标签、对应配置，并在状态格式或内容发生变化时恢复同批次完整卷备份。当前没有跨版本状态迁移/降级保证。管理界面的“回退主题”只改当前主题，不能回退应用代码或存储格式。

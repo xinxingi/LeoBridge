@@ -15,7 +15,7 @@
 
 ## 正常发版
 
-1. 在`develop`更新`package.json`中的版本号、使用说明及升级注意事项，通过PR合入`main`。
+1. 在`develop`更新`package.json`中的版本号，同步`deploy/docker/compose.yaml`中`services.app.image`的镜像版本，更新使用说明及升级注意事项，通过PR合入`main`。Release会复制该标签的部署模板，模板镜像必须与本次发行版本一致；镜像地址不在`.env`中配置。
 2. 确认`main`对应提交的`check`通过。该检查包含架构、类型、全部测试、Node构建、构建产物运行时、Worker打包和实际容器启动/改密/重启验证。Worker打包不是云部署。
 3. 给选定的`main`提交创建带注释的标签并推送。以下以**下一次补丁版本`0.2.1`**为例，先确保该版本已写入`package.json`并合入main；不要重复使用已发布的`v0.2.0`。远端名按自己的`git remote -v`结果填写，远端名称与分支名称不同：
 
