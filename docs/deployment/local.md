@@ -2,21 +2,33 @@
 
 普通用户下载对应系统、架构的运行包，解压后直接启停。包内带有Node、应用、生产依赖和管理资源，目标机器无需安装Node、npm或pnpm，也不需要编译。
 
-**发布状态：目前尚未在GitHub Releases公开发布运行包。** 以下约定用于运行包交付和使用；发布后请选版本附件中的`leobridge-<版本>-<系统>-<架构>.tar.gz`，不要下载GitHub自动生成的`Source code`源码归档作为运行包。自行构建见[开发文档](../development/build.md)。
+从[GitHub Release v0.2.0](https://github.com/xinxingi/LeoBridge/releases/tag/v0.2.0)下载Linux运行包及对应`.sha256`附件。不要下载GitHub自动生成的`Source code`源码归档作为运行包。其他版本从[版本列表](https://github.com/xinxingi/LeoBridge/releases)选择；macOS自行构建见[开发文档](../development/build.md)，当前发布流程不生成macOS或Windows运行包。
 
 ## 获取和启动
 
-1. 选择与目标机器系统、架构匹配的运行包，同时下载该包的`.sha256`文件。Linux官方Node运行时需要glibc；Alpine等环境建议使用Docker镜像。
-2. 校验下载摘要，例如Linux用`sha256sum -c <包名>.tar.gz.sha256`，macOS用`shasum -a 256 -c <包名>.tar.gz.sha256`，确认通过后解压。
-3. 进入解压后的目录执行：
+Release附件受GitHub仓库权限控制。私有仓库需先登录有访问权限的账号，匿名访问可能返回404；无需把GitHub凭据配置到LeoBridge中。
+
+先用`uname -m`确认目标机器架构：
+
+| 系统输出 | v0.2.0附件 |
+| --- | --- |
+| `x86_64` | `leobridge-0.2.0-linux-x64.tar.gz`及同名`.sha256` |
+| `aarch64` / `arm64` | `leobridge-0.2.0-linux-arm64.tar.gz`及同名`.sha256` |
+
+Linux官方Node运行时需要glibc；Alpine等环境建议使用[Docker镜像](docker.md)。将运行包和对应校验文件下载到同一目录，以下以x64为例，arm64替换两处包名及目录名：
 
 ```sh
+sha256sum -c leobridge-0.2.0-linux-x64.tar.gz.sha256
+tar -xzf leobridge-0.2.0-linux-x64.tar.gz
+cd leobridge-0.2.0-linux-x64
 ./leobridge.sh start
 ```
 
+只有摘要校验成功才继续解压启动。用macOS核对Linux包摘要时可用`shasum -a 256 -c`，但Linux包不能在macOS直接运行。
+
 启动只使用包内已有程序，不联网下载运行环境、不安装依赖或构建。缺少文件或运行时不匹配会报错，此时应重新下载完整的匹配包。无参数运行`./leobridge.sh`等同于start；若执行权限未保留，可用`bash leobridge.sh start`。
 
-程序默认后台运行，关闭终端后继续运行，只监听本机`127.0.0.1:8787`。首次启动不需要上游凭据或第三方主题。需要Bash；当前打包目标为Linux/macOS x64/arm64，实际可用平台以已发布附件及验收记录为准。
+程序默认后台运行，关闭终端后继续运行，只监听本机`127.0.0.1:8787`。首次启动不需要上游凭据或第三方主题，需要Bash。远程服务器部署时，先通过SSH隧道访问后台，或按下方反代章节配置访问入口；在自己电脑直接打开127.0.0.1不会访问到远端服务。
 
 ## 初始化
 
@@ -25,7 +37,7 @@
 3. 在CFSM或Komari商店查看来源和许可信息，主动确认安装，预览后启用。
 4. 打开[展示首页](http://127.0.0.1:8787/)，检查节点、详情、历史及实时更新。
 
-本地预览使用`*.localhost`，需浏览器支持回环解析。默认同源展示与管理，只应启用可信主题；需要独立源时按[配置参考](../configuration.md)使用isolated模式。运行包可直接启动，但连接数据源和浏览主题商店仍需相应网络。
+默认single预览使用同一站点的`?__preview=<安装ID>`，不需要额外子域名。默认同源展示与管理，只应预览和启用可信主题；需要独立源时按[配置参考](../configuration.md)使用isolated模式，本地isolated模式才需要浏览器支持`*.localhost`回环解析。运行包可直接启动，但连接数据源、安装主题及按需加载资源仍需相应网络。
 
 ## 后台管理
 

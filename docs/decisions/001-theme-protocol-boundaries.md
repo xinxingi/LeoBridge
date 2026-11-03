@@ -13,20 +13,20 @@ LeoBridge提供轻量管理后台和CFSM、Komari两个商店，采集及服务�
 ## 安装与发布
 
 1. `src/themes/catalog.ts`分别解析两个官方目录，将main解析为具体SHA，缓存60秒；刷新重新解析。安装携带用户看到的catalogRevision。
-2. `src/themes/package.ts`将CFSM构建分支固定到commit，按目录SHA-256核验Komari ZIP。检查来源、路径、配额、清单及静态资源引用，只接收静态包，不执行包内构建或服务端代码。
+2. `src/themes/package.ts`将CFSM构建分支固定到commit，按目录SHA-256核验Komari ZIP。检查来源、路径、配额和清单，外部/缺失资源引用作为诊断。CFSM保存固定资源索引并按需取文件，Komari保存原ZIP静态资源；不执行包内构建或服务端代码。
 3. 管理员先查看固定版本、来源和许可文件，再主动确认。准备记录绑定会话、版本、摘要及文案版本，15分钟有效并持久化；安装重新下载核验，最终提交再校验记录。缺少许可明确提示，不作授权判断。
 4. 资产完整写入后才公布安装元数据，失败不替换active。记录生态、来源、版本、许可资料、确认信息、入口、兼容状态及profile。
 5. 启用与回退要求最新generation，冲突时刷新后重试。发现、安装与实测兼容独立；确认安装或启用都不自动将unverified提升为verified。
 
-包限制与用户操作统一维护在[主题管理](../themes.md)，不在本ADR重复维护数值。尚无主题配置编辑、卸载及孤立资源清理UI，Komari raw/redirect配置拒绝，managed使用默认值。
+包限制与用户操作统一维护在[主题管理](../themes.md)，不在本ADR重复维护数值。尚无主题配置编辑、卸载及孤立资源清理UI，Komari raw/redirect配置声明可保存但不执行，managed使用默认值。
 
 ## 路由与隔离
 
 - 默认single模式在同一端口以`/`展示、`/admin/`管理。根入口直接供应活动主题，切换或回退关闭根入口旧实时连接，刷新后加载新版本。同源路径不隔离第三方脚本，只应启用可信主题。
 - isolated模式使用独立管理源，展示根入口307跳转当前版本。不可变展示地址为`t-<32hex>.<displayDomain>`，预览为`p-<32hex>.<previewOrigin主机名>`；旧版本页面及WS继续使用原协议。
-- 版本主机保留主题原有绝对`/api`、`/assets`路径，避免改写压缩JS。预览与管理始终使用不同主机名，不能只靠端口或路径隔离。
+- single预览使用同源`?__preview=<安装ID>`，注入请求/导航适配，按查询参数及同源Referer绑定版本，不改变原包字节。isolated预览与管理使用不同主机名。两种模式均保留主题的`/api`、`/assets`路径，不改写压缩JS；同源预览不能当作安全隔离。
 - 会话为host-only、HttpOnly、SameSite=Strict；HTTPS下single使用`__Secure-`及`Path=/admin`，isolated使用`__Host-`及`Path=/`。写操作验证Origin/CSRF，退出或改密撤销会话；初始凭据和强制改密见[配置参考](../configuration.md#管理密码持久化)。
-- 展示Basic Auth与管理认证独立。主题CSP限制同源资源和连接，阻断iframe、Worker/Service Worker及外部依赖；静态校验不能代替浏览器验收。预览可读取已授权展示数据。
+- 展示Basic Auth与管理认证独立。主题CSP允许HTTPS外部资源/连接、HTTPS iframe及同源/blob Worker，管理页策略独立。静态诊断和CSP不能代替浏览器验收或代码审计。预览可读取已授权展示数据。
 
 ## 存储与运行时
 

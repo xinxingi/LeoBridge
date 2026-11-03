@@ -44,7 +44,7 @@ CFSM核心和商店仓库标识MIT；这不自动赋予每个主题、截图、�
 
 固定核心实现也接受顶层数组或单个主题对象，LeoBridge的官方源解析器使用文档的版本化形状。核心将download和sha256同时存在视为**可安装**，下载后校验ZIP SHA-256，检查根manifest的short/version与目录匹配。SHA-256只能证明拿到目录指定字节，不能证明作者身份、无恶意代码或协议兼容；当前目录没有签名或统一能力矩阵。
 
-包是ZIP：根 `komari-theme.json`，默认页面 `dist/index.html`，资源可以通过 `/themes/:id/*path` 访问。manifest字段为name、short、description、version、author、url、preview、configuration。configuration有managed/raw/redirect，managed声明string/number/select/switch等设置项；raw是管理配置HTML，redirect指向站内路径。**raw配置HTML不能放进LeoBridge可信管理源执行。** LeoBridge拒绝raw/redirect，managed保留默认值，尚无配置编辑UI。
+包是ZIP：根 `komari-theme.json`，默认页面 `dist/index.html`，资源可以通过 `/themes/:id/*path` 访问。manifest字段为name、short、description、version、author、url、preview、configuration。configuration有managed/raw/redirect，managed声明string/number/select/switch等设置项；raw是管理配置HTML，redirect指向站内路径。**raw配置HTML不能放进LeoBridge可信管理源执行。** 当前LeoBridge保留raw/redirect声明但不执行其配置界面，managed保留默认值，尚无配置编辑UI。
 
 核心有 `/api/admin/theme/market/sources|catalog|install` 等管理员接口，但这是部署实例内部的管理API，不能当成公共商店API，也无需运行Komari后端来复用目录。Komari核心MIT；本次商店固定目录树未列出LICENSE，目录及每个主题的授权需要分别记录，不能套用核心许可证。
 
@@ -52,4 +52,4 @@ CFSM核心和商店仓库标识MIT；这不自动赋予每个主题、截图、�
 
 Komari公开消费者使用JSON-RPC 2.0 HTTP/WS及部分REST；旧式`/api/clients`文本get与CFSM subscribe/batchUpdate不同。固定核心WS曾把CPU真0变为0.01，LeoBridge保留真实0。具体方法、单位与偏差见[Komari协议](komari-protocol.md)，CFSM对应[消费者契约](frontend-contract.md)。
 
-目录只提供发现与包定位。安装器分别核验固定来源、摘要、路径、大小、类型和静态引用，不执行构建脚本；协议兼容必须使用实际前台验证。可安装、已安装、已验证兼容分别记录，不能由目录出现或HTTP成功推断。资源、管理隔离及存储方案以ADR和架构文档为准。
+目录只提供发现与包定位。安装器核验固定来源、摘要、路径及大小，静态引用和外部依赖只作诊断，不要求全部资源自包含，也不执行构建脚本；协议兼容必须使用实际前台验证。可安装、已安装、已验证兼容分别记录，不能由目录出现或HTTP成功推断。资源、管理隔离及存储方案以ADR和架构文档为准。

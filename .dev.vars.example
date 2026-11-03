@@ -25,5 +25,5 @@
 # 可选Node开发代理；先确认端口支持HTTP CONNECT，Worker不使用此项。
 # BRIDGE_DEV_PROXY=http://127.0.0.1:7897
 
-# 主控地址、Token、节点身份及 Ping 目标在后台“数据源设置”检查并“保存并应用”。
+# 主控地址、Token、节点身份及 Ping 目标在后台“设置 → 数据源”检查并“保存并应用”。
 # Docker配置使用 deploy/docker/.env.example。
