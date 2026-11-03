@@ -1,0 +1,141 @@
+{
+  "retrieved_on": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "scope": "Reference material only; not a runnable vendored application",
+  "files": [
+    {
+      "file": "docs/references/upstream/cfsm-API.md",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "API.md",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/API.md",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/API.md?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "c8e4a3865759ff6c85ce6cccd40fc67e29b8cb02",
+      "sha256": "4d3fae10f2f47617de6ea8d6bfcd7c2c45142894a363b760c09b7cf0361cd0bf",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-LICENSE",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "LICENSE",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/LICENSE",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/LICENSE?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "89d35e567e707373d1cee5b24016c3454096e722",
+      "sha256": "89b8f89a15bf1eeea3292b91b832fc87afea696d4fba37b291cdff52dde7a572",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-README.md",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "README.md",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/README.md",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/README.md?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "e65641a260f139182046f35141a6adacbb2f3e37",
+      "sha256": "2bd29bdd0acf49b239f0d02c9f6bda477888ce6b8be981ba50e9128acc4c86dc",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-source/package.json",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "package.json",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/package.json",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/package.json?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "c5595fb296155d33dd82636f8e23b5b89464d7b9",
+      "sha256": "a35e8b4ea28f64ee4bda923992236be4c92bdfc9b553313d2ac453c7428430d3",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-source/src/durable/MetricsBroadcaster.js",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "src/durable/MetricsBroadcaster.js",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/src/durable/MetricsBroadcaster.js",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/src/durable/MetricsBroadcaster.js?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "53dee682653f6f2cdc968c379836691069c48044",
+      "sha256": "852275381af740bc9610dc8729a3da36b0e2b372bbef5eaddb429105c4192dd0",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-source/src/frontend/utils/api.js",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "src/frontend/utils/api.js",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/src/frontend/utils/api.js",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/src/frontend/utils/api.js?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "f546d3fca3cf903094242b60a44186c4a5542470",
+      "sha256": "f67a3e322b8052dde8866a0b136a91f7a9e62efc17d4ef74a97937df6e20572d",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-source/src/frontend/views/Dashboard.vue",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "src/frontend/views/Dashboard.vue",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/src/frontend/views/Dashboard.vue",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/src/frontend/views/Dashboard.vue?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "df01b7f2b76fd193320519dee0607ddd752a6905",
+      "sha256": "d28f67aec5e0f2633c8f3113911b419a32f79af840a4e247122427e3ff6cfa24",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-source/src/frontend/views/ServerDetail.vue",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "src/frontend/views/ServerDetail.vue",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/src/frontend/views/ServerDetail.vue",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/src/frontend/views/ServerDetail.vue?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "5c33e79da7adb7453ab4c95320b9f557327b6aae",
+      "sha256": "8cd2872ecdf304dde780ac8bc59f762f2693f2da4f877b0056a8f10fba125c21",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-source/src/handlers/dashboard.js",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "src/handlers/dashboard.js",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/src/handlers/dashboard.js",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/src/handlers/dashboard.js?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "1bedf5639fa38a024a0ae2577873041c4d8752a6",
+      "sha256": "46acdb27a1b3705de21e2ed294c03c485328ad1babe1ef8166736e7fcc0c1803",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-source/wrangler.toml",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "wrangler.toml",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/wrangler.toml",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/wrangler.toml?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "f56dc26f209dc2824a42c3b8bfc2118ffb65a972",
+      "sha256": "be0543394ba8c31f267ab10c312e59ff5c625872c0da11b806c1f31c6baca8ca",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    },
+    {
+      "file": "docs/references/upstream/cfsm-theme-develop.md",
+      "repository": "huilang-me/CF-Server-Monitor",
+      "commit": "609cc0b0998793510453be8eadced2064b28ad7d",
+      "upstream_path": "theme-develop.md",
+      "source_url": "https://github.com/huilang-me/CF-Server-Monitor/blob/609cc0b0998793510453be8eadced2064b28ad7d/theme-develop.md",
+      "download_url": "https://api.github.com/repos/huilang-me/CF-Server-Monitor/contents/theme-develop.md?ref=609cc0b0998793510453be8eadced2064b28ad7d",
+      "git_blob_sha": "b6c1abfb8e62654f4c8a2153b4517fc581c2f655",
+      "sha256": "28c8d4e31dac3eb65870c67cfc9b0437dcf00a8ee463fb10657b6c78a602cbd6",
+      "license": "MIT; see docs/references/upstream/cfsm-LICENSE"
+    }
+  ],
+  "web_notes": [
+    {
+      "url": "https://miaomiaowux.com/docs/probe-api/",
+      "page_updated_on": "2026-10-31",
+      "file": "docs/references/mmwx-probe-notes.md",
+      "capture": "Human-curated technical notes from browser-visible page; not verbatim or observed API response"
+    }
+  ],
+  "mmwx_public_repository": {
+    "repository": "iluobei/miaomiaowuX",
+    "commit": "dda3d699a4669e281cf98575057146169dc0e72d",
+    "note": "Tree inspected; no probe server implementation found. Not a pin for docs website or deployed master."
+  }
+}

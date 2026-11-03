@@ -1,0 +1,95 @@
+name: leobridge
+
+services:
+  app:
+    image: ${LEOBRIDGE_IMAGE:-leobridge:local}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-bookworm-slim}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    environment:
+      NODE_ENV: production
+      BRIDGE_NODE_MODE: proxy
+      BRIDGE_LISTEN_HOST: 0.0.0.0
+      BRIDGE_LISTEN_PORT: '8787'
+      BRIDGE_TRUSTED_PROXIES: ${PROXY_IPV4:-172.30.84.2}/32
+      BRIDGE_THEME_STORE: /data/theme-store
+      BRIDGE_ADMIN_ORIGIN: https://${BRIDGE_ADMIN_HOST:?Set the independent admin hostname}
+      BRIDGE_DISPLAY_ORIGIN: https://${BRIDGE_DISPLAY_HOST:?Set the display root hostname}
+      BRIDGE_DISPLAY_DOMAIN: ${BRIDGE_DISPLAY_DOMAIN:?Set the version hostname suffix}
+      BRIDGE_PREVIEW_ORIGIN: https://${BRIDGE_PREVIEW_HOST:?Set the preview hostname suffix}
+      MMWX_BASE_URL: ${MMWX_BASE_URL:?Set the authorized upstream origin}
+      MMWX_PROBE_TOKEN: ${MMWX_PROBE_TOKEN:?Set the authorized probe token}
+      BRIDGE_ACCESS: ${BRIDGE_ACCESS:?Explicitly choose public or private}
+      BRIDGE_TITLE: ${BRIDGE_TITLE:-LeoBridge}
+      BRIDGE_USERNAME: ${BRIDGE_USERNAME:-}
+      BRIDGE_PASSWORD: ${BRIDGE_PASSWORD:-}
+      BRIDGE_ADMIN_USERNAME: ${BRIDGE_ADMIN_USERNAME:-admin}
+      BRIDGE_ADMIN_PASSWORD: ${BRIDGE_ADMIN_PASSWORD:?Set an independent admin password}
+      BRIDGE_BINDINGS: ${BRIDGE_BINDINGS:?Set reviewed stable server bindings}
+      BRIDGE_PING_TARGETS: ${BRIDGE_PING_TARGETS:?Set a JSON object, optionally empty}
+    volumes:
+      - theme-store:/data/theme-store
+    # No host port: only the reverse proxy can reach the listener from outside.
+    networks: [backend]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8787/healthz',{signal:AbortSignal.timeout(2000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  nginx:
+    image: ${NGINX_IMAGE:-nginx:1.28-alpine}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      # Substitute public BRIDGE_ settings only; preserve nginx $host etc.
+      NGINX_ENVSUBST_FILTER: '^BRIDGE_'
+      BRIDGE_ADMIN_HOST: ${BRIDGE_ADMIN_HOST:?Set admin hostname}
+      BRIDGE_DISPLAY_HOST: ${BRIDGE_DISPLAY_HOST:?Set display hostname}
+      BRIDGE_DISPLAY_DOMAIN: ${BRIDGE_DISPLAY_DOMAIN:?Set version hostname suffix}
+      BRIDGE_PREVIEW_HOST: ${BRIDGE_PREVIEW_HOST:?Set preview hostname suffix}
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${TLS_DIRECTORY:?Set the existing certificate directory}:/etc/nginx/tls:ro
+    networks:
+      backend:
+        ipv4_address: ${PROXY_IPV4:-172.30.84.2}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+volumes:
+  theme-store:
+    name: ${THEME_STORE_VOLUME:-leobridge-theme-store}
+
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${BACKEND_SUBNET:-172.30.84.0/24}
+          # Keep dynamic app/container assignments away from nginx's fixed IP.
+          ip_range: ${BACKEND_DYNAMIC_RANGE:-172.30.84.128/25}

@@ -1,0 +1,25 @@
+name: check
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  local-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test:runtime
+        env:
+          BRIDGE_TEST_BUILT_NODE: '1'
+      - run: pnpm build:worker # Deferred adapter remains buildable; no deployment.
+      - run: docker build --tag leobridge:ci --file deploy/docker/Dockerfile .

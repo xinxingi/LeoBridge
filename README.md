@@ -4,7 +4,7 @@
 
 LeoBridge 只读访问妙妙屋X探针 API，转换服务器状态、历史和实时协议，并提供独立的主题管理站。采集、服务器管理和历史保存仍由妙妙屋X负责，无需安装新的 Agent。
 
-**当前优先支持 Linux VPS 部署。** 两个内置主题已完成本地真实数据与浏览器验收；VPS 镜像、HTTPS/WSS 和服务器运维验收将在测试服务器提供后完成。Cloudflare Workers 保留为后续方向，本轮不部署。
+**当前优先支持 Linux VPS 部署。** 两个内置主题已完成本地真实数据与浏览器验收；本机 Docker/nginx 合成验收，以及 VPS 私有实例的真实接口、实时更新、重启和备份恢复检查已通过；该 VPS 的浏览器验收与公网 DNS/TLS 仍待完成。Cloudflare Workers 保留为后续方向，本轮不部署。
 
 ## 可以做什么
 
@@ -75,7 +75,7 @@ docs/       用户指南、开发说明、决策与研究证据
 | 安装、预览与切换主题 | [主题管理](docs/themes.md) |
 | 排查历史、身份或实时问题 | [排障](docs/troubleshooting.md) |
 | 开发、测试或贡献代码 | [贡献指南](CONTRIBUTING.md) · [架构](docs/development/architecture.md) |
-| 查看实际通过与未验证项 | [开发进度](docs/progress.md) · [双生态验收](docs/research/dual-store-acceptance.md) |
+| 查看实际通过与未验证项 | [开发进度](docs/progress.md) · [容器验收](docs/research/container-acceptance.md) · [双生态验收](docs/research/dual-store-acceptance.md) |
 | 了解源码来源与许可 | [第三方声明](THIRD_PARTY_NOTICES.md) |
 
 ## 许可与反馈

@@ -1,0 +1,29 @@
+# Build context is an allowlist. Local credentials, raw responses, Git history,
+# node_modules, existing builds and pinned research copies never enter the image.
+**
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.json
+!scripts/
+!scripts/build-*.mjs
+!src/
+!src/**
+!web/
+!web/**
+web/**/node_modules
+web/**/dist
+!deploy/
+!deploy/docker/
+!deploy/docker/Dockerfile
+# Defense in depth if a credential file is ever added under an allowed tree.
+**/.env
+**/.env.*
+**/.dev.vars
+**/.dev.vars.*
+**/*.pem
+**/*.key
+**/node_modules
+**/dist

@@ -1,0 +1,33 @@
+{
+  "enabled": true,
+  "title": "LeoBridge Synthetic Fixture",
+  "show_name": true,
+  "servers": [
+    {
+      "name": "fixture-online",
+      "online": true,
+      "cpu_pct": 12.5,
+      "mem_used": 1073741824,
+      "mem_total": 2147483648,
+      "disk_used": 10737418240,
+      "disk_total": 21474836480,
+      "download_speed": 1048576,
+      "upload_speed": 524288,
+      "uptime": 3600
+    },
+    {
+      "name": "fixture-idle",
+      "online": true,
+      "cpu_pct": 0,
+      "mem_used": 0,
+      "mem_total": 2147483648,
+      "download_speed": 0,
+      "upload_speed": 0
+    },
+    {
+      "name": "fixture-offline",
+      "online": false,
+      "last_seen": "2026-11-02T08:00:00Z"
+    }
+  ]
+}

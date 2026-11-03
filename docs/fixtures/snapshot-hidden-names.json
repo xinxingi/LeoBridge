@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "show_name": false,
+  "servers": [
+    {
+      "online": true
+    },
+    {
+      "online": false,
+      "last_seen": "2026-11-02T08:00:00Z"
+    }
+  ]
+}

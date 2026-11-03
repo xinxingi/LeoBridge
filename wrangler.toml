@@ -1,0 +1,30 @@
+name = "leobridge"
+main = "src/runtime/worker.ts"
+compatibility_date = "2025-10-11"
+workers_dev = false
+
+[assets]
+directory = "./dist/bundled"
+binding = "ASSETS"
+run_worker_first = true
+
+[vars]
+BRIDGE_ACCESS = "local"
+BRIDGE_TITLE = "LeoBridge"
+BRIDGE_ADMIN_ORIGIN = "http://admin.localhost:8787"
+BRIDGE_DISPLAY_ORIGIN = "http://127.0.0.1:8787"
+BRIDGE_DISPLAY_DOMAIN = "display.localhost"
+BRIDGE_PREVIEW_ORIGIN = "http://preview.localhost:8787"
+# Set MMWX_BASE_URL and identity bindings as secrets; see README.
+
+[[r2_buckets]]
+binding = "THEME_ASSETS"
+bucket_name = "leobridge-theme-assets"
+
+[[durable_objects.bindings]]
+name = "THEME_COORDINATOR"
+class_name = "ThemeCoordinator"
+
+[[migrations]]
+tag = "theme-coordinator-v1"
+new_sqlite_classes = ["ThemeCoordinator"]

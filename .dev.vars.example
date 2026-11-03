@@ -1,0 +1,26 @@
+# Copy once; do not overwrite an existing private .dev.vars.
+MMWX_BASE_URL=https://your-master.example.com
+MMWX_PROBE_TOKEN=replace-with-your-probe-token
+BRIDGE_ACCESS=local
+BRIDGE_TITLE=LeoBridge
+# Themes are selected in the management UI, not through a build-time variable.
+# pnpm configure:admin creates independent management credentials locally.
+# BRIDGE_ADMIN_USERNAME=admin
+# BRIDGE_ADMIN_PASSWORD=use-a-separate-random-password-at-least-20-characters
+# Node local origins. Hostnames must differ; ports alone do not isolate cookies.
+# BRIDGE_ADMIN_ORIGIN=http://admin.localhost:8786
+# BRIDGE_DISPLAY_ORIGIN=http://127.0.0.1:8787
+# BRIDGE_DISPLAY_DOMAIN=display.localhost
+# BRIDGE_PREVIEW_ORIGIN=http://preview.localhost:8789
+# BRIDGE_THEME_STORE=work/theme-store
+# pnpm configure creates explicit BRIDGE_BINDINGS and BRIDGE_PING_TARGETS.
+# Example syntax only, not a real identity or universally unique name:
+# BRIDGE_BINDINGS='[{"id":"stable-uuid","match":{"name":"example","arch":"amd64"}}]'
+# BRIDGE_PING_TARGETS='{"ct":{"key":"actual-target-key","label":"Target label"}}'
+# Remote private display (use HTTPS):
+# BRIDGE_ACCESS=private
+# BRIDGE_USERNAME=viewer
+# BRIDGE_PASSWORD=replace-with-a-separate-password-at-least-16-characters
+# Optional Node development transport; not used by the production Worker.
+# Set only after confirming that this local port accepts HTTP CONNECT.
+# BRIDGE_DEV_PROXY=http://127.0.0.1:7897

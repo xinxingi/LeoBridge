@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "show_name": true,
+  "servers": [
+    {
+      "name": "duplicate",
+      "online": true
+    },
+    {
+      "name": "duplicate",
+      "online": true
+    }
+  ]
+}
