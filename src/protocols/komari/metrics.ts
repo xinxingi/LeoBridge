@@ -17,7 +17,7 @@ export const metricFields = {
 
 export function metricDefinitions(hours: number) {
   return [...Object.entries(metricFields).map(([name, [,unit]]) => ({name, unit})),
-    {name:'ping.latency_ms',unit:'ms'}, {name:'ping.loss_percent',unit:'%'}]
+    {name:'ping.latency_ms',unit:'ms'}, {name:'ping.loss',unit:'ratio'}, {name:'ping.loss_percent',unit:'%'}]
     .map(item => ({...item,type:'gauge',retention_days:hours/24}));
 }
 
@@ -31,16 +31,16 @@ export function queryMetrics(series: HistoricalSeries, id: string, keys: string[
       const points=series.points.filter(point=>point.timestamp>=start&&point.timestamp<=end)
         .map(point=>({time:new Date(point.timestamp).toISOString(),value:point[field]??null}));
       output.push({metric_key:key,entity_id:id,unit,interval_seconds:series.bucketSeconds,count:points.length,points});
-    } else if (key==='ping.latency_ms'||key==='ping.loss_percent') {
+    } else if (key==='ping.latency_ms'||key==='ping.loss_percent'||key==='ping.loss') {
       for (const target of komariTargets(targets)) {
         const points=series.pings.filter(point=>point.targetKey===target.key&&point.timestamp>=start&&point.timestamp<=end)
-          .map(point=>({time:new Date(point.timestamp).toISOString(),value:key==='ping.latency_ms'?point.latencyMs:point.lossPercent}));
-        output.push({metric_key:key,entity_id:id,unit:key==='ping.latency_ms'?'ms':'%',tags:{task_id:String(target.id)},
+          .map(point=>({time:new Date(point.timestamp).toISOString(),value:key==='ping.latency_ms'?point.latencyMs:key==='ping.loss'?(point.lossPercent===null?null:point.lossPercent/100):point.lossPercent}));
+        output.push({metric_key:key,entity_id:id,unit:key==='ping.latency_ms'?'ms':key==='ping.loss'?'ratio':'%',tags:{task_id:String(target.id)},
           interval_seconds:series.bucketSeconds,count:points.length,points});
       }
     }
   }
   return {start:new Date(start).toISOString(),end:new Date(end).toISOString(),series:output,count:output.length,
-    bridge:{aggregation:'source_bucket',unsupported:keys.filter(key=>!Object.hasOwn(metricFields,key)&&key!=='ping.latency_ms'&&key!=='ping.loss_percent'),
+    bridge:{aggregation:'source_bucket',unsupported:keys.filter(key=>!Object.hasOwn(metricFields,key)&&key!=='ping.latency_ms'&&key!=='ping.loss_percent'&&key!=='ping.loss'),
       note:'原始源桶；不重采样、不补点。丢包率为源桶百分比，不推算发包数或分位数。'}};
 }

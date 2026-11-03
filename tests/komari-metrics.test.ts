@@ -40,3 +40,10 @@ test('official common node map respects privacy and unsupported date/aggregation
   }
   await assert.rejects(()=>app.method('admin:queryMetrics',{}),/Method not found/);
 });
+
+test('native ping.loss uses ratio while the explicit bridge percent metric preserves percentages',()=>{
+  const result=queryMetrics({bucketSeconds:300,points:[],pings:[{timestamp:now,targetKey:'t',latencyMs:null,lossPercent:25,state:'missing'}]},
+    'stable',['ping.loss','ping.loss_percent'],{ct:{key:'t',label:'Target'}},now-3600000,now);
+  assert.equal(result.series[0]?.unit,'ratio');assert.equal(result.series[0]?.points[0]?.value,0.25);
+  assert.equal(result.series[1]?.unit,'%');assert.equal(result.series[1]?.points[0]?.value,25);
+});

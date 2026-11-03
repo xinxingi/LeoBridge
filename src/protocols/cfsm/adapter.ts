@@ -25,6 +25,7 @@ export function toCfsmServer(input: UnifiedServer, id: string): CfsmServer {
     id,
     name: metadata.name ?? '服务器',
     online,
+    is_online: online,
     stale: false,
     observed_at: observedAt,
     last_updated: online === true ? observedAt : lastSeen,

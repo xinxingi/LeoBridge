@@ -96,16 +96,19 @@ test('invalid numeric values are not coerced to valid metrics or logical cores',
     assert.equal(server[field], null, field);
   }
   assert.equal(server.online, null);
+  assert.equal(server.is_online, null);
   assert.equal(server.last_updated, null);
 });
 
 test('source offline status overrides a recent last-seen time; boot time is an explicit estimate', () => {
   const offline = toServer({ online: false, last_seen: '2026-11-02T11:59:59Z', uptime: 10 }, 'opaque', now);
   assert.equal(offline.online, false);
+  assert.equal(offline.is_online, false);
   assert.equal(offline.last_updated, now - 1000);
   assert.equal(offline.boot_time, null);
   assert.equal(offline.boot_time_estimated, false);
   const online = toServer({ online: true, uptime: 10 }, 'opaque', now);
+  assert.equal(online.is_online, true);
   assert.equal(online.boot_time, now - 10000);
   assert.equal(online.boot_time_estimated, true);
   assert.equal(online.timestamp_source, 'bridge_observation');

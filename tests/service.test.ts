@@ -50,3 +50,21 @@ test('Ping mapping uses exact configured target keys; no-data/timeout/zero and d
   applyPing(out,[{key:'a',current_ms:Infinity}],targets);assert.equal(out.ping_ct,false);
   applyPing(out,[{key:'a',current_ms:8},{key:'a',current_ms:9}],targets);assert.equal(out.ping_ct,false);
 });
+
+test('native CFSM fleet rate names and regions preserve complete, zero and unknown source values',async()=>{
+  const names=['one','two','offline'];
+  const config=readConfig({...env,BRIDGE_BINDINGS:JSON.stringify(names.map(id=>({id,match:{name:id}})))});
+  const get=async(missing=false,zero=false)=>{
+    const source={enabled:true,show_name:false,servers:[
+      {name:'one',online:true,region_country:'US',download_speed:zero?0:100,upload_speed:zero?0:10},
+      {name:'two',online:true,region_country:'JP',...(missing?{}:{download_speed:zero?0:200}),upload_speed:zero?0:20},
+      {name:'offline',online:false,region_country:'DE',download_speed:999,upload_speed:999},
+    ]};
+    return (await new Bridge(config,new Upstream(config,async()=>Response.json(source))).api(req('/api/servers')))!.json();
+  };
+  const complete=await get();assert.equal(complete.stats.globalSpeedIn,300);assert.equal(complete.stats.globalSpeedOut,30);
+  assert.deepEqual(complete.servers.map((server:{region:string})=>server.region),['US','JP','DE']);
+  assert.deepEqual(complete.regionStats,{US:1,JP:1,DE:1});
+  const zero=await get(false,true);assert.equal(zero.stats.globalSpeedIn,0);assert.equal(zero.stats.globalSpeedOut,0);
+  const missing=await get(true);assert.equal(missing.stats.globalSpeedIn,null);assert.equal(missing.stats.globalSpeedOut,30);
+});

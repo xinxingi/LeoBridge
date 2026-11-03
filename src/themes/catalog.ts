@@ -49,7 +49,7 @@ export async function fetchPublicBytes(value: string, options: { fetcher?: Publi
         url = validatePublicUrl(new URL(location, url));
         continue;
       }
-      if (!response.ok) { await response.body?.cancel(); throw new ThemePackageError('DOWNLOAD_HTTP', `主题公开来源读取失败（HTTP ${response.status}）。`, 502); }
+      if (!response.ok) { await response.body?.cancel(); throw Object.assign(new ThemePackageError('DOWNLOAD_HTTP', `主题公开来源读取失败（HTTP ${response.status}）。`, 502), {httpStatus:response.status}); }
       if (response.url) validatePublicUrl(response.url);
       const length = Number(response.headers.get('content-length') || '0');
       if (length > maxBytes) { await response.body?.cancel(); throw new ThemePackageError('DOWNLOAD_SIZE', '主题下载超过大小限制。'); }
@@ -76,6 +76,29 @@ export async function fetchPublicBytes(value: string, options: { fetcher?: Publi
 export async function fetchPublicJson(value: string, options: { fetcher?: PublicFetcher; maxBytes?: number; timeoutMs?: number } = {}): Promise<unknown> {
   const bytes = await fetchPublicBytes(value, options);
   try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw new ThemePackageError('CATALOG_JSON', '公开来源未返回有效JSON。', 502); }
+}
+/** Resolve a branch to an immutable commit without depending on anonymous API quota. */
+export async function repositoryRevision(repository:string,branch:string,fetcher?:PublicFetcher):Promise<string>{
+  try{
+    const value=await fetchPublicJson(`https://api.github.com/repos/${repository}/commits/${encodeURIComponent(branch)}`,{fetcher,maxBytes:1_000_000});
+    if(!record(value)||typeof value.sha!=='string'||! /^[a-f0-9]{40}$/.test(value.sha))throw new ThemePackageError('SOURCE_REVISION','上游分支未返回有效提交。',502);
+    return value.sha;
+  }catch(error){
+    const status=(error as {httpStatus?:number}).httpStatus;
+    if(status!==403&&status!==429&&!(status&&status>=500))throw error;
+  }
+  const html=new TextDecoder().decode(await fetchPublicBytes(`https://github.com/${repository}/tree/${encodeURIComponent(branch)}`,{fetcher,maxBytes:6_000_000}));
+  for(const script of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)){
+    if(!/data-target=["']react-app\.embeddedData["']/.test(script[1]!))continue;
+    let root:unknown;try{root=JSON.parse(script[2]!);}catch{continue;}
+    if(!record(root)||!record(root.payload))continue;
+    const layout=root.payload.codeViewLayoutRoute,tree=root.payload.codeViewTreeRoute;
+    if(!record(layout)||!record(layout.repo)||!record(tree)||!record(tree.refInfo))continue;
+    const repo=layout.repo,ref=tree.refInfo;
+    if(`${repo.ownerLogin}/${repo.name}`.toLowerCase()!==repository.toLowerCase()||ref.name!==branch||typeof ref.currentOid!=='string'||! /^[a-f0-9]{40}$/.test(ref.currentOid))continue;
+    return ref.currentOid;
+  }
+  throw new ThemePackageError('SOURCE_REVISION','无法从上游仓库核实固定版本。',502);
 }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const string = (value: unknown, max = 500) => typeof value === 'string' ? value.slice(0, max) : '';
@@ -168,9 +191,7 @@ export async function fetchCatalog(ecosystem: Ecosystem, fetcher: PublicFetcher 
   // A failed explicit refresh must not masquerade as a newly fetched old catalog.
   if (options.refresh) { cached.value = undefined; cached.at = undefined; }
   const task = (async () => {
-    const commit = await fetchPublicJson(`https://api.github.com/repos/${source.repository}/commits/${source.branch}`, { fetcher, maxBytes: 1_000_000 });
-    if (!record(commit) || typeof commit.sha !== 'string' || !/^[a-fA-F0-9]{40}$/.test(commit.sha)) throw new ThemePackageError('CATALOG_COMMIT', '官方目录分支未返回有效Git提交。', 502);
-    const revision = commit.sha.toLowerCase();
+    const revision = await repositoryRevision(source.repository, source.branch, fetcher);
     return catalogAtRevision(ecosystem, revision, fetcher);
   })();
   cached.pending = task;

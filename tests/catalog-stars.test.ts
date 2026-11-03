@@ -70,7 +70,8 @@ test('catalog cards display exact formatted stars, genuine zero and unavailable 
   });
   for (const [stars, expected] of [[1234, '★ 1,234 Stars'], [0, '★ 0 Stars'], [null, '☆ - Stars']] as const) {
     const card = render({ name: 'Example', stars, starsFetchedAt: stars === null ? null : '2026-11-03T00:00:00Z' }, 'komari');
-    const label = card.children.find((e: any) => e.className === 'theme-stars');
+    const descendants = (node: any): any[] => [node, ...node.children.flatMap(descendants)];
+    const label = descendants(card).find((e: any) => e.className === 'theme-stars');
     assert.equal(label.text, expected); assert.match(label.title, /GitHub 仓库 Star 数/);
   }
 });

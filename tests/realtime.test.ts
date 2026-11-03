@@ -51,6 +51,7 @@ test('subscription protocol filters samples, preserves explicit offline/zero, an
   assert.equal(batch?.updates[0]?.serverId, 'opaque-a');
   assert.equal(batch?.updates[0]?.samples[0]?.data.cpu, 0);
   assert.equal(batch?.updates[0]?.samples[0]?.data.online, true);
+  assert.equal(batch?.updates[0]?.samples[0]?.data.is_online, true);
   client.receive({ type: 'ping' });
   assert.equal(client.sent.at(-1)?.type, 'pong');
   assert.equal(JSON.stringify(client.sent).includes('synthetic-secret'), false);
@@ -96,6 +97,7 @@ test('stale upstream data triggers an explicit stale status and closes the stall
   assert.equal(batches.length, 1);
   const updates = batches[0]?.updates as { samples: { data: Record<string, unknown> }[] }[];
   assert.equal(updates[0]?.samples[0]?.data.online, false);
+  assert.equal(updates[0]?.samples[0]?.data.is_online, false);
 });
 
 test('closing viewer during a pending handshake closes late upstream and cancels all retry work', async t => {

@@ -1,7 +1,10 @@
+import { cssDependencySources } from './resource-sources-css.ts';
+import type { PublicResourceSource } from './default-resources.ts';
 import { Inflate } from 'fflate';
 import { tokenizer } from 'acorn';
-import { fetchCatalog, fetchPublicBytes, fetchPublicJson, repositoryParts, validatePublicUrl, ThemePackageError, type CatalogEntry, type Ecosystem, type PublicFetcher } from './catalog.ts';
+import { fetchCatalog, fetchPublicBytes, fetchPublicJson, repositoryRevision, repositoryParts, validatePublicUrl, ThemePackageError, type CatalogEntry, type Ecosystem, type PublicFetcher } from './catalog.ts';
 export { ThemePackageError } from './catalog.ts';
+export interface RemoteThemeFile { sha: string; size: number; contentType: string; }
 export interface ThemeFile { path: string; bytes: Uint8Array; contentType: string; }
 export interface LicenseRecord { spdx: string; text: string; source: string; sha256: string; status?: 'found' | 'missing'; documents?: {path:string;text:string;sha256:string}[]; }
 /** Optional independent evidence must belong to this repository and be pinned. */
@@ -19,7 +22,7 @@ export interface ThemePackage {
   id: string; digest: string; themeId: string; name: string; ecosystem: Ecosystem;
   source: string; catalogSource: string; catalogRevision: string; pinnedVersion: string;
   license: LicenseRecord; entry: 'index.html'; files: ThemeFile[];
-  compatibility: 'unverified'; configuration?: Record<string, unknown>;
+  compatibility: 'unverified'; configuration?: Record<string, unknown>; manifest?: Record<string, unknown>; remoteFiles?: Record<string, RemoteThemeFile>; dependencySources?: Record<string, PublicResourceSource>;
   audit: { staticReferencesChecked: true; dynamicReferencesRequireBrowser: true; notices: string[] };
 }
 export const PACKAGE_LIMITS = Object.freeze({ archive: 16_000_000, total: 32_000_000, file: 8_000_000, files: 1200, ratio: 200 });
@@ -36,7 +39,7 @@ export function safePackagePath(path: string, directory = false): string {
   if (!normalized || normalized.length > 400 || normalized.startsWith('/') || /[\\:%?#\x00-\x1f\x7f]/.test(normalized) || normalized.normalize('NFC') !== normalized || normalized.split('/').some(part => !part || part === '.' || part === '..')) fail('PACKAGE_PATH', '主题包包含不安全或歧义路径。');
   return normalized;
 }
-const MIME: Record<string, string> = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', mjs: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json; charset=utf-8', webmanifest: 'application/manifest+json', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', ico: 'image/x-icon', woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf', txt: 'text/plain; charset=utf-8', md: 'text/plain; charset=utf-8' };
+const MIME: Record<string, string> = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', mjs: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json; charset=utf-8', webmanifest: 'application/manifest+json', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', ico: 'image/x-icon', woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf', txt: 'text/plain; charset=utf-8', md: 'text/plain; charset=utf-8', map: 'application/json; charset=utf-8', eot: 'application/vnd.ms-fontobject', wasm: 'application/wasm', mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', xml: 'application/xml' };
 export function contentType(path: string): string | null {
   if (/^(LICENSE|LICENCE|COPYING|NOTICE|THIRD_PARTY)(\.[A-Za-z]+)?$/i.test(path.split('/').at(-1)!)) return 'text/plain; charset=utf-8';
   return MIME[path.split('.').at(-1)!.toLowerCase()] || null;
@@ -139,20 +142,20 @@ function manifest(bytes: Uint8Array | undefined, entry: CatalogEntry): Record<st
   let raw: unknown; try { raw = bytes && JSON.parse(decoder.decode(bytes)); } catch { return fail('MANIFEST_JSON', 'Komari主题清单无效。'); }
   if (!record(raw) || raw.short !== entry.id || raw.version !== entry.version) fail('MANIFEST_IDENTITY', 'Komari清单标识或版本与目录不一致。');
   if (raw.configuration !== undefined) {
-    if (!record(raw.configuration) || (raw.configuration.type !== undefined && raw.configuration.type !== 'managed')) fail('MANIFEST_CONFIGURATION', '主题raw/redirect配置不允许进入可信管理页面。');
+    if (!record(raw.configuration)) fail('MANIFEST_CONFIGURATION', '主题配置清单无效。');
     if (JSON.stringify(raw.configuration).length > 100_000) fail('MANIFEST_CONFIGURATION', '主题配置清单过大。');
   }
   return raw;
 }
 function file(path: string, bytes: Uint8Array): ThemeFile {
   safePackagePath(path);
-  const type = contentType(path); if (!type) fail('PACKAGE_FILE_TYPE', '主题包包含不受支持的文件类型。');
+  const type = contentType(path) ?? 'application/octet-stream';
   if (bytes.length > PACKAGE_LIMITS.file) fail('PACKAGE_SIZE', '主题文件超过限制。');
   return { path, bytes, contentType: type };
 }
 function resolveReference(base: string, reference: string): string | null {
   if (!reference || reference.startsWith('#') || reference.startsWith('data:')) return null;
-  if (/^(?:https?:)?\/\//i.test(reference)) fail('EXTERNAL_ASSET', '主题依赖外部静态资源，当前仅支持包内静态资源。');
+  if (/^(?:https?:)?\/\//i.test(reference)) return null;
   if (/^[a-z][a-z0-9+.-]*:/i.test(reference)) fail('ASSET_PROTOCOL', '主题静态资源协议无效。');
   const cleaned = reference.split(/[?#]/, 1)[0]!;
   if (cleaned.includes('%') || cleaned.includes('\\')) fail('ASSET_PATH', '主题静态引用路径存在歧义。');
@@ -196,8 +199,9 @@ function javascriptReferences(text: string): string[] {
   return refs;
 }
 /** Verify statically resolvable local resources. Dynamic JS still needs a browser. */
-export function validateStaticReferences(files: ThemeFile[]): void {
-  const paths = new Set(files.map(f => f.path));
+export function validateStaticReferences(files: ThemeFile[],knownPaths:string[]=[]): string[] {
+  const notices: string[] = [];
+  const paths = new Set([...files.map(f => f.path),...knownPaths]);
   if (!paths.has('index.html')) fail('ENTRY_REQUIRED', '主题包缺少根index.html。');
   for (const asset of files) {
     if (!/\.(html|css|m?js)$/.test(asset.path)) continue;
@@ -212,19 +216,29 @@ export function validateStaticReferences(files: ThemeFile[]): void {
     if (asset.path.endsWith('.css')) {
       for (const match of text.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/url\(\s*["']?([^"')\s]+)["']?\s*\)|@import\s+["']([^"']+)["']/g)) refs.push(match[1] || match[2]!);
     }
-    if (/\.m?js$/.test(asset.path)) refs.push(...javascriptReferences(text));
-    for (const ref of refs) { const path = resolveReference(asset.path, ref); if (path && !paths.has(path)) throw Object.assign(new ThemePackageError('ASSET_MISSING', '主题静态资源引用不完整。'), { assetPath: asset.path, referencePath: path }); }
+    if (/\.m?js$/.test(asset.path)) {
+      try { refs.push(...javascriptReferences(text)); } catch { notices.push(`无法静态分析脚本：${asset.path}`); }
+    }
+    for (const ref of refs) {
+      if (/^(?:https?:)?\/\//i.test(ref)) { notices.push(`外部资源：${asset.path} → ${ref}`); continue; }
+      try { const path = resolveReference(asset.path, ref); if (path && !paths.has(path)) notices.push(`包外资源：${asset.path} → ${path}`); }
+      catch { notices.push(`需浏览器解析的资源：${asset.path} → ${ref}`); }
+    }
   }
+  return [...new Set(notices)].slice(0, 200);
 }
-async function finish(entry: CatalogEntry, files: ThemeFile[], license: LicenseRecord, source: string, pinnedVersion: string, configuration?: Record<string, unknown>): Promise<ThemePackage> {
+async function finish(entry: CatalogEntry, files: ThemeFile[], license: LicenseRecord, source: string, pinnedVersion: string, configuration?: Record<string, unknown>, remoteFiles?: Record<string, RemoteThemeFile>): Promise<ThemePackage> {
   if (files.length > PACKAGE_LIMITS.files || files.reduce((n, f) => n + f.bytes.length, 0) > PACKAGE_LIMITS.total) fail('PACKAGE_SIZE', '主题资产总量超过限制。');
   if (new Set(files.map(f => f.path.toLowerCase())).size !== files.length) fail('PACKAGE_DUPLICATE', '展示根目录含重复资产路径。');
   files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
-  validateStaticReferences(files);
+  const dependencySources:Record<string,PublicResourceSource>={};
+  for(const asset of files)if(asset.path.endsWith('.css'))Object.assign(dependencySources,await cssDependencySources(asset.path,asset.bytes));
+  const notices = validateStaticReferences(files,[...Object.keys(remoteFiles??{}),...Object.keys(dependencySources)]);
+  if(Object.keys(dependencySources).length)notices.push('公共库资源：Semantic UI 固定版本；字体及图标遵循上游独立许可。');
   license.documents = await Promise.all(files.filter(f => /(?:^|\/)(?:LICENSE|LICENCE|COPYING|NOTICE|THIRD_PARTY)(?:\.[^/]*)?$|(?:^|\/)licenses?\//i.test(f.path)).filter(f => f.contentType.startsWith('text/')).map(async f => ({path:f.path,text:new TextDecoder().decode(f.bytes),sha256:await sha256(f.bytes)})));
-  const descriptor = JSON.stringify({ ecosystem: entry.ecosystem, themeId: entry.id, source, pinnedVersion, license: license.sha256, files: await Promise.all(files.map(async f => [f.path, f.contentType, await sha256(f.bytes)])) });
+  const descriptor = JSON.stringify({ ecosystem: entry.ecosystem, themeId: entry.id, source, pinnedVersion, license: license.sha256, ...(Object.keys(dependencySources).length ? {dependencySources} : {}), ...(remoteFiles ? {remoteFiles} : {}), files: await Promise.all(files.map(async f => [f.path, f.contentType, await sha256(f.bytes)])) });
   const digest = await sha256(encoder.encode(descriptor));
-  return { id: digest.slice(0, 32), digest, themeId: entry.id, name: entry.name, ecosystem: entry.ecosystem, source, catalogSource: entry.catalogSource, catalogRevision: entry.catalogRevision, pinnedVersion, license, entry: 'index.html', files, compatibility: 'unverified', ...(configuration ? { configuration } : {}), audit: { staticReferencesChecked: true, dynamicReferencesRequireBrowser: true, notices: files.filter(f => /(?:LICENSE|LICENCE|NOTICE|THIRD_PARTY)/i.test(f.path)).map(f => f.path) } };
+  return { id: digest.slice(0, 32), digest, themeId: entry.id, name: entry.name, ecosystem: entry.ecosystem, source, catalogSource: entry.catalogSource, catalogRevision: entry.catalogRevision, pinnedVersion, license, entry: 'index.html', files, compatibility: 'unverified', ...(Object.keys(dependencySources).length ? {dependencySources} : {}), ...(remoteFiles ? {remoteFiles} : {}), ...(configuration ? { configuration } : {}), audit: { staticReferencesChecked: true, dynamicReferencesRequireBrowser: true, notices } };
 }
 export async function buildKomariPackage(entry: CatalogEntry, archive: Uint8Array, options: InstallOptions = {}): Promise<ThemePackage> {
   if (entry.ecosystem !== 'komari' || !entry.sha256 || await sha256(archive) !== entry.sha256) fail('PACKAGE_SHA256', '主题ZIP与固定目录摘要不一致。');
@@ -236,28 +250,46 @@ export async function buildKomariPackage(entry: CatalogEntry, archive: Uint8Arra
   for (const [path, bytes] of unpacked) {
     if (path.startsWith('dist/')) files.push(file(path.slice(5), bytes));
     else if (/^(?:(?:LICENSE|LICENCE|COPYING|NOTICE|THIRD_PARTY)(?:\.[A-Za-z]+)?|licenses?\/.+)$/i.test(path)) files.push(file(path, bytes));
-    else if (path !== 'komari-theme.json' && !/^(?:README(?:\.[A-Za-z]+)?|preview\.(?:png|webp|jpg|jpeg))$/i.test(path)) fail('PACKAGE_EXTRA_FILE', 'Komari包根目录包含非静态交付文件。');
+    else files.push(file(`.komari/${path}`, bytes));
   }
   if (license.text && !files.some(f => /^(?:LICENSE|LICENCE|COPYING)(?:\.[A-Za-z]+)?$/i.test(f.path))) files.push(file('LICENSE', encoder.encode(license.text)));
-  return finish(entry, files, license, entry.downloadUrl!, `${entry.version}@sha256:${entry.sha256}`, record(config.configuration) ? config.configuration : undefined);
+  const pkg = await finish(entry, files, license, entry.downloadUrl!, `${entry.version}@sha256:${entry.sha256}`, record(config.configuration) ? config.configuration : undefined);
+  return { ...pkg, manifest: config };
 }
 interface TreeBlob { path: string; sha: string; size: number; }
 async function buildCfsmPackage(entry: CatalogEntry, options: InstallOptions): Promise<ThemePackage> {
   const repo = repositoryParts(entry.repositoryUrl); if (!repo || !entry.branch) fail('CFSM_SOURCE', 'CFSM构建来源无效。');
   const api = `https://api.github.com/repos/${repo.owner}/${repo.repo}`;
   if (options.expectedBuildRevision !== undefined && !/^[a-f0-9]{40}$/.test(options.expectedBuildRevision)) fail('CFSM_COMMIT', '固定构建版本无效。');
-  const commit = options.expectedBuildRevision ? {sha:options.expectedBuildRevision} : await fetchPublicJson(`${api}/commits/${encodeURIComponent(entry.branch)}`, { fetcher: options.fetcher });
+  const commit = options.expectedBuildRevision ? {sha:options.expectedBuildRevision} : {sha:await repositoryRevision(`${repo.owner}/${repo.repo}`,entry.branch,options.fetcher)};
   if (!record(commit) || typeof commit.sha !== 'string' || !/^[a-f0-9]{40}$/.test(commit.sha)) fail('CFSM_COMMIT', '无法将构建分支固定为Git提交。');
   const sha = commit.sha;
-  const tree = await fetchPublicJson(`${api}/git/trees/${sha}?recursive=1`, { fetcher: options.fetcher, maxBytes: 4_000_000 });
+  let tree:unknown;
+  try{tree=await fetchPublicJson(`${api}/git/trees/${sha}?recursive=1`, { fetcher: options.fetcher, maxBytes: 4_000_000 });}
+  catch(error){
+    const status=(error as {httpStatus?:number}).httpStatus;
+    if(status!==403&&status!==429&&!(status&&status>=500))throw error;
+    // Codeload serves the exact resolved commit; build the same blob index locally.
+    const archive=readStaticZip(await fetchPublicBytes(`https://codeload.github.com/${repo.owner}/${repo.repo}/zip/${sha}`,{fetcher:options.fetcher,maxBytes:PACKAGE_LIMITS.archive,timeoutMs:60_000}));
+    const prefix=`${repo.repo}-${sha}/`;
+    const nodes=[];
+    for(const [name,bytes] of archive){
+      if(!name.startsWith(prefix))fail('CFSM_TREE','固定源码归档的根路径不一致。');
+      const path=safePackagePath(name.slice(prefix.length));
+      const header=encoder.encode(`blob ${bytes.length}\0`),input=new Uint8Array(header.length+bytes.length);input.set(header);input.set(bytes,header.length);
+      const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-1',input))].map(v=>v.toString(16).padStart(2,'0')).join('');
+      nodes.push({path,type:'blob',mode:'100644',size:bytes.length,sha:hash});
+    }
+    tree={truncated:false,tree:nodes};
+  }
   if (!record(tree) || tree.truncated !== false || !Array.isArray(tree.tree) || tree.tree.length > 10000) fail('CFSM_TREE', '构建资源树不完整或过大。');
   const selected: TreeBlob[] = [];
   for (const node of tree.tree) {
     if (!record(node) || typeof node.path !== 'string') fail('CFSM_TREE', '构建资源树条目无效。');
     if (node.type !== 'blob') continue;
     const path = safePackagePath(node.path);
-    if (!(!path.includes('/') || /^(?:assets|flags|os-icons|fonts|licenses)\//.test(path))) continue;
-    if (!contentType(path)) continue;
+    // Build repositories can use arbitrary static directories; do not impose our layout.
+    if (path.split('/').some(part => part.startsWith('.'))) continue;
     if (node.mode !== '100644' && node.mode !== '100755') fail('CFSM_SPECIAL_FILE', '构建资源中禁止符号链接。');
     if (typeof node.sha !== 'string' || !/^[a-f0-9]{40}$/.test(node.sha) || typeof node.size !== 'number' || node.size > PACKAGE_LIMITS.file || node.size < 0) fail('CFSM_TREE', '构建资源摘要或大小无效。');
     selected.push({ path, sha: node.sha, size: node.size });
@@ -267,8 +299,9 @@ async function buildCfsmPackage(entry: CatalogEntry, options: InstallOptions): P
   const hasLicense = selected.some(f => /^(?:LICENSE|LICENCE|COPYING)(?:\.[A-Za-z]+)?$/i.test(f.path));
   const independent = hasLicense ? undefined : await independentLicense(entry, evidence, options.fetcher);
   const files: ThemeFile[] = [];
-  // Sequential bounded downloads avoid thousands of parallel origin requests.
-  for (const node of selected) {
+  // Keep the source index; fetch static bytes on demand. Only entry and license are needed to install.
+  const remoteFiles = Object.fromEntries(selected.map(node => [node.path, {sha:node.sha,size:node.size,contentType:contentType(node.path)??'application/octet-stream'}]));
+  for (const node of selected.filter(node => node.path === 'index.html' || /(?:^|\/)(?:LICENSE|LICENCE|COPYING|NOTICE|THIRD_PARTY)(?:\.[^/]*)?$|(?:^|\/)licenses?\//i.test(node.path))) {
     const bytes = await fetchPublicBytes(`https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${sha}/${node.path.split('/').map(encodeURIComponent).join('/')}`, { fetcher: options.fetcher, maxBytes: PACKAGE_LIMITS.file });
     if (bytes.length !== node.size) fail('CFSM_BLOB_SIZE', '构建资源长度与固定树不一致。');
     const prefix = encoder.encode(`blob ${bytes.length}\0`), input = new Uint8Array(prefix.length + bytes.length); input.set(prefix); input.set(bytes, prefix.length);
@@ -279,7 +312,7 @@ async function buildCfsmPackage(entry: CatalogEntry, options: InstallOptions): P
   const candidate = files.find(f => /^(?:LICENSE|LICENCE|COPYING)(?:\.[A-Za-z]+)?$/i.test(f.path));
   const license = candidate ? await licenseRecord(candidate.bytes, `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${sha}/${candidate.path}`) : independent!;
   if (!candidate && license.text) files.push(file('LICENSE', encoder.encode(license.text)));
-  return finish(entry, files, license, repo.url, sha);
+  return finish(entry, files, license, repo.url, sha, undefined, remoteFiles);
 }
 /** Public installer entry: IDs only; authoritative URLs come from pinned catalogs. */
 export async function installCatalogTheme(ecosystem: Ecosystem, themeId: string, options: InstallOptions = {}): Promise<ThemePackage> {
