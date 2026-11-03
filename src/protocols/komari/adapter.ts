@@ -1,12 +1,12 @@
 import type { Config } from '../../core/config.ts';
 import { BridgeError } from '../../core/errors.ts';
 import type { UnifiedServer } from '../../core/model.ts';
-import type { HistoricalSeries, HistoryPoint } from '../../upstream/series.ts';
+import { sourceCounterData, type HistoricalSeries, type HistoryPoint } from '../../upstream/series.ts';
 
 export const KOMARI_PROFILE='komari-rpc2-bed58b5';
 export type Transport='websocket'|'poll';
 export function bridgeMetadata(input:UnifiedServer,staleMs:number,transport:Transport,now=Date.now()) {
-  return {observed_at:input.observedAt,source_last_seen:input.sourceLastSeen,stale:now-input.observedAt>staleMs,stale_ms:staleMs,transport,timestamp_source:'bridge_observation'};
+  return {observed_at:input.observedAt,source_last_seen:input.sourceLastSeen,stale:now-input.observedAt>staleMs,stale_ms:staleMs,transport,timestamp_source:'bridge_observation',data:input.data};
 }
 function countryFlag(code:string|null):string {
   return code&&/^[A-Z]{2}$/.test(code)?Array.from(code).map(char=>String.fromCodePoint(char.charCodeAt(0)-65+0x1f1e6)).join(''):'';
@@ -47,13 +47,14 @@ export function komariRecent(input:UnifiedServer,id:string,staleMs:number,transp
 export function komariFlatRecent(report:ReturnType<typeof komariRecent>) {
   return {...unavailable,client:report.uuid,time:report.updated_at,cpu:report.cpu.usage,
     ram:report.ram.used,ram_total:report.ram.total,swap:report.swap.used,swap_total:report.swap.total,
-    load:report.load.load1,disk:report.disk.used,disk_total:report.disk.total,
+    load:report.load.load1,load5:report.load.load5,load15:report.load.load15,disk:report.disk.used,disk_total:report.disk.total,
     net_in:report.network.down,net_out:report.network.up,
     connections:connectionTotal(report.connections.tcp,report.connections.udp),
     connections_tcp:report.connections.tcp,connections_udp:report.connections.udp,bridge:report.bridge};
 }
 export function komariRecord(point:HistoryPoint,id:string) {
   return {
+    ...('cumulativeUploadBytes' in point || 'cumulativeDownloadBytes' in point ? {bridge:{sourceCounters:sourceCounterData(point)}} : {}),
     ...unavailable,client:id,time:new Date(point.timestamp).toISOString(),cpu:point.cpuPercent??null,
     ram:point.memoryUsedBytes??null,ram_total:point.memoryTotalBytes??null,disk:point.diskUsedBytes??null,disk_total:point.diskTotalBytes??null,
     load:null,net_in:point.downloadBytesPerSecond??null,net_out:point.uploadBytesPerSecond??null,

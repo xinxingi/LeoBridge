@@ -2,13 +2,14 @@ import type { Config } from '../../core/config.ts';
 import { BridgeError } from '../../core/errors.ts';
 import type { Snapshot } from '../../core/model.ts';
 import type { Upstream } from '../../upstream/client.ts';
-import { Series,normalizeSystemSeries,normalizePingSeries,type HistoryPoint,type PingSample } from '../../upstream/series.ts';
-export type HistoryRow=Record<string,number|null|boolean>&{timestamp:number};
+import { Series,normalizeSystemSeries,normalizePingSeries,sourceCounterData,type HistoryPoint,type PingSample } from '../../upstream/series.ts';
+export type HistoryRow=Record<string,number|null|boolean|{sourceCounters:ReturnType<typeof sourceCounterData>}>&{timestamp:number};
 const fields:Record<string,[string,number]>={cpuPercent:['cpu',1],memoryUsedBytes:['ram_used',1024**2],memoryTotalBytes:['ram_total',1024**2],diskUsedBytes:['disk_used',1024**2],diskTotalBytes:['disk_total',1024**2],downloadBytesPerSecond:['net_in_speed',1],uploadBytesPerSecond:['net_out_speed',1],tcpConnections:['tcp_conn',1],udpConnections:['udp_conn',1]};
 function systemProjection(points:HistoryPoint[]):HistoryRow[] {
   return points.map(point=>{
     const row:HistoryRow={timestamp:point.timestamp};
     for(const[field,value]of Object.entries(point)){const mapping=fields[field];if(mapping)row[mapping[0]]=value===null?null:value/mapping[1];}
+    if('cumulativeUploadBytes' in point || 'cumulativeDownloadBytes' in point)row.bridge={sourceCounters:sourceCounterData(point)};
     return row;
   });
 }

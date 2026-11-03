@@ -11,6 +11,12 @@ export interface HistoryPoint {
   diskUsedBytes?: number|null; diskTotalBytes?: number|null;
   downloadBytesPerSecond?: number|null; uploadBytesPerSecond?: number|null;
   tcpConnections?: number|null; udpConnections?: number|null;
+  cumulativeUploadBytes?: number|null; cumulativeDownloadBytes?: number|null;
+}
+/** Keep source buckets available without treating them as exact interval deltas. */
+export function sourceCounterData(point: HistoryPoint) {
+  return { cumulativeUploadBytes: point.cumulativeUploadBytes ?? null, cumulativeDownloadBytes: point.cumulativeDownloadBytes ?? null,
+    aggregation: 'source_bucket' as const, resetScope: null, exactIntervalDeltaAvailable: false };
 }
 export interface PingSample {
   timestamp:number; targetKey:string; latencyMs:number|null; lossPercent:number|null;
@@ -21,6 +27,7 @@ const fields = {
   cpu_pct:'cpuPercent',mem_used:'memoryUsedBytes',mem_total:'memoryTotalBytes',
   disk_used:'diskUsedBytes',disk_total:'diskTotalBytes',download_speed:'downloadBytesPerSecond',
   upload_speed:'uploadBytesPerSecond',tcp_connections:'tcpConnections',udp_connections:'udpConnections',
+  cumulative_up:'cumulativeUploadBytes',cumulative_down:'cumulativeDownloadBytes',
 } as const;
 function bucketWidth(raw:Record<string,unknown>):number {
   const width=finiteNumber(raw.bucket_sec,Number.MIN_VALUE);
