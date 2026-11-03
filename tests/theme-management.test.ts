@@ -251,7 +251,7 @@ test('switching active pointer preserves protocol and assets on old installation
   for (const [origin, protocol] of [[original, 'cfsm'], [next, 'komari']]) {
     assert.deepEqual(await (await site.fetch(new Request(`${origin}/api/protocol`))).json(), {protocol});
     const asset = await site.fetch(new Request(`${origin}/`));
-    assert.equal(asset.status, 200); assert.equal(await asset.text(), '<html>synthetic theme</html>');
+    assert.equal(asset.status, 200); assert.match(await asset.text(), /<html>synthetic theme<\/html>/);
     assert.equal(asset.headers.get('set-cookie'), null);
     assert.equal((await site.fetch(new Request(`${origin}/missing.js`, {headers: {accept: 'text/html'}}))).status, 404);
   }
@@ -269,7 +269,7 @@ test('preview has a separate origin and cannot reach admin endpoints or cross-or
     assert.equal((await site.fetch(request('/manage/api/state', {...session, base: origin}))).status, 404);
     assert.equal((await site.fetch(request('/admin', {...session, base: origin}))).status, 404);
     assert.equal(await site.websocket(new Request(`${origin}/api/ws`, {headers: {origin: config.adminOrigin}})), null);
-    assert.equal(await site.websocket(new Request(`${origin}/api/ws`, {headers: {origin}})), site.protocols['cfsm-609cc0b']);
+    assert.deepEqual((await site.websocket(new Request(`${origin}/api/ws`, {headers: {origin}})))?.websocketPaths, site.protocols['cfsm-609cc0b'].websocketPaths);
   }
   assert.equal(installationFromUrl(config, new URL(`${display}:8443/`)), null);
   assert.equal(installationFromUrl(config, new URL(display.replace('https:', 'http:'))), null);
@@ -300,7 +300,7 @@ test('single origin defaults to root theme and /admin, with namespaced resources
   site.protocols['cfsm-609cc0b']=fakeProtocol('cfsm');
   site.protocols['komari-adhesive-v1']=fakeProtocol('komari');
   const call=(path:string,options:Parameters<typeof request>[1]={})=>site.fetch(request(path,{base:config.displayOrigin,origin:config.displayOrigin,...options}));
-  assert.equal(await (await call('/')).text(),'<html>synthetic theme</html>');
+  assert.match(await (await call('/')).text(),/<html>synthetic theme<\/html>/);
   assert.equal((await call('/')).headers.get('location'),null);
   assert.equal((await call('/')).headers.get('cache-control'),'no-store');
   assert.deepEqual(await (await call('/api/protocol')).json(),{protocol:'cfsm'});
@@ -331,7 +331,7 @@ test('single origin defaults to root theme and /admin, with namespaced resources
   assert.equal(changes,1);
   assert.deepEqual(await (await call('/api/protocol')).json(),{protocol:'komari'});
   const rootWs=new Request(config.displayOrigin+'/api/rpc2',{headers:{origin:config.displayOrigin}});
-  assert.equal(await site.websocket(rootWs),site.protocols['komari-adhesive-v1']);
+  assert.deepEqual((await site.websocket(rootWs))?.websocketPaths,site.protocols['komari-adhesive-v1'].websocketPaths);
   assert.equal(await site.websocket(new Request(rootWs.url,{headers:{origin:'https://other.invalid'}})),null);
   const preview=installationUrl(config,ids[0],true);
   assert.equal((await site.fetch(new Request(new URL('/admin/api/state'+new URL(preview).search,preview),{headers:{cookie}}))).status,404);
@@ -529,7 +529,7 @@ test('single-domain previews bind each request to its version without changing a
   for(const invalid of ['bad','',ids[1]+'&__preview='+ids[0]])assert.equal((await get('/?__preview='+invalid)).status,400);
   assert.equal((await get('/?__preview='+ids[2])).status,404);
   const ws=new Request(config.displayOrigin+'/api/rpc2'+preview,{headers:{Origin:config.displayOrigin}});
-  assert.equal(await site.websocket(ws),site.protocols['komari-adhesive-v1']);
+  assert.deepEqual((await site.websocket(ws))?.websocketPaths,site.protocols['komari-adhesive-v1'].websocketPaths);
   assert.equal(await site.websocket(new Request(ws.url,{headers:{Origin:'https://external.invalid'}})),null);
   await store.command({type:'activate',id:ids[1],expectedGeneration:(await store.state()).generation});
   assert.deepEqual(await (await get('/api/protocol?__preview='+ids[0])).json(),{protocol:'cfsm'});
@@ -544,4 +544,71 @@ test('same-domain preview respects private display access for HTML, APIs and web
   site.protocols['cfsm-609cc0b']=fakeProtocol('cfsm');
   for(const path of ['/','/index.html','/api/protocol'])assert.equal((await site.fetch(new Request(config.displayOrigin+path+'?__preview='+ids[0]))).status,401);
   assert.equal(await site.websocket(new Request(config.displayOrigin+'/api/ws?__preview='+ids[0])),null);
+});
+
+test('HTTP and WebSocket theme settings stay bound to each preview while root theme changes',async()=>{
+  const store=new MemoryStore();
+  for(const index of [1,2])await commitInstallation(store,installation(index,{themeId:`Theme${index}`,manifest:{short:`Theme${index}`,version:'1.0'},configuration:{type:'managed',data:[{key:'level',default:index}]} }),files(),index===1);
+  const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test'});
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'public'}),config,store,ui);
+  const captured:unknown[]=[];
+  site.protocols['komari-adhesive-v1']={websocketPaths:['/api/rpc2'],fetch:async(r,context)=>new URL(r.url).pathname.startsWith('/api/')?Response.json(context):null,openRealtime:(_client,_connect,_path,context)=>{captured.push(context);return{close(){}};}};
+  const call=(path:string)=>site.fetch(new Request(config.displayOrigin+path));
+  const a=await site.websocket(new Request(config.displayOrigin+'/api/rpc2?__preview='+ids[1]));
+  const b=await site.websocket(new Request(config.displayOrigin+'/api/rpc2?__preview='+ids[2]));
+  await store.command({type:'activate',id:ids[2],expectedGeneration:store.value.generation});
+  for(const [path,theme,level] of [['/api/public','Theme2',2],['/api/public?__preview='+ids[1],'Theme1',1],['/api/public?__preview='+ids[2],'Theme2',2]] as const)
+    assert.deepEqual(await(await call(path)).json(),{theme,settings:{level}});
+  const socket={send(){},close(){},onMessage(){},onClose(){},onError(){}};
+  a!.openRealtime(socket,async()=>socket,'/api/rpc2');b!.openRealtime(socket,async()=>socket,'/api/rpc2');
+  assert.deepEqual(captured,[{theme:'Theme1',settings:{level:1}},{theme:'Theme2',settings:{level:2}}]);
+  assert.deepEqual(await(await call('/themes/Theme1/komari-theme.json?__preview='+ids[1])).json(),{short:'Theme1',version:'1.0'});
+  assert.equal((await call('/themes/Theme2/komari-theme.json?__preview='+ids[1])).status,404);
+  const html=await call('/?__preview='+ids[1]);
+  assert.match(html.headers.get('content-security-policy')!,/script-src 'self' 'unsafe-inline' https:/);
+  const admin=await call('/admin/');assert.doesNotMatch(admin.headers.get('content-security-policy')!,/script-src[^;]*https:/);
+});
+
+test('declared extensionless remote resources are resolved before HTML SPA fallback',async()=>{
+  const {StoreNetwork}=await import('../src/management/store-network.ts');
+  const {createHash}=await import('node:crypto');
+  const bytes=encoder.encode('{"remote":true}'),blob=createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+  const store=new MemoryStore(),item=installation(0,{source:'https://github.com/example/theme',pinnedVersion:'b'.repeat(40),remoteFiles:{'data/config':{sha:blob,size:bytes.length,contentType:'application/json'}}});
+  await commitInstallation(store,item,files(),true);
+  let calls=0;const network=new StoreNetwork(store,async(_settings,run)=>run(async()=>{calls++;return new Response(bytes);}));
+  const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test'});
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'public'}),config,store,ui,network);
+  site.protocols['cfsm-609cc0b']=fakeProtocol('cfsm');
+  const response=await site.fetch(new Request(config.displayOrigin+'/data/config',{headers:{Accept:'text/html'}}));
+  assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'application/json');assert.deepEqual(await response.json(),{remote:true});assert.equal(calls,1);
+  const html=await(await site.fetch(new Request(config.displayOrigin+'/'))).text();
+  assert.equal(html,'<html>synthetic theme</html>');
+  assert.equal(new TextDecoder().decode((await store.asset(item.id,'index.html'))!.bytes),'<html>synthetic theme</html>');
+});
+
+test('exact installation assets and observed CSS dependencies precede Komari namespace aliases',async()=>{
+  const {ThemeResources}=await import('../src/themes/resources.ts');
+  const local='themes/default/assets/local.woff',declared='themes/default/assets/declared.woff',observed='themes/default/assets/observed.woff';
+  const ownFiles=[...files(),{path:local,bytes:encoder.encode('local font'),contentType:'font/woff'}];
+  const source={url:'https://raw.githubusercontent.com/example/library/'+ 'b'.repeat(40)+'/font.woff',sha256:'c'.repeat(64)};
+  const store=new MemoryStore(),item=installation(1,{themeId:'Example',manifest:{short:'Example',version:'1'},files:Object.fromEntries(ownFiles.map(file=>[file.path,{size:file.bytes.length,contentType:file.contentType}])),dependencySources:{[declared]:source}});
+  await commitInstallation(store,item,ownFiles,true);
+  const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test'});
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'public'}),config,store,ui);
+  site.protocols['komari-adhesive-v1']=fakeProtocol('komari');
+  const resources=new ThemeResources(async()=>{throw Error('no external network in route test');});
+  // Seed the same runtime index populated by observe(); CSS fingerprint matching has separate coverage.
+  (resources as unknown as {dependencies:Map<string,Record<string,typeof source>>}).dependencies.set(item.id,{[observed]:source});
+  const calls:{path:string;defaultOnly:boolean}[]=[];
+  resources.get=async(_item,path,defaultOnly=false)=>{calls.push({path,defaultOnly});return {bytes:encoder.encode('resolved '+path),contentType:'font/woff'};};
+  (site as unknown as {resources:typeof resources}).resources=resources;
+  const get=(path:string)=>site.fetch(new Request(config.displayOrigin+'/'+path));
+  assert.equal(await(await get(local)).text(),'local font');assert.equal(calls.length,0);
+  for(const path of [declared,observed])assert.equal(await(await get(path)).text(),'resolved '+path);
+  assert.deepEqual(calls,[{path:declared,defaultOnly:false},{path:observed,defaultOnly:false}]);
+  const ownNamespace=await get('themes/Example/dist/index.html');assert.equal(ownNamespace.status,200);assert.match(await ownNamespace.text(),/synthetic theme/);
+  assert.deepEqual(await(await get('themes/Example/komari-theme.json')).json(),item.manifest);
+  await get('themes/default/assets/logo/os-alma.svg');
+  assert.deepEqual(calls.at(-1),{path:'assets/logo/os-alma.svg',defaultOnly:true});
+  assert.equal((await get('themes/Other/dist/index.html')).status,404);
 });

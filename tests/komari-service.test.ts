@@ -75,3 +75,124 @@ test('source outage and identity ambiguity remain RPC errors rather than fake of
     assert.equal(JSON.stringify(result).includes('SENSITIVE'),false);assert.equal(JSON.stringify(result).includes('source.invalid'),false);
   }
 });
+
+test('native common methods retain request-scoped settings and single-node response forms',async()=>{
+  const app=service(),context={theme:'UpstreamTheme',settings:{refreshSeconds:3}};
+  const settings=await app.rpc(rpc('common:getPublicInfo'),context) as RpcResponse;
+  assert.equal((settings.result as {theme:string}).theme,'UpstreamTheme');
+  assert.deepEqual((settings.result as {theme_settings:unknown}).theme_settings,context.settings);
+  assert.equal((await app.method('public:getPublicSettings') as {theme:string}).theme,'default');
+  const single=await app.method('common:getNodes',{uuid:'opaque'}) as Record<string,unknown>;
+  assert.equal(single.uuid,'opaque');assert.equal(single.cpu_cores,null);assert.equal('opaque' in single,false);
+  await assert.rejects(app.method('common:getNodes',{uuid:'absent'}),{code:-32602});
+  const recent=await app.method('common:getNodeRecentStatus',{uuid:'opaque'}) as {count:number;records:Record<string,unknown>[]};
+  assert.equal(recent.count,1);assert.equal(recent.records[0]?.client,'opaque');assert.equal(recent.records[0]?.cpu,0);
+  assert.equal(recent.records[0]?.net_in,null);assert.equal(recent.records[0]?.time,new Date(now).toISOString());
+  assert.equal((await app.method('common:getMe') as {logged_in:boolean}).logged_in,false);
+  assert.deepEqual(await app.method('common:getBackendVersion'),await app.method('public:getVersion'));
+});
+
+test('common load records use native grouped form; supported-but-absent metrics remain null',async()=>{
+  const app=service(async input=>Response.json(String(input).includes('probe-servers')?snapshot:{success:true,bucket_sec:300,series:{cpu_pct:[{t:now/1000,value:0}]}}));
+  const result=await app.method('common:getRecords',{uuid:'opaque',type:'load',hours:1}) as {count:number;records:Record<string,Record<string,unknown>[]>};
+  assert.equal(result.count,1);assert.deepEqual(Object.keys(result.records),['opaque']);assert.equal(result.records.opaque?.[0]?.cpu,0);
+  assert.equal(result.records.opaque?.[0]?.swap,null);
+  const absent=await app.method('public:getRecordsByUUID',{uuid:'opaque',hours:1,load_type:'swap'}) as {records:Record<string,unknown>[]};
+  assert.equal(absent.records[0]?.swap,null);
+  await assert.rejects(app.method('common:getRecords',{uuid:'not-public',type:'load'}),{code:-32602});
+  await assert.rejects(app.method('common:getRecords',{type:'exec'}),{code:-32602});
+});
+
+test('common Ping records without uuid cover only bound public nodes and preserve source buckets',async()=>{
+  const config=readConfig({MMWX_BASE_URL:'https://source.invalid',BRIDGE_BINDINGS:JSON.stringify([{id:'a',match:{name:'A'}},{id:'b',match:{name:'B'}}]),BRIDGE_PING_TARGETS:JSON.stringify({ct:{key:'t',label:'Target'}})});
+  const source={enabled:true,show_name:false,history_days:7,servers:[{name:'A',online:true},{name:'B',online:false}]};
+  const upstream=new Upstream(config,async input=>{
+    const url=new URL(String(input));
+    return Response.json(url.pathname.endsWith('probe-servers')?source:url.searchParams.get('metric')==='system'?{success:true,bucket_sec:300,series:{cpu_pct:[{t:now/1000,value:0}]}}:
+      {success:true,bucket_sec:300,generated_at:now/1000,all_series:[{key:'t',buckets:[{ms:0,loss:0},{ms:-1,loss:100}]}]});
+  },()=>now);
+  const app=new KomariService(config,upstream,()=>now);
+  const result=await app.method('common:getRecords',{type:'ping',hours:1}) as {count:number;records:{client:string;value:number}[];tasks:{id:number}[]};
+  assert.equal(result.count,4);assert.deepEqual([...new Set(result.records.map(row=>row.client))].sort(),['a','b']);
+  assert.deepEqual(result.records.map(row=>row.value).sort(),[-1,-1,0,0]);assert.equal(result.tasks.length,1);
+  const byTask=await app.method('public:getPingRecords',{task_id:result.tasks[0]!.id,hours:1}) as {count:number};
+  assert.equal(byTask.count,4);
+  const summary=await app.method('public:getPingMetricStats',{entity_id:'a',hours:1}) as {stats:Record<string,unknown>[]};
+  assert.equal(summary.stats.length,1);assert.equal(summary.stats[0]?.loss,50);assert.equal(summary.stats[0]?.avg,0);
+  assert.equal(summary.stats[0]?.total,null);assert.equal(summary.stats[0]?.valid,null);assert.equal(Object.hasOwn(summary.stats[0]!, 'p99'),false);
+  assert.equal(Object.hasOwn(summary.stats[0]!, 'latest'),false);assert.equal(summary.stats[0]?.sample_buckets,2);
+
+});
+
+test('history concurrency is shared across RPC batches and failed all-node reads stop scheduling',async()=>{
+  const names=Array.from({length:12},(_,index)=>`node-${index}`);
+  const config=readConfig({MMWX_BASE_URL:'https://source.invalid',BRIDGE_BINDINGS:JSON.stringify(names.map(id=>({id,match:{name:id}})))});
+  const source={enabled:true,show_name:true,history_days:7,servers:names.map(name=>({name,online:true}))};
+  const app=new KomariService(config,new Upstream(config,async()=>Response.json(source),()=>now),()=>now);
+  let active=0,peak=0;
+  app.series.get=async()=>{active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,2));active--;return {points:[],pings:[],bucketSeconds:300};};
+  const replies=await app.rpc(Array.from({length:8},(_,index)=>rpc('common:getRecords',{hours:1+index},index))) as RpcResponse[];
+  assert.equal(replies.length,8);assert.ok(replies.every(reply=>!reply.error));assert.equal(peak,4);assert.equal(active,0);
+  const started:string[]=[];
+  app.series.get=async(id)=>{started.push(id);if(id==='node-0')throw new Error('synthetic outage');active++;await new Promise(resolve=>setTimeout(resolve,2));active--;return {points:[],pings:[],bucketSeconds:300};};
+  await assert.rejects(app.method('common:getRecords',{hours:1}),/synthetic outage/);
+  assert.deepEqual(started,['node-0','node-1','node-2','node-3']);assert.equal(active,0);
+  // A failure releases the shared permits for subsequent requests.
+  app.series.get=async()=>({points:[],pings:[],bucketSeconds:300});
+  assert.ok(await app.method('common:getRecords',{uuid:'node-1',hours:1}));
+});
+
+test('native absolute-time aliases fail explicitly instead of returning recent history',async()=>{
+  const app=service();let reads=0;
+  app.series.get=async()=>{reads++;return {points:[],pings:[],bucketSeconds:300};};
+  for(const method of ['common:getRecords','public:queryMetrics','public:getPingMetricStats']){
+    for(const key of ['start','end','start_time','end_time']){
+      await assert.rejects(app.method(method,{entity_id:'opaque',metric_keys:['cpu.usage_percent'],[key]:'2020-01-01T00:00:00Z'}),{code:'UNSUPPORTED_RANGE'});
+    }
+  }
+  assert.equal(reads,0);
+});
+
+test('Ping statistics honor native task_id and task_ids filters without conflating task data',async()=>{
+  const config=readConfig({MMWX_BASE_URL:'https://source.invalid',BRIDGE_BINDINGS:JSON.stringify([{id:'a',match:{name:'A'}}]),BRIDGE_PING_TARGETS:JSON.stringify({ct:{key:'one',label:'One'},cu:{key:'two',label:'Two'}})});
+  const app=new KomariService(config,undefined,()=>now);
+  app.series.get=async()=>({points:[],bucketSeconds:300,pings:[
+    {timestamp:now,targetKey:'one',latencyMs:10,lossPercent:0,state:'measurement'},
+    {timestamp:now,targetKey:'two',latencyMs:20,lossPercent:50,state:'measurement'},
+  ]});
+  const all=await app.method('public:getPingMetricStats',{entity_id:'a'}) as {stats:{task_id:string;avg:number}[]};
+  assert.equal(all.stats.length,2);
+  const first=all.stats[0]!,second=all.stats[1]!;
+  for(const selection of [{task_id:first.task_id},{task_ids:[Number(first.task_id)]}]){
+    const selected=await app.method('public:getPingMetricStats',{entity_id:'a',...selection}) as typeof all;
+    assert.deepEqual(selected.stats,[first]);
+  }
+  const both=await app.method('public:getPingMetricStats',{entity_id:'a',task_id:first.task_id,task_ids:[second.task_id]}) as typeof all;
+  assert.deepEqual(both.stats,all.stats);
+  const missing=await app.method('public:getPingMetricStats',{entity_id:'a',task_ids:['999999']}) as typeof all;
+  assert.deepEqual(missing.stats,[]);
+  await assert.rejects(app.method('public:getPingMetricStats',{entity_id:'a',task_ids:'bad'}),{code:-32602});
+});
+
+
+test('Ping statistics omit unknown optional metrics and do not create statistics for absent measurements',async()=>{
+  const config=readConfig({MMWX_BASE_URL:'https://source.invalid',BRIDGE_PING_TARGETS:JSON.stringify({ct:{key:'zero',label:'Zero'},cu:{key:'timeout',label:'Timeout'},cm:{key:'missing',label:'Missing'},bd:{key:'unknown-loss',label:'Unknown loss'}})});
+  const app=new KomariService(config,undefined,()=>now);
+  app.series.get=async()=>({points:[],bucketSeconds:300,pings:[
+    {timestamp:now,targetKey:'zero',latencyMs:0,lossPercent:0,state:'measurement'},
+    {timestamp:now,targetKey:'timeout',latencyMs:null,lossPercent:100,state:'timeout'},
+    {timestamp:now,targetKey:'missing',latencyMs:null,lossPercent:null,state:'missing'},
+    {timestamp:now,targetKey:'unknown-loss',latencyMs:8,lossPercent:null,state:'measurement'},
+  ]});
+  const result=await app.method('public:getPingMetricStats',{entity_id:'a'}) as {stats:Record<string,unknown>[]};
+  assert.equal(result.stats.length,2);
+  const zero=result.stats.find(row=>row.name==='Zero')!,timeout=result.stats.find(row=>row.name==='Timeout')!;
+  assert.equal(zero.avg,0);assert.equal(zero.min,0);assert.equal(zero.max,0);assert.equal(zero.latest,0);assert.equal(zero.loss,0);
+  assert.equal(timeout.loss,100);
+  for(const row of result.stats)for(const field of ['p50','p99','stddev','p99_p50_ratio'])assert.equal(Object.hasOwn(row,field),false);
+  for(const field of ['avg','min','max','latest'])assert.equal(Object.hasOwn(timeout,field),false);
+  // A consumer can use presence checks before formatting every optional numeric value.
+  for(const row of result.stats)for(const field of ['avg','min','max','latest','p50','p99','stddev','p99_p50_ratio'])if(row[field]!==undefined)assert.doesNotThrow(()=>(row[field] as number).toFixed(2));
+  app.series.get=async()=>({points:[],pings:[],bucketSeconds:300});
+  assert.deepEqual((await app.method('public:getPingMetricStats',{entity_id:'a'}) as typeof result).stats,[]);
+});

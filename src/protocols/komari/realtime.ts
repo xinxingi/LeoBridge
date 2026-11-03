@@ -1,9 +1,10 @@
+import type { PresentationContext } from '../../core/presentation.ts';
 import { safeError } from '../../core/errors.ts';
 import type { Connect,Socket } from '../../core/socket.ts';
 import type { KomariService } from './service.ts';
 
 /** Real Komari RPC2 request/response transport, independent of CFSM subscribe/batchUpdate. */
-export function komariRealtime(service:KomariService,client:Socket,connect:Connect,path='/api/rpc2') {
+export function komariRealtime(service:KomariService,client:Socket,connect:Connect,path='/api/rpc2',presentation?:PresentationContext) {
   let stopped=false,source:Socket|undefined,connecting=false,generation=0,retry=1000,lastFrame=0,inflight=0;
   let reconnectTimer:ReturnType<typeof setTimeout>|undefined;
   const safeClose=(socket:Socket|undefined,code=1000,reason='closed')=>{try{socket?.close(code,reason);}catch{/* already closed */}};
@@ -50,7 +51,7 @@ export function komariRealtime(service:KomariService,client:Socket,connect:Conne
       }
       let payload:unknown;
       try{payload=JSON.parse(text);}catch{send({jsonrpc:'2.0',id:null,error:{code:-32700,message:'Parse error'}});return;}
-      const response=await service.rpc(payload);
+      const response=await service.rpc(payload,presentation);
       if(response!==null)send(response);
     }finally{inflight--;}
   }

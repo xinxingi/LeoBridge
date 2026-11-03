@@ -95,7 +95,19 @@ test('a failed explicit refresh is visible and cannot masquerade as an old succe
   let broken=false,calls=0;
   const fetcher=async(input:string|URL|Request)=>{calls++;return String(input).includes('/commits/')?Response.json({sha:broken?'invalid':'e'.repeat(40)}):Response.json({schema:1,themes:[]});};
   await fetchCatalog('cfsm',fetcher,{latest:true});broken=true;
-  await assert.rejects(fetchCatalog('cfsm',fetcher,{refresh:true}),{code:'CATALOG_COMMIT',status:502});
-  await assert.rejects(fetchCatalog('cfsm',fetcher,{latest:true}),{code:'CATALOG_COMMIT'});
+  await assert.rejects(fetchCatalog('cfsm',fetcher,{refresh:true}),{code:'SOURCE_REVISION',status:502});
+  await assert.rejects(fetchCatalog('cfsm',fetcher,{latest:true}),{code:'SOURCE_REVISION'});
   assert.equal(calls,4);
+});
+
+test('branch resolution falls back to verified public repository metadata when API quota is exhausted',async()=>{
+  const {repositoryRevision}=await import('../src/themes/catalog.ts');
+  const sha='a'.repeat(40),seen:string[]=[];
+  const page=(owner='example',branch='build')=>`<script type="application/json" data-target="react-app.embeddedData">${JSON.stringify({payload:{codeViewLayoutRoute:{repo:{ownerLogin:owner,name:'theme'}},codeViewTreeRoute:{refInfo:{name:branch,currentOid:sha}}}})}</script>`;
+  const fetcher=async(input:string|URL|Request)=>{seen.push(String(input));return seen.length===1?new Response('quota',{status:403}):new Response(page());};
+  assert.equal(await repositoryRevision('example/theme','build',fetcher),sha);
+  assert.equal(seen[1],'https://github.com/example/theme/tree/build');
+  for(const html of [page('other'),page('example','master'),'<p>sha '+sha+'</p>']){
+    await assert.rejects(repositoryRevision('example/theme','build',async input=>String(input).includes('api.github.com')?new Response('quota',{status:429}):new Response(html)),{code:'SOURCE_REVISION'});
+  }
 });

@@ -43,6 +43,15 @@ export function komariRecent(input:UnifiedServer,id:string,staleMs:number,transp
     updated_at:new Date(input.observedAt).toISOString(),bridge:bridgeMetadata(input,staleMs,transport,now),
   };
 }
+/** Flatten an observed legacy report without creating new samples or zero defaults. */
+export function komariFlatRecent(report:ReturnType<typeof komariRecent>) {
+  return {...unavailable,client:report.uuid,time:report.updated_at,cpu:report.cpu.usage,
+    ram:report.ram.used,ram_total:report.ram.total,swap:report.swap.used,swap_total:report.swap.total,
+    load:report.load.load1,disk:report.disk.used,disk_total:report.disk.total,
+    net_in:report.network.down,net_out:report.network.up,
+    connections:connectionTotal(report.connections.tcp,report.connections.udp),
+    connections_tcp:report.connections.tcp,connections_udp:report.connections.udp,bridge:report.bridge};
+}
 export function komariRecord(point:HistoryPoint,id:string) {
   return {
     ...unavailable,client:id,time:new Date(point.timestamp).toISOString(),cpu:point.cpuPercent??null,

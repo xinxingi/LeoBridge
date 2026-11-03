@@ -187,7 +187,7 @@ jobs:
           cat *.sha256 > checksums.txt
           cp ../deploy/docker/compose.yaml compose.yaml
           cp ../deploy/docker/.env.example docker.env.example
-      - name: Create release and upload verified packages
+      - name: Create or reuse release and upload verified packages
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
@@ -195,6 +195,13 @@ jobs:
           IMAGE_DIGEST: ${{ needs.docker.outputs.digest }}
         run: |
           set -euo pipefail
+          # Include drafts and every page. A failed query stops before any mutation.
+          release_tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name')
+          if grep -Fxq -- "$RELEASE_TAG" <<< "$release_tags"; then
+            # Keep existing release notes, title and draft/prerelease status.
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+            exit 0
+          fi
           printf 'Docker Hub: `staractive/leobridge:%s`\n\nImage digest: `%s`\n\nLinux x64/arm64 archives include Node and production dependencies. Download the matching archive and checksum file.\n' \
             "$RELEASE_VERSION" "$IMAGE_DIGEST" > release-notes.md
           args=(--verify-tag --title "LeoBridge $RELEASE_TAG" --notes-file release-notes.md --generate-notes)

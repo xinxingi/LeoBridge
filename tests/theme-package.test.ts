@@ -36,7 +36,7 @@ test('valid static ZIP produces content-derived immutable identity, normalized r
   const a = await buildKomariPackage(e, archive), b = await buildKomariPackage(e, archive);
   assert.equal(a.id, b.id); assert.match(a.id, /^[a-f0-9]{32}$/); assert.equal(a.entry, 'index.html');
   assert.equal(a.license.spdx, 'MIT'); assert.equal(a.compatibility, 'unverified');
-  assert.deepEqual(a.files.map(f => f.path).sort(), ['LICENSE','assets/app.js','assets/style.css','index.html'].sort());
+  assert.deepEqual(a.files.map(f => f.path).sort(), ['.komari/komari-theme.json','LICENSE','assets/app.js','assets/style.css','index.html'].sort());
   const changed = zipSync(source({ 'dist/assets/app.js': 'export const synthetic = false;' }));
   assert.notEqual((await buildKomariPackage(await entry(changed), changed)).id, a.id);
 });
@@ -50,7 +50,9 @@ test('hash, manifest identity and configuration remain mandatory; missing licens
   const absent = zipSync(noLicense), missing=await buildKomariPackage(await entry(absent), absent); assert.equal(missing.license.status,'missing'); assert.equal(missing.files.some(f=>f.path==='LICENSE'),false);
   const custom=zipSync(source({LICENSE:'Custom terms: contact the author.'})); const found=await buildKomariPackage(await entry(custom),custom); assert.equal(found.license.status,'found');assert.equal(found.license.spdx,'NOASSERTION');assert.equal(found.license.text,'Custom terms: contact the author.');
   const raw = zipSync(source({ 'komari-theme.json': JSON.stringify({ short:'Synthetic',version:'1.0',configuration:{type:'raw',html:'<script>bad</script>'} }) }));
-  await assert.rejects(buildKomariPackage(await entry(raw), raw), { code: 'MANIFEST_CONFIGURATION' });
+  assert.equal((await buildKomariPackage(await entry(raw), raw)).configuration?.type,'raw');
+  const invalid=zipSync(source({'komari-theme.json':JSON.stringify({short:'Synthetic',version:'1.0',configuration:[]})}));
+  await assert.rejects(buildKomariPackage(await entry(invalid),invalid),{code:'MANIFEST_CONFIGURATION'});
 });
 
 test('ZIP rejects traversal, absolute paths, backslashes, encoded paths and case aliases', () => {
@@ -79,10 +81,11 @@ test('ZIP size and ratio claims cannot hide actual expansion or bad CRC', () => 
   assert.throws(() => readStaticZip(corrupted), { code:'ZIP_CHECKSUM' });
 });
 
-test('resource validation rejects missing chunks and external scripts, not harmless navigation links', async () => {
-  for (const markup of ['<script src="/assets/missing.js"></script>', '<script src="https://evil.test/payload.js"></script>']) {
+test('resource diagnostics retain external and unresolved references without requiring a self-contained package', async () => {
+  for (const markup of ['<script src="/assets/missing.js"></script>', '<script src="https://cdn.example.test/library.js"></script>']) {
     const archive = zipSync(source({'dist/index.html':markup}));
-    await assert.rejects(buildKomariPackage(await entry(archive),archive), {code:markup.includes('https')?'EXTERNAL_ASSET':'ASSET_MISSING'});
+    const pkg=await buildKomariPackage(await entry(archive),archive);
+    assert.ok(pkg.audit.notices.some(note=>note.includes(markup.includes('https')?'外部资源':'包外资源')));
   }
   const files = [{path:'index.html',bytes:enc.encode('<a href="https://example.com">link</a>'),contentType:contentType('index.html')!}];
   assert.doesNotThrow(()=>validateStaticReferences(files));
@@ -142,7 +145,7 @@ test('JavaScript references use tokens: prose and comments are not imports', asy
   await assert.doesNotReject(buildKomariPackage(await entry(prose),prose));
   for (const code of [`import './missing.js';`,`import x from './missing.js';`,`export {x} from './missing.js';`,`import('./missing.js');`]) {
     const archive=zipSync(source({'dist/assets/app.js':code}));
-    await assert.rejects(buildKomariPackage(await entry(archive),archive),{code:'ASSET_MISSING'});
+    assert.ok((await buildKomariPackage(await entry(archive),archive)).audit.notices.some(note=>note.includes('missing.js')));
   }
 });
 
@@ -185,4 +188,13 @@ test('CFSM installation pins the reviewed commit even when its build branch move
     return new Response(bytes);
   }});
   assert.equal(pkg.pinnedVersion,fixed);assert.equal(pkg.license.status,'missing');assert.equal(seen.length,3);
+});
+
+test('Komari preserves source maps, ancillary files, metadata and arbitrary static directories',async()=>{
+  const archive=zipSync(source({'dist/js/app.js.map':'{}','dist/json/.gitignore':'stats.json','dist/media/clip.webm':'video','preview.png':'preview'}));
+  const pkg=await buildKomariPackage(await entry(archive),archive);
+  assert.equal(pkg.files.find(f=>f.path==='js/app.js.map')?.contentType,'application/json; charset=utf-8');
+  assert.equal(pkg.files.find(f=>f.path==='json/.gitignore')?.contentType,'application/octet-stream');
+  assert.ok(pkg.files.some(f=>f.path==='.komari/preview.png'));
+  assert.equal(pkg.manifest?.short,'Synthetic');
 });

@@ -26,7 +26,7 @@ flowchart LR
 | `src/upstream` | 妙妙屋HTTP读取、缓存/超时、中立历史序列 | core、upstream |
 | `src/protocols/cfsm` | CFSM服务、序列化、Ping、历史和订阅 | core、upstream、cfsm本层 |
 | `src/protocols/komari` | Komari RPC/REST、序列化及实时 | core、upstream、komari本层 |
-| `src/themes` | 商店、静态包校验、安装确认及状态契约 | core、themes |
+| `src/themes` | 商店、静态包校验、固定资源来源/按需缓存、安装确认及状态契约 | core、themes |
 | `src/management` | 独立认证、管理API与源配置 | core、themes、management |
 | `src/app` | 组合协议应用与站点路由 | 上述中立/功能层、app |
 | `src/runtime` | Node/Worker入口、文件/R2/DO存储、代理 | 上述层、runtime |
@@ -63,3 +63,8 @@ Node默认single路由只开一个监听端口，local使用回环HTTP，direct�
 ## 商店下载传输
 
 `core/store-proxy.ts`定义私有代理配置及URL校验；`management/store-network.ts`管理配置状态及下载任务的传输注入，主题目录/安装器继续只消费`PublicFetcher`。`runtime/store-transport.ts`用配套的undici fetch与Agent/ProxyAgent建立每个任务独立的HTTP(S)传输，在全部下载结束后销毁；代理切换不修改全局dispatcher或主控连接，不在失败时回退直连。代理配置通过既有ThemeStore原子事务持久化，从公开主题状态中剔除，认证URL不回显。Worker没有Node传输注入，明确拒绝代理配置及使用代理的下载。
+
+
+## 原主题资源与展示上下文
+
+`themes/resources.ts`通过注入的商店传输按固定版本读取静态资源，不接触源端凭据；本地/主题自己的资源优先，已识别公共库及生态官方公共图像补缺。来源清单仅包含URL与摘要，不交付第三方资源字节。`core/presentation.ts`承载当前安装的主题标识及默认设置，`app/site.ts`在HTTP和WS请求入口绑定，协议层不读取主题仓库或其他生态的响应。展示HTML不再注入数据说明；预览仍保留请求及历史导航适配，原包文件及摘要不变。主题HTTPS外链由浏览器读取，管理UI不执行主题配置代码。

@@ -23,7 +23,7 @@ git tag -a v0.1.0 <已核对的main提交SHA> -m "LeoBridge v0.1.0"
 git push <远端名> refs/tags/v0.1.0
 ```
 
-标签必须与`package.json`完全一致，且目标提交必须已进入远端`main`。例如`v0.1.0-rc.1`要求包版本为`0.1.0-rc.1`，GitHub Release会标记为预发布。不要提前手动创建Release；工作流在全部工件准备完成后自动创建。
+标签必须与`package.json`完全一致，且目标提交必须已进入远端`main`。例如`v0.1.0-rc.1`要求包版本为`0.1.0-rc.1`，新建GitHub Release会标记为预发布。通常由工作流在全部工件准备完成后自动创建Release；同标签Release已存在时上传附件并替换同名附件，保留原说明、标题和草稿/预发布状态。已有草稿仍需管理员确认后发布；已有说明中的镜像摘要需与本次Docker任务输出核对。
 
 4. 在Actions查看`Docker and Release packages`。失败时先读取失败步骤并修复原因，不通过移动已公开标签替换代码；代码需要变化时发布新的版本号。
 
@@ -39,3 +39,15 @@ git push <远端名> refs/tags/v0.1.0
 运行包、镜像及Release均来自同一标签提交。全部检查通过后才进入上传步骤；普通PR不会读取Docker Hub发布凭据。Docker Hub和GitHub Release并非跨平台原子事务：如果镜像已上传而Release步骤失败，先排查并重跑失败任务，不删除数据或擅自重打版本标签。
 
 自动检查使用隔离的合成数据，不访问真实主控、不证明第三方主题兼容或实际部署环境验收。首次使用本工作流前的本地验证不能记作已完成公开发布；实际发布以Actions结果、Release附件及Docker Hub摘要为准。
+
+## 旧工作流报同标签Release已存在
+
+`a release with the same tag name already exists`表示创建Release冲突，不代表前面的运行包或Docker构建失败。新版工作流分页查询含草稿的Release列表，精确匹配标签后复用；查询返回403、服务故障或网络错误时直接失败，只有完整查询成功且无同标签Release才进入创建流程。附件上传失败会保留失败状态，可重跑失败任务补齐；上传不是原子操作。
+
+已触发的旧标签工作流不会因分支上的修复而更新，直接重跑仍会执行旧的创建命令。不要移动标签或删除已有Release来规避。对于已经完成打包和Docker发布的旧运行，可在原Release中补齐该次运行的产物：
+
+1. 从同一次Actions运行下载`release-linux-x64`和`release-linux-arm64`工件，在保留期内解压到同一目录，保留两个`.tar.gz`及其`.sha256`。分别校验两份SHA-256文件，再将两份校验文件合并为`checksums.txt`。
+2. 从该标签提交取得`deploy/docker/compose.yaml`和`deploy/docker/.env.example`，后者保存为`docker.env.example`；不能混入当前开发分支的文件。
+3. 在已有Release的编辑页上传上述7个附件，核对同名附件后替换。保留已有发布说明，并补充该次Docker任务实际输出的镜像标签和digest；保存后检查两种架构的附件及校验文件完整。
+
+这是对已成功构建产物的手动补交，不会使原Actions运行变绿。若工件已过期或无法核实来源，应通过新版本完整发版。新版本标签包含工作流修复后，才会自动使用复用逻辑。

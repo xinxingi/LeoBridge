@@ -7,7 +7,7 @@ LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议
 | CFSM默认前台 | `609cc0b0998793510453be8eadced2064b28ad7d` | 首页、详情、系统与Ping历史、实时更新 |
 | Komari 官方默认前台 | `bed58b589da63232a17681b1dbaed9eab2423078` | 首页、详情、系统与Ping/丢包历史、实时更新 |
 
-两个历史适配包曾通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见[来源档案](../references/retired-themes/README.md)。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect配置拒绝，managed使用默认值。
+两个历史适配包曾通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见[来源档案](../references/retired-themes/README.md)。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect声明保留但不在管理页执行，managed默认值按安装版本传入HTTP/WS；尚无配置编辑UI。
 
 LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服务器管理、终端、远程控制与告警功能。上游Token不提供给主题。single模式的正式主题及预览均与管理后台同源，只应预览和启用可信主题；需要隔离时使用isolated模式。
 
@@ -16,6 +16,14 @@ LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服�
 默认不内置第三方主题，由管理员从商店按需安装。先展示实际固定版本、来源和许可文件，再主动勾选确认；安装时重新校验同一版本及摘要。记录知情决定，不作授权判断。许可信息缺失不代替包安全与兼容性检查；所有新商店安装仍标为未验证，详见[主题管理](../themes.md#主题获取与许可信息)。历史适配包兼容结论不覆盖商店原版。
 
 本轮实际检查了商店原版Emerald及Adhesive Note：两者首页/详情可读取真实数据，但发现未知字段被原主题显示为零、免费或无限；Emerald七天图表还要求原CFSM管理登录。它们继续保持未验证，不宣称完整兼容，见[按需安装验收记录](theme-store-transition.md)。
+
+## 2026-11-03 通用资源与协议修复
+
+资源完整性不再等同于“所有依赖必须在ZIP里”。支持主题固定来源按需拉取、官方公共图像回退、公共CSS库字体依赖及HTTPS外链；仍核对摘要、路径及大小，详见[主题管理](../themes.md)和[资源来源](../references/theme-resource-sources.md)。不按主题名改写原包，不伪装完整CFSM/Komari管理后端。
+
+真实妙妙屋X快照11/11节点具有有效CPU、内存、磁盘和网络速率；同一快照与中立模型、CFSM、Komari转换比较0差异，CPU真零保留。此前Fixture Missing是缺值合成节点，不能当作真实源缺CPU的证据。
+
+按用户最新要求，展示页已移除“数据说明”，保留原主题显示逻辑；不支持的指标及原主题可能显示0、免费或无限的限制继续记录在本文。Komari Ping统计省略无法推导的可选分位数等字段，避免原主题对null调用toFixed，不伪造统计值。CFSM提供原生is_online别名，避免Horizon把离线误当在线。Emerald 1.0.16原版对缺失负载直接调用toFixed，合成缺值/离线节点会无法渲染卡片，属于已确认的原主题缺值边界限制；真实11台节点负载完整。具体原包浏览器复验结果见[通用桥接验收](theme-bridge-acceptance.md)。
 
 ## 协议与来源
 
@@ -34,7 +42,7 @@ LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服�
 | `cpu_threads` | 逻辑核心；不把物理`cpu_cores`无条件当逻辑线程 | 未知保持缺省 |
 | `online` | 显式true/false/null优先 | 上游不可达、数据过期不是服务器离线 |
 | `last_seen / uptime` | 离线源时间转毫秒；在线采用桥接观察时间；启动时间标记推算 | 不声称取得源端精确在线采样时间或开机时刻 |
-| `region_country / region` | 已知国家编码/Emoji转地区代码；未知不编造 | 图标资源由各主题包提供 |
+| `region_country / region` | 已知国家编码/Emoji转地区代码；未知不编造 | 图标优先来自主题，缺失时读取固定官方公共资源 |
 | Ping目标 | 显式key→CFSM槽位，不按数组位置或ISP唯一性推断 | 源目标数量可变；桥接最多8槽，未选目标不展示 |
 | Ping `-1` | 无数据；保持CFSM `false`/空点语义 | 不能改为0延迟；只有明确100%丢包且无有效RTT才表示超时 |
 | `traffic_* / cumulative_*` | 累计、月流量和计费字段当前不映射，显示未知 | 计费用量为configured_period、来源xray；网卡/开机累计为current_boot。不同口径不得混用 |

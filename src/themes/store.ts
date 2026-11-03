@@ -1,6 +1,7 @@
+import type { PublicResourceSource } from './default-resources.ts';
 import { parseStoreProxy,type SavedStoreProxy,type StoreProxySettings } from '../core/store-proxy.ts';
 import { BridgeError } from '../core/errors.ts';
-import type { LicenseRecord } from './package.ts';
+import type { LicenseRecord,RemoteThemeFile } from './package.ts';
 import type { SavedSource, SourceReview, SourceSettings } from '../core/source.ts';
 export const INSTALL_NOTICE_VERSION='2026-11-03.1';
 export const INSTALL_NOTICE_TEXT='我已查看上游来源及可用的许可说明，了解 LeoBridge 不提供授权判断，并决定安装此主题。';
@@ -16,6 +17,8 @@ export interface Installation {
   packageDigest?:string; confirmation?:InstallConfirmation;
   entry:string; installedAt:string; compatibility:Compatibility; evidence?:string;
   catalogRevision?:string;
+  themeId?:string; manifest?:Record<string,unknown>; configuration?:Record<string,unknown>;
+  resourceNotices?:string[]; remoteFiles?:Record<string,RemoteThemeFile>; dependencySources?:Record<string,PublicResourceSource>;
   files:Record<string,{contentType:string;size:number;offset?:number}>; bundled:boolean;
 }
 export interface AdminSession {expires:number;csrf:string;credentialVersion?:number;review?:InstallReview;sourceReview?:SourceReview;}
