@@ -2,17 +2,19 @@
 
 Docker Compose只启动LeoBridge应用，映射HTTP端口并保存数据卷。域名、DNS、HTTPS证书及反向代理由部署者自己的服务管理，模板不启动nginx或Caddy，不占用80/443。
 
-**目前尚未公开发布Docker Hub镜像。** 正式发布后使用对应仓库的固定版本或镜像摘要；不要把占位地址当作可拉取镜像。自行构建镜像见[开发文档](../development/build.md)，目标机器无需Node、pnpm或源码编译。
+镜像已发布到[Docker Hub：staractive/leobridge](https://hub.docker.com/r/staractive/leobridge/tags)，可匿名拉取。本文使用固定版本`staractive/leobridge:0.2.0`，支持`linux/amd64`和`linux/arm64`，Docker会选择宿主架构；当前不提供`latest`标签。也可使用`staractive/leobridge@sha256:<镜像索引摘要>`固定内容，摘要从对应版本的Docker Hub标签或成功的发布Actions摘要取得。自行构建见[开发文档](../development/build.md)，目标机器无需Node、pnpm或源码编译。
 
 ## 配置及首次启动
 
-准备Docker Engine和Docker Compose v2，把同版本的`compose.yaml`、`.env.example`放在部署目录（来源为仓库`deploy/docker`）：
+准备Docker Engine和Docker Compose v2，从[v0.2.0 Release](https://github.com/xinxingi/LeoBridge/releases/tag/v0.2.0)下载`compose.yaml`和`docker.env.example`到新建的部署目录。也可从同一Git标签的`deploy/docker/compose.yaml`和`deploy/docker/.env.example`取得模板，后者在Release附件中重命名为`docker.env.example`。不要用开发分支模板覆盖已有部署配置。
+
+模板下载受GitHub仓库权限控制，私有仓库需先登录有访问权限的账号；拉取Docker镜像不需要GitHub账号。升级时编辑原`.env`，不要重新复制示例覆盖配置。
 
 ```sh
 cd /path/to/leobridge-deploy
-cp .env.example .env
+cp docker.env.example .env
 chmod 600 .env
-# 编辑 .env，填写 LEOBRIDGE_IMAGE 为发布的镜像及固定版本。
+# 编辑 .env，设置 LEOBRIDGE_IMAGE=staractive/leobridge:0.2.0
 docker compose config --quiet
 docker compose pull app
 docker compose up -d --no-build
@@ -21,7 +23,7 @@ docker compose ps
 
 ### 首次打开后台
 
-默认在宿主机打开 `http://127.0.0.1:8787/admin/`：
+默认在宿主机打开 `http://127.0.0.1:8787/admin/`。远程服务器部署时通过SSH隧道或配置好的HTTPS反代访问；自己电脑上的127.0.0.1不会直接连到服务器：
 
 1. 全新卷且未自定义账号时，用`admin / admin`登录，设置12–128位、含大小写字母、数字和符号的新密码后重新登录。已有卷使用当前密码。
 2. 在“设置 → 数据源”填写主控地址和Token，检查连接、核对节点身份和Ping目标，确认“保存并应用”；不用预填环境JSON。

@@ -1,3 +1,4 @@
+import { createNativeBuilder } from './native-build.ts';
 import { createStoreTransport } from './store-transport.ts';
 import { StoreNetwork } from '../management/store-network.ts';
 import { setGlobalDispatcher } from 'undici';
@@ -31,7 +32,8 @@ const store=new FileThemeStore(env.BRIDGE_THEME_STORE||'work/theme-store');
 try{await seedBundled(store,async path=>new Uint8Array(await readFile(resolve(assets,path))));}
 catch{console.error('Theme initialization failed. Build the application and check theme storage permissions.');await transport.http.close();transport.webSocket?.destroy();process.exit(1);}
 const storeTransport=createStoreTransport();
-const storeNetwork=new StoreNetwork(store,storeTransport.run);
+const nativeBuilder=createNativeBuilder();
+const storeNetwork=new StoreNetwork(store,storeTransport.run,nativeBuilder);
 const site=new Site(config,management,store,async path=>new Response(new Uint8Array(await readFile(resolve(assets,'_management',path))),{headers:{'Content-Type':path.endsWith('.html')?'text/html; charset=utf-8':path.endsWith('.css')?'text/css; charset=utf-8':path.endsWith('.svg')?'image/svg+xml':'text/javascript; charset=utf-8'}}),storeNetwork);
 function socket(ws:WebSocket):Socket{return {send:data=>ws.send(data),close:(code,reason)=>ws.close(code,reason),onMessage:fn=>ws.on('message',data=>fn(data.toString())),onClose:fn=>ws.on('close',fn),onError:fn=>ws.on('error',fn)};}
 const wss=new WebSocketServer({noServer:true,maxPayload:65536});
@@ -92,6 +94,7 @@ function shutdown(){
   for(const session of sessions)session.close();
   for(const source of sources)source.terminate();
   wss.close();for(const server of servers)server.close();
+  nativeBuilder.close();
   void storeTransport.destroy();
   void transport.http.destroy().catch(()=>{/* already closed */});transport.webSocket?.destroy();
   // Bound draining for hostile/idle clients. The deadline does not keep an idle process alive.

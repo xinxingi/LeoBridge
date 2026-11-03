@@ -1,8 +1,11 @@
+import { prepareData, type PreparedData } from './prepared-data.ts';
+
 /** Upstream data stays behind the protocol adapter: never serialize `raw` to clients. */
 export type UpstreamServer = Record<string, unknown>;
 
 /** Ecosystem-neutral current metrics. Capacities are bytes; rates are bytes/s. */
 export interface UnifiedServer {
+  data: PreparedData;
   online: boolean | null;
   observedAt: number;
   sourceLastSeen: number | null;
@@ -91,7 +94,7 @@ export function normalizeServer(raw: UpstreamServer, observedAt: number, showNam
   if (!Number.isFinite(observedAt) || observedAt <= 0) throw new SnapshotError();
   const cpu = finiteNumber(raw.cpu_pct);
   const threads = finiteNumber(raw.cpu_threads, 1);
-  return {
+  const metrics: Omit<UnifiedServer, 'data'> = {
     online: typeof raw.online === 'boolean' ? raw.online : null,
     observedAt,
     sourceLastSeen: isoTimestamp(raw.last_seen),
@@ -116,6 +119,7 @@ export function normalizeServer(raw: UpstreamServer, observedAt: number, showNam
       regionCode: normalizeRegionCode(raw.region_country, raw.region),
     },
   };
+  return { ...metrics, data: prepareData(raw, metrics) };
 }
 
 export function normalizeSnapshot(raw: unknown, observedAt = Date.now()): Snapshot {

@@ -10,7 +10,7 @@
 
 `public:queryMetrics` 接收 `entity_id`、`metric_keys`、`hours`，返回带 `metric_key/entity_id/unit/interval_seconds/points` 的序列；CPU 百分比、内存/磁盘 bytes、网速 B/s，Ping ms、丢包率百分比。保留源桶真实时间、零值和 null；图表只插入空断点，不生成数值样本，不使用 EWMA、插值或当前容量回填历史。新请求清除旧范围图，错误明确显示。
 
-支持相对历史范围，拒绝任意起止日期及非源桶聚合请求。源端不提供逐包计数与分位数，所以 `public:getPingMetricStats` 返回空统计及明确限制，丢包率由独立源桶曲线呈现。管理、终端、安装恢复页面、临时密钥 cookie 入口与 PWA 注册未纳入公共应用。
+该历史适配阶段支持相对历史范围，拒绝任意起止日期及非源桶聚合请求；当时 `public:getPingMetricStats` 返回空统计及明确限制，丢包率由独立源桶曲线呈现。当前协议已提供可由真实源桶计算的摘要，仍不伪造逐包计数或分位数，见[现行统计语义](komari-protocol.md#ping统计可选值与原生差异)。管理、终端、安装恢复页面、临时密钥 cookie 入口与 PWA 注册未纳入公共应用。
 
 固定安装 profile 为 `komari-default-bed58b5`，适配包为 `LeoBridgeKomariDefault / bed58b5-leobridge.1`。验收见[官方前台验收](komari-default-acceptance.md)。这些标识仅用于识别历史适配安装；当前构建不会生成或自动导入该包。
 

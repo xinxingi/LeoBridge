@@ -31,7 +31,8 @@ test('system history converts seconds/MiB/Bps, aligns only exact times and clips
   } }, now - 300_000, now);
   assert.deepEqual(rows, [
     { timestamp: (seconds - 120) * 1000, ram_total: 2048 },
-    { timestamp: (seconds - 60) * 1000, cpu: 0, ram_used: 1024, net_in_speed: 1048576, net_out_speed: 0 },
+    { timestamp: (seconds - 60) * 1000, cpu: 0, ram_used: 1024, net_in_speed: 1048576, net_out_speed: 0,
+      bridge: { sourceCounters: { cumulativeUploadBytes: 999, cumulativeDownloadBytes: null, aggregation: 'source_bucket', resetScope: null, exactIntervalDeltaAvailable: false } } },
   ]);
   assert.equal('ram_total' in rows[1]!, false);
   assert.equal('net_tx' in rows[1]!, false);

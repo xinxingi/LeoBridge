@@ -43,11 +43,11 @@ pnpm build
 pnpm package:local --node-dir /path/to/verified-node-distribution --out-dir /path/to/output
 ```
 
-输出`leobridge-<版本>-<系统>-<架构>.tar.gz`及同名`.sha256`。当前支持Linux/macOS、x64/arm64的本机打包；Linux x64、arm64须分别使用对应构建机器，本命令不声称交叉编译或跨架构运行验证。
+输出`leobridge-<版本>-<系统>-<架构>.tar.gz`及同名`.sha256`。打包器支持Linux/macOS、x64/arm64的本机打包；当前Release工作流只发行Linux x64和arm64，两种Linux架构分别使用对应构建机器，本命令不声称交叉编译或跨架构运行验证。
 
 打包器只取已构建应用、资源、生产依赖及其传递依赖、Node二进制与许可证，不复制源码、开发工具、私有配置或现有work状态，不包含npm/pnpm。生产包原始许可证随包保留。遇到依赖循环或缺失会拒绝打包；依赖布局改变时应重新审查。输出已存在时拒绝覆盖。
 
-解压到独立目录，以不含Node/npm/pnpm的PATH执行start/status/restart/stop，检查管理页、状态持久化和日志；同时核对包内没有私有文件，摘要匹配。已有单元测试的合成样例不能替代实际发行包验证。正式发版还需Linux目标运行、升级/回退及真实前台验收。
+使用当前构建平台实际执行`node scripts/verify-release.mjs package /path/to/output/<包名>.tar.gz`，检查摘要、包内容、无系统Node/npm/pnpm的启动、改密和重启持久化。脚本使用独立临时目录及空数据源，结束时停止测试实例，不读取用户状态。已有单元测试的合成样例不能替代实际发行包检查；产物检查也不能替代目标环境的升级/回退及真实前台验收。
 
 ## 自行构建Docker镜像
 
@@ -55,7 +55,10 @@ pnpm package:local --node-dir /path/to/verified-node-distribution --out-dir /pat
 
 ```sh
 docker build --tag leobridge:local --file deploy/docker/Dockerfile .
+node scripts/verify-release.mjs image leobridge:local
 ```
+
+容器检查创建独立临时容器和数据卷，验证空源启动、改密及重启持久化后清理；不会访问真实主控。
 
 默认基础镜像为`node:24-bookworm-slim`。需要可复现发行时，用`--build-arg NODE_IMAGE=<已审查的tag@sha256摘要>`固定基础镜像，记录源码提交、锁文件和镜像摘要。`.dockerignore`使用白名单，私有配置、原始响应、Git历史及参考源码不进入构建上下文。
 

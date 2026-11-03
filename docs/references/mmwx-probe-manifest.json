@@ -1,0 +1,95 @@
+{
+  "retrieved_on": "2026-11-03",
+  "timezone": "Asia/Shanghai",
+  "repository": "mmwx-group/mmwx-probe",
+  "commit": "723427b18ea23a59a923a89155ebe1f3fa3fa824",
+  "scope": "Selected read-only references, not a runnable copy. No dependencies installed.",
+  "license": "Miaomiaowu X Source Available License v1.0 (MSAL-1.0); see upstream/mmwx-probe-source/LICENSE",
+  "download_base": "https://raw.githubusercontent.com/mmwx-group/mmwx-probe/723427b18ea23a59a923a89155ebe1f3fa3fa824/",
+  "files": [
+    {
+      "file": "docs/references/upstream/mmwx-probe-source/README.md",
+      "upstream_path": "README.md",
+      "git_blob_sha": "117def77c0c72fd82b3682a4deae5d2d5227f9f7",
+      "sha256": "c574b198af8f13257cf529671f5c175bf2e7f4ded7a718fd74ec4b44013cb24c"
+    },
+    {
+      "file": "docs/references/upstream/mmwx-probe-source/LICENSE",
+      "upstream_path": "LICENSE",
+      "git_blob_sha": "6a0f84bd38ddb58ac93a19716aebce97db1129fe",
+      "sha256": "8d19d94fb2fe01c1dc4067fb34b7a112e6318e43ca915340c96d4b9571305e3a"
+    },
+    {
+      "file": "docs/references/upstream/mmwx-probe-source/package.json",
+      "upstream_path": "package.json",
+      "git_blob_sha": "7f8350b70f916b3ea97521349787091e11ac8317",
+      "sha256": "e10b4da0c1620a6adb098be02876af76fcc3b061333a65d250c6bdf663fc52d8"
+    },
+    {
+      "upstream_path": "vite.config.ts",
+      "git_blob_sha": "dc14ac61e017a249cb64c401104d890c6abe23e1",
+      "sha256": "723c3201ab0eeba2ef70b1c35692bc841c6119472739ff34b24b9bc1ca905396",
+      "source_url": "https://github.com/mmwx-group/mmwx-probe/blob/723427b18ea23a59a923a89155ebe1f3fa3fa824/vite.config.ts",
+      "note": "Audited online for boundaries only; not vendored, executed or deployed"
+    },
+    {
+      "upstream_path": ".github/workflows/ci.yml",
+      "git_blob_sha": "c59ad05851cd93300fa7f3780ac0fa56fd5b7bcb",
+      "sha256": "af9bbbbdd2b999588c2c5ac0aeb606914c0ea274f56ef600f06dbbfffe87694b",
+      "source_url": "https://github.com/mmwx-group/mmwx-probe/blob/723427b18ea23a59a923a89155ebe1f3fa3fa824/.github/workflows/ci.yml",
+      "note": "Audited online for boundaries only; not vendored, executed or deployed"
+    },
+    {
+      "upstream_path": "worker/index.ts",
+      "git_blob_sha": "26be6d55536bb82e24e71243b38faf7e9721b454",
+      "sha256": "3d0d9e4062a8fb90ff67da507de1429136e311131008df1e6e7e99e415e4da32",
+      "source_url": "https://github.com/mmwx-group/mmwx-probe/blob/723427b18ea23a59a923a89155ebe1f3fa3fa824/worker/index.ts",
+      "note": "Audited online for boundaries only; not vendored, executed or deployed"
+    },
+    {
+      "file": "docs/references/upstream/mmwx-probe-source/src/use-probe.ts",
+      "upstream_path": "src/use-probe.ts",
+      "git_blob_sha": "8b9d40caa054cc59164be6d67f326980fba6a8f4",
+      "sha256": "75a0e18e33e0c80466c6fd7e892d93ad4b5e43c90adf7079389023dc4dae671c"
+    },
+    {
+      "file": "docs/references/upstream/mmwx-probe-source/src/types.ts",
+      "upstream_path": "src/types.ts",
+      "git_blob_sha": "8e691403ef17821be93358e8ede6f65d0d64521f",
+      "sha256": "2bd49c94db94c1ea71567ff178cdedbe161f21e2e34cb61b7930649d9989a0ae"
+    },
+    {
+      "file": "docs/references/upstream/mmwx-probe-source/src/server-detail-route.ts",
+      "upstream_path": "src/server-detail-route.ts",
+      "git_blob_sha": "40ab6e728a8404685a7ffcbb07004f52d72d59a8",
+      "sha256": "4dbaa75b6d6b6d5041f9ce1479c7c48b30dd0bd0e772712a1581c8d444cf3e16"
+    },
+    {
+      "file": "docs/references/upstream/mmwx-probe-source/src/probe-ranges.ts",
+      "upstream_path": "src/probe-ranges.ts",
+      "git_blob_sha": "2e2cf389963625f659ac43397d9d4004b5486355",
+      "sha256": "c39f30693c08a237f678105fc0087d9606c071bf3f2589beb0610e2080fbd7ae"
+    },
+    {
+      "upstream_path": "src/App.tsx",
+      "source_url": "https://github.com/mmwx-group/mmwx-probe/blob/723427b18ea23a59a923a89155ebe1f3fa3fa824/src/App.tsx",
+      "git_blob_sha": "b7fb10d2e946ce80f89de27c7a5ed08a14972ba0",
+      "sha256": "319717aa2ce105c868257d4e4ff8d2303fc94c586c6cc7544166f9c8246c8948",
+      "note": "Audited online; source not vendored"
+    },
+    {
+      "upstream_path": "src/PremiumProbePage.tsx",
+      "source_url": "https://github.com/mmwx-group/mmwx-probe/blob/723427b18ea23a59a923a89155ebe1f3fa3fa824/src/PremiumProbePage.tsx",
+      "git_blob_sha": "a968c0fe8b092fa72e0d59944da724688f54624f",
+      "sha256": "d3d9414289af667f936bd45149064655e6d63f64a8d1ff539633f087ebf81a97",
+      "note": "Audited online; source not vendored"
+    },
+    {
+      "upstream_path": "src/styles.css",
+      "source_url": "https://github.com/mmwx-group/mmwx-probe/blob/723427b18ea23a59a923a89155ebe1f3fa3fa824/src/styles.css",
+      "git_blob_sha": "88a01c83a5828e65b7cc9302e631826703a7d8dd",
+      "sha256": "73699aae7cb5052dd939a0876b846f503597624d11c674a9e3cc7fd7f31b9a43",
+      "note": "Audited online; source not vendored"
+    }
+  ]
+}

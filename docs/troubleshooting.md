@@ -1,6 +1,18 @@
 # 排障
 
-不要粘贴`.dev.vars`、主题存储中的会话或原始响应到工单/日志。真实只读复验使用CFSM `pnpm verify:live`及Komari `scripts/verify-komari.ts --origin <实际版本源>`；原始证据仅在忽略目录。安装成功、HTTP 200、WebSocket open与真实主题完整兼容是不同检查。
+先确认应用版本、部署方式和失败步骤，仅分享脱敏错误。不要粘贴`.dev.vars`、主题存储中的会话或原始主控响应。安装成功、HTTP 200、WebSocket open与真实主题完整兼容是不同检查。
+
+## 下载与版本
+
+| 现象 | 处理 |
+| --- | --- |
+| 不知道下载哪个文件 | [Release](https://github.com/xinxingi/LeoBridge/releases)中的Linux x64包对应x86_64，arm64包对应aarch64/arm64；一起下载同名.sha256。Source code是源码，不是运行包 |
+| Release页面或附件404 | 核对仓库地址、标签及访问权限；私有仓库须用有权限的GitHub账号登录。不能仅凭404认定尚未发布；不要把登录令牌写到公开命令或工单 |
+| Docker拉取latest失败 | 当前不发布latest，使用`staractive/leobridge:0.2.0`等明确存在的固定版本；镜像标签不带v |
+| no matching manifest / Exec format error | 核对目标系统与CPU架构；当前发行只提供Linux x64/amd64和arm64，Linux运行包不能在macOS/Windows直接运行 |
+| 校验文件不匹配 | 停止解压或升级，确认运行包及.sha256来自同一个Release并重新下载；不能跳过摘要校验 |
+
+维护者遇到Actions中同标签Release已存在时，按[发布恢复步骤](development/releasing.md#旧工作流报同标签release已存在)处理，不需要用户重新编译。
 
 ## 登录和配置没有按预期生效
 
@@ -37,7 +49,7 @@
 | PASSWORD_CHANGE_REQUIRED / 403 | 新实例使用默认密码admin，必须先改密；改密后使用新密码重新登录 |
 | LOGIN_FAILED / LOGIN_THROTTLED | 使用当前管理用户名和密码；连续失败会限速，等待后按上方登录排障核对初始配置与已保存密码，勿将Token当作管理密码 |
 | LOGIN_REQUIRED / 401 | 会话过期或已退出，回管理源重新登录；展示/预览不会携带管理cookie |
-| ORIGIN_ISOLATION / MANAGEMENT_CONFIGURATION | isolated模式管理、展示、预览须不同主机名；single仅允许管理与根展示同源，预览仍独立。核对路由模式、origin及HTTPS配置 |
+| ORIGIN_ISOLATION / MANAGEMENT_CONFIGURATION | isolated模式管理、展示、预览须不同主机名；single模式三者同源，预览用版本参数。核对路由模式、origin及HTTPS配置 |
 | ORIGIN_REJECTED / CSRF_REJECTED | 从配置的管理源操作，重新登录获取会话与CSRF；不要关闭校验或将管理页面代理到主题主机 |
 | REVISION_CONFLICT / 409 | 另一页面已改变安装或启用状态；刷新管理站，检查当前/上一版本后重新操作 |
 | PREVIEW_REQUIRED / 409 | 商店包未经实测，先预览再明确确认；确认启用不会自动把兼容状态变成verified |
@@ -56,9 +68,9 @@ Node状态默认在`work/theme-store`，包括安装资源、管理会话、密�
 | INSTALL_REVIEW_EXPIRED / INSTALL_PACKAGE_CHANGED | 准备记录已过期、会话变更或下载内容变化；重新准备并查看固定版本，不跳过摘要校验 |
 | PACKAGE_SHA256 / LICENSE_HASH | 下载内容和固定摘要不一致，停止安装并核对官方目录；不能删除摘要检查 |
 | ZIP_* / PACKAGE_SIZE / PACKAGE_PATH | 包超过静态限额、路径/压缩结构不安全或特殊文件不受支持；不执行包内程序来“修复” |
-| ASSET_MISSING / EXTERNAL_ASSET | 包缺本地资源或依赖外部静态资源；先审查资源与许可，不通过放开CSP掩盖问题 |
-| MANIFEST_CONFIGURATION | raw/redirect配置被拒绝；managed配置尚无编辑UI，安装不等于主题设置已支持 |
-| 主题安装后白屏、外链/Service Worker被阻断 | 检查浏览器控制台和主题实际协议；CSP仅允许受控同源资源，阻断Worker/iframe及外部请求。动态引用需浏览器验收，不保证所有主题兼容 |
+| 缺失/外部资源诊断 | 当前版本将静态外链及未找到的依赖作为诊断，不因资源不自包含直接拒绝安装。先看浏览器实际失败的资源URL、来源及网络；旧版本的ASSET_MISSING/EXTERNAL_ASSET安装错误不代表当前策略 |
+| MANIFEST_CONFIGURATION | 清单配置不是对象或超过大小限制；raw/redirect声明可保存但不执行，managed使用默认值，尚无配置编辑UI |
+| 主题安装后白屏、外链加载失败 | 检查浏览器控制台、CORS、客户端网络及主题所需协议。主题允许HTTPS外链、HTTPS iframe和同源/blob Worker；管理页策略独立。HTTP混合内容或不受支持的API仍可能失败，不能以安装成功推断所有依赖可用 |
 | 主题API字段错误 | 查看`/__bridge/version`的ecosystem/profile；CFSM与Komari协议不同，检查是否打开了正确版本主机 |
 | 回退后旧页面未变化 | 设计行为：旧版本主机继续固定原资源与协议；从展示根入口重新进入当前版本 |
 
@@ -80,7 +92,9 @@ Node状态默认在`work/theme-store`，包括安装资源、管理会话、密�
 | HISTORY_RANGE / UPSTREAM_HISTORY | 范围不支持、success=false或历史契约变化；七天需`history_days>=7`及实际协议支持，不补0或造曲线 |
 | 数据过期、实时重连 | WS连接建立不等于新采样；看观察时间、transport和恢复。HTTP回退不是原生WS实时验证 |
 | “—”或空图 | 未提供/未验证能力不等于0；计费和网卡流量不混用，显式8目标选择不等于源端全目标 |
-| private展示401 | 使用独立展示Basic Auth；上游Token和管理员cookie均不能登录展示站。版本和预览是不同源，浏览器可能分别提示 |
+| private展示401 | 使用独立展示Basic Auth；上游Token和管理员cookie均不能登录展示站。默认single预览同源，isolated版本与预览使用不同源，浏览器可能分别提示 |
 | Worker出站/WS失败 | 分别检查本地workerd和云运行时，dry-run不验证Cloudflare网络、TLS、域名路由或额度 |
 
 节点身份在后台检查并确认保存。修复时保留已保存的稳定ID，不自动重生成。源端没有足够的公开辨识信息时需要稳定公开标识，不能用随机UUID掩盖歧义。历史读取期间不调整公开列表/身份属性，详见[身份约束](configuration.md#身份约束)。
+
+开发者在源码检出中可用CFSM `pnpm verify:live`和Komari `node --import tsx scripts/verify-komari.ts --origin <实际站点源>`只读检查已启动的对应协议。预编译包和Docker镜像不附带这套开发脚本，普通用户按部署指南检查页面及日志即可；原始诊断输出应保留在私有目录。

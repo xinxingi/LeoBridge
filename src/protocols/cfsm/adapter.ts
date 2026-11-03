@@ -32,6 +32,7 @@ export function toCfsmServer(input: UnifiedServer, id: string): CfsmServer {
     timestamp: observedAt,
     timestamp_source: 'bridge_observation',
     source_last_seen: lastSeen,
+    bridge: { data: input.data },
     cpu: input.cpuPercent,
     ram_used: bytesToMiB(input.memoryUsedBytes),
     ram_total: bytesToMiB(input.memoryTotalBytes),
