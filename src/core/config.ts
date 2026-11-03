@@ -9,10 +9,10 @@ export interface Config {
   pingTargets: Partial<Record<PingSlot, {key:string;label:string}>>;
   timeoutMs: number; cacheMs: number; staleMs: number;
 }
-export function readConfig(env: Env): Config {
-  let url: URL;
-  try { url = new URL(env.MMWX_BASE_URL || ''); } catch { throw new BridgeError('CONFIGURATION', 503, '未配置有效的上游地址。'); }
-  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+export function readConfig(env: Env, allowUnconfigured=false): Config {
+  let url: URL | undefined;
+  try { if(env.MMWX_BASE_URL || !allowUnconfigured)url = new URL(env.MMWX_BASE_URL || ''); } catch { throw new BridgeError('CONFIGURATION', 503, '未配置有效的上游地址。'); }
+  if (url && (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/')) {
     throw new BridgeError('CONFIGURATION', 503, '上游地址必须为不含凭据、路径和查询参数的 HTTP(S) 源。');
   }
   const access = env.BRIDGE_ACCESS || 'local';
@@ -31,7 +31,7 @@ export function readConfig(env: Env): Config {
     }
   } catch { throw new BridgeError('CONFIGURATION', 503, 'Ping目标配置无效。'); }
   return {
-    baseUrl:url.origin, token:env.MMWX_PROBE_TOKEN || '', access:access as Config['access'],
+    baseUrl:url?.origin || '', token:env.MMWX_PROBE_TOKEN || '', access:access as Config['access'],
     username:env.BRIDGE_USERNAME || '', password:env.BRIDGE_PASSWORD || '',
     title:env.BRIDGE_TITLE || 'LeoBridge', bindings:parseBindings(env.BRIDGE_BINDINGS || '[]'), pingTargets,
     timeoutMs:30000, cacheMs:3000, staleMs:45000,

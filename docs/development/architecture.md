@@ -53,3 +53,7 @@ Node默认single路由只开一个监听端口，local使用回环HTTP，direct�
 - 修改Node入口时验证HTTP/WS反代、Origin/CSRF、客户端地址和持久化重启；反代模拟不等于真实nginx/TLS或VPS通过。
 - 新上游适配实现中立模型；新主题生态实现独立协议。不得让协议之间通过互相调用响应转换来“兼容”。
 - 运行`pnpm check`；Worker维护另运行`pnpm build:worker`。CI和本地实际结果分别记录。
+
+## 后台数据源初始化
+
+`core/source.ts` 定义私有数据源配置与检查草稿，`management/source.ts` 负责已认证的检查/确认流程，`app/site.ts` 注入上游只读快照读取。配置通过既有状态存储原子提交，独立版本号防止覆盖；不新增数据库。空源只运行管理与初始化引导；保存后重新组合两个协议并清理旧连接/缓存，公开主题状态排除数据源凭据。

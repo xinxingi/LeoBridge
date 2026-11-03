@@ -34,6 +34,7 @@ async function fixture(required=true,initiallyLoggedIn=true,infoFails=false){
         else {mustChangePassword=false;loggedIn=false;data={ok:true};}
       }
       else if(path==='state')data={installations:{},displayOrigin:'https://synthetic.invalid'};
+      else if(path==='source')data={configured:true};
       else if(path==='logout')loggedIn=false;
       return {ok:status===200,status,json:async()=>data};
     },
@@ -60,7 +61,7 @@ test('resumed bootstrap session shows mandatory form without loading management 
   await f.submit('login-form',{username:'admin',password:strong});
   assert.equal(f.get('workspace').hidden,false);assert.equal(f.get('change-password').hidden,false);
   assert.equal(f.get('login').hidden,true);assert.equal(f.get('login-form').elements.password.value,'');
-  assert.equal(f.calls.at(-1)?.path,'state');
+  assert.ok(f.calls.some(call=>call.path==='state'));
 });
 
 test('optional password change can return to the workspace and logout clears the form',async()=>{

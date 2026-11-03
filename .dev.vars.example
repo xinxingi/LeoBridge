@@ -1,4 +1,5 @@
-# Copy once; do not overwrite an existing private .dev.vars.
+# Optional legacy/development configuration. New users configure the source in /admin/.
+# Copy once only if needed; do not overwrite an existing private .dev.vars.
 MMWX_BASE_URL=https://your-master.example.com
 MMWX_PROBE_TOKEN=replace-with-your-probe-token
 BRIDGE_ACCESS=local

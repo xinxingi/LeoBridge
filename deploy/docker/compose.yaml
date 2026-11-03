@@ -26,16 +26,16 @@ services:
       BRIDGE_DISPLAY_ORIGIN: https://${BRIDGE_DISPLAY_HOST:?Set the display root hostname}
       BRIDGE_DISPLAY_DOMAIN: ${BRIDGE_DISPLAY_DOMAIN:?Set the version hostname suffix}
       BRIDGE_PREVIEW_ORIGIN: https://${BRIDGE_PREVIEW_HOST:?Set the preview hostname suffix}
-      MMWX_BASE_URL: ${MMWX_BASE_URL:?Set the authorized upstream origin}
-      MMWX_PROBE_TOKEN: ${MMWX_PROBE_TOKEN:?Set the authorized probe token}
+      MMWX_BASE_URL: ${MMWX_BASE_URL:-}
+      MMWX_PROBE_TOKEN: ${MMWX_PROBE_TOKEN:-}
       BRIDGE_ACCESS: ${BRIDGE_ACCESS:?Explicitly choose public or private}
       BRIDGE_TITLE: ${BRIDGE_TITLE:-LeoBridge}
       BRIDGE_USERNAME: ${BRIDGE_USERNAME:-}
       BRIDGE_PASSWORD: ${BRIDGE_PASSWORD:-}
       BRIDGE_ADMIN_USERNAME: ${BRIDGE_ADMIN_USERNAME:-admin}
       BRIDGE_ADMIN_PASSWORD: ${BRIDGE_ADMIN_PASSWORD:-admin}
-      BRIDGE_BINDINGS: ${BRIDGE_BINDINGS:?Set reviewed stable server bindings}
-      BRIDGE_PING_TARGETS: ${BRIDGE_PING_TARGETS:?Set a JSON object, optionally empty}
+      BRIDGE_BINDINGS: '${BRIDGE_BINDINGS:-[]}'
+      BRIDGE_PING_TARGETS: '${BRIDGE_PING_TARGETS:-{}}'
     volumes:
       - theme-store:/data/theme-store
     # No host port: only the reverse proxy can reach the listener from outside.

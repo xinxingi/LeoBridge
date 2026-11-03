@@ -18,7 +18,7 @@ import { readNodeRuntimeConfig,nodeRequest,isTrustedProxy,isLoopback } from './n
 process.umask(0o077);
 let env,config,management,runtime;
 try{
-  env=await loadRuntimeEnv(process.env);config=readConfig(env);management=managementConfig(env);runtime=readNodeRuntimeConfig(env);
+  env=await loadRuntimeEnv(process.env);config=readConfig(env,true);management=managementConfig(env);runtime=readNodeRuntimeConfig(env);
   if(runtime.mode!=='local'&&(config.access==='local'||!management.password))throw new Error('Production requires explicit display access and independent admin credentials.');
 }catch{console.error('LeoBridge configuration is invalid. See docs/configuration.md and docs/deployment/vps.md.');process.exit(1);}
 const transport=createDevTransport(env.BRIDGE_DEV_PROXY,config.timeoutMs);setGlobalDispatcher(transport.http);
@@ -34,10 +34,10 @@ const rootSessions=new Set<{close:()=>void}>();
 site.onActiveThemeChange=()=>{for(const session of rootSessions)session.close();};
 const sessions=new Set<{close:()=>void}>(),sources=new Set<WebSocket>();
 let shuttingDown=false;
-const connect=()=>new Promise<Socket>((accept,reject)=>{
+const connect=(sourceConfig:typeof config)=>()=>new Promise<Socket>((accept,reject)=>{
   if(shuttingDown){reject(new BridgeError('SHUTTING_DOWN',503,'服务正在停止。'));return;}
-  const url=new URL('/api/public/probe-ws',config.baseUrl);url.protocol=url.protocol==='https:'?'wss:':'ws:';
-  const source=new WebSocket(url,{headers:{'X-MMwx-Probe-Token':config.token},handshakeTimeout:config.timeoutMs,maxPayload:12_000_000,followRedirects:false,agent:transport.webSocket});
+  const url=new URL('/api/public/probe-ws',sourceConfig.baseUrl);url.protocol=url.protocol==='https:'?'wss:':'ws:';
+  const source=new WebSocket(url,{headers:{'X-MMwx-Probe-Token':sourceConfig.token},handshakeTimeout:sourceConfig.timeoutMs,maxPayload:12_000_000,followRedirects:false,agent:transport.webSocket});
   sources.add(source);source.once('close',()=>sources.delete(source));
   source.once('open',()=>accept(socket(source)));source.on('error',()=>reject(new BridgeError('UPSTREAM_WS',502,'上游实时连接失败。')));
 });
@@ -68,7 +68,8 @@ const servers=ports.map(port=>{
       if(shuttingDown||sessions.size>=50){connection.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');return;}
       const request=nodeRequest(req,runtime,management,undefined,port),url=new URL(request.url),protocol=await site.websocket(request);
       if(!protocol||shuttingDown||sessions.size>=50){connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');return;}
-      wss.handleUpgrade(req,connection,head,ws=>{const session=protocol.openRealtime(socket(ws),connect,url.pathname);sessions.add(session);if(management.routing==='single'&&url.origin===management.displayOrigin)rootSessions.add(session);ws.on('close',()=>{sessions.delete(session);rootSessions.delete(session);});});
+      const sourceConfig=site.config;
+      wss.handleUpgrade(req,connection,head,ws=>{const session=protocol.openRealtime(socket(ws),connect(sourceConfig),url.pathname);sessions.add(session);if(management.routing==='single'&&url.origin===management.displayOrigin)rootSessions.add(session);ws.on('close',()=>{sessions.delete(session);rootSessions.delete(session);});});
     }catch{connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');}
   });
   server.once('error',()=>{console.error('LeoBridge listener failed; check address and port availability.');process.exitCode=1;shutdown();});

@@ -59,13 +59,13 @@ docker compose ps
 
 不要覆盖已有 `.env`，也不要将 `docker compose config` 的展开配置、`docker inspect` 环境变量或 `.env` 内容贴到工单。容器管理员/Docker 管理员能查看应用环境变量和持久卷；这不是隔离宿主管理员的密钥保险库。
 
-`.env.example` 故意将必要密钥和访问策略留空，未填写会拒绝启动：
+`.env.example` 将展示访问策略留空，需要明确选择；主控连接可在启动后的后台填写：
 
-- `MMWX_BASE_URL` 为授权主控的完整源，例如 `https://controller.example`，不带 API 路径、用户名或查询参数。`MMWX_PROBE_TOKEN` 仅服务端使用。
+- 新站点无需设置 `MMWX_BASE_URL` 和 `MMWX_PROBE_TOKEN`。登录管理页、改密后，在“数据源设置”填写主控地址和 Token 并检查连接；Token 仅在服务端保存。环境变量保留为已有部署的兼容方式。
 - 显式选择 `BRIDGE_ACCESS=public` 或 `private`。public 公开所选探针数据；private 为展示 HTML、资源、HTTP、WS 增加独立 Basic Auth。private 的 `BRIDGE_USERNAME` 非空、`BRIDGE_PASSWORD` 至少16字符，浏览器可能在不同版本/预览源分别要求认证。
 - `BRIDGE_ADMIN_PASSWORD` 可留空，默认初始密码为 `admin`，用户名默认 `admin`；自定义初始口令至少20字符。首次登录必须更换为12–128位且包含大小写字母、数字和符号的强密码。改密结果随状态卷持久化，旧会话全部失效，后续环境变量初始口令不再生效。管理站使用自己的登录会话。
 - `BRIDGE_BINDINGS` 是审查后的完整绑定 JSON；`BRIDGE_PING_TARGETS` 是已确认目标键的 JSON。可以将已完成本地配置中的这两项私下迁移，保留原稳定ID。不要复制整个开发配置，也不要把本地开发代理和localhost源带到生产。
-- 尚未初始化绑定的新站点，先按仓库 README 的本地只读配置流程取得、审查绑定。`[]` 只是占位，不能为已有服务器提供身份映射；改名/隐藏/增删节点后需要显式维护，不能自动按名称或下标映射。
+- 新站点在后台检查连接、确认节点身份与 Ping 目标后保存，无需先运行本地配置脚本。改名/隐藏/增删节点后仍需要在页面显式核对身份，不能自动按名称或下标映射。
 - 值可用单引号包围以保留字面 `$`，JSON不要改成多行 shell 命令；不要将秘密放进命令参数。
 
 Compose 把四个主机名转换为 HTTPS 源。`BRIDGE_NODE_MODE=proxy` 让应用单监听 `0.0.0.0:8787`，端口不映射到宿主。只信任 nginx 的固定 `PROXY_IPV4`，默认 `172.30.84.2/32`；`BACKEND_SUBNET` 默认 `172.30.84.0/24`，`BACKEND_DYNAMIC_RANGE` 默认 `172.30.84.128/25`，将应用动态地址与固定代理地址分开。如与目标网络冲突，启动前同时调整网段、动态地址池及 nginx 地址，确保代理位于子网内且不在动态池中，不要扩大到信任所有代理。Docker bridge 保留出站网络以访问主控/官方主题源，未使用会阻断出站的 `internal: true`。
@@ -78,7 +78,7 @@ Compose 把四个主机名转换为 HTTPS 源。`BRIDGE_NODE_MODE=proxy` 让应�
 
 ## 状态、备份与恢复
 
-`leobridge-theme-store`命名卷挂载至 `/data/theme-store`，保存完整主题包、安装元数据、active/previous指针和管理会话。首次空卷启动无主题，显示安装引导；重启保留安装及启用状态。`/healthz`只确认本机进程存活，不读取主控，不证明Token、身份、历史或WebSocket正确；nginx阻止它对公网开放。Compose健康检查失败会标记unhealthy，单靠该标记不会自动修复上游或重新启动仍在运行的进程。
+`leobridge-theme-store`命名卷挂载至 `/data/theme-store`，保存完整主题包、安装元数据、active/previous指针、数据源凭据和管理会话。首次空卷启动无主题，显示安装引导；重启保留安装及启用状态。`/healthz`只确认本机进程存活，不读取主控，不证明Token、身份、历史或WebSocket正确；nginx阻止它对公网开放。Compose健康检查失败会标记unhealthy，单靠该标记不会自动修复上游或重新启动仍在运行的进程。
 
 当前文件存储按**单站、单进程、单副本**运行。文件锁/原子替换不等于共享盘分布式事务；不要 `--scale app`、不要让多台VPS/NFS共同写此目录，也不要由滚动更新临时启动第二写入者。主题切换可以在管理站完成；应用二进制升级需要停机窗口。
 

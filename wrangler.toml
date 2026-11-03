@@ -15,7 +15,7 @@ BRIDGE_ADMIN_ORIGIN = "http://admin.localhost:8787"
 BRIDGE_DISPLAY_ORIGIN = "http://127.0.0.1:8787"
 BRIDGE_DISPLAY_DOMAIN = "display.localhost"
 BRIDGE_PREVIEW_ORIGIN = "http://preview.localhost:8787"
-# Set MMWX_BASE_URL and identity bindings as secrets; see README.
+# Configure the upstream in the management UI; legacy source secrets remain supported.
 
 [[r2_buckets]]
 binding = "THEME_ASSETS"

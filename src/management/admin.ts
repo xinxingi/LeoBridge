@@ -4,13 +4,14 @@ import { commitInstallation,publicThemeState,sha256,INSTALL_NOTICE_VERSION,INSTA
 import { installationUrl,type ManagementConfig } from './config.ts';
 import { fetchCatalog,ThemePackageError } from '../themes/catalog.ts';
 import { installCatalogTheme } from '../themes/package.ts';
+import type { SourceManagement } from './source.ts';
 
 import { constantEqual,hashPassword,validatePassword,verifyPassword } from './password.ts';
 const token=()=>[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('');
 export class Admin {
   private attempts=new Map<string,{count:number;until:number}>();
   private installing=false;
-  constructor(readonly config:ManagementConfig,readonly store:ThemeStore,private loadUi:(path:string)=>Promise<Response>){ }
+  constructor(readonly config:ManagementConfig,readonly store:ThemeStore,private loadUi:(path:string)=>Promise<Response>,private source?:SourceManagement){ }
   private cookieName(){return this.config.routing==='single'?(this.config.adminOrigin.startsWith('https:')?'__Secure-leobridge_admin_path':'leobridge_admin_path'):(this.config.adminOrigin.startsWith('https:')?'__Host-leobridge_admin':'leobridge_admin_local');}
   private cookie(value:string,maxAge=14400){return `${this.cookieName()}=${value}; Path=${this.config.routing==='single'?'/admin':'/'}; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${this.config.adminOrigin.startsWith('https:')?'; Secure':''}`;}
   private async session(request:Request){
@@ -37,7 +38,7 @@ export class Admin {
       if(request.method==='POST'&&request.headers.get('content-type')?.split(';')[0]!=='application/json')throw new BridgeError('CONTENT_TYPE',415,'管理请求必须为JSON。');
       let body:Record<string,unknown>={};
       if(request.method==='POST'){
-        const text=await request.text();if(text.length>8192)throw new BridgeError('REQUEST_TOO_LARGE',413,'请求过大。');
+        const text=await request.text();if(text.length>(url.pathname.startsWith('/manage/api/source')?131072:8192))throw new BridgeError('REQUEST_TOO_LARGE',413,'请求过大。');
         try{body=JSON.parse(text);if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();}catch{throw new BridgeError('BAD_REQUEST',400,'请求JSON无效。');}
       }
       if(url.pathname==='/manage/api/login-info'&&request.method==='GET')return this.secure(json({showInitialPasswordHint:!(await this.store.state()).adminCredential}));
@@ -71,6 +72,11 @@ export class Admin {
         this.attempts.delete(key);const response=json({ok:true});response.headers.set('Set-Cookie',this.cookie('',0));return this.secure(response);
       }
       if(session.mustChangePassword)throw new BridgeError('PASSWORD_CHANGE_REQUIRED',403,'首次登录必须先设置高强度密码。');
+      if(this.source){
+        if(url.pathname==='/manage/api/source'&&request.method==='GET')return this.secure(json(await this.source.status()));
+        if(url.pathname==='/manage/api/source/check'&&request.method==='POST')return this.secure(json(await this.source.check(body,session.id)));
+        if(url.pathname==='/manage/api/source/save'&&request.method==='POST')return this.secure(json(await this.source.save(body,session.id)));
+      }
       if(url.pathname==='/manage/api/state'&&request.method==='GET'){
         const state=publicThemeState(await this.store.state());
         return this.secure(json({...state,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:this.config.routing==='single'&&id===state.active?this.config.displayOrigin:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));

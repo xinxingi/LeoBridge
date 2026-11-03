@@ -19,7 +19,7 @@ export default {
       const values=Object.fromEntries(Object.entries(env).filter(([,v])=>typeof v==='string')) as Env;
       const key=JSON.stringify(values);
       if(!cached||cached.key!==key){
-        const store=new WorkerThemeStore(env.THEME_ASSETS,env.THEME_COORDINATOR),config=readConfig(values);
+        const store=new WorkerThemeStore(env.THEME_ASSETS,env.THEME_COORDINATOR),config=readConfig(values,true);
         const site=new Site(config,managementConfig(values),store,async path=>env.ASSETS.fetch(new Request(`https://assets/_management/${path}`)));
         const ready=seedBundled(store,async path=>{const response=await env.ASSETS.fetch(new Request(`https://assets/${path}`));if(!response.ok)throw new Error('Missing bundled assets');return new Uint8Array(await response.arrayBuffer());});
         cached={key,site,ready};ready.catch(()=>{cached=undefined;});
@@ -28,11 +28,12 @@ export default {
       const site=current.site;
       if(request.headers.get('upgrade')?.toLowerCase()==='websocket'){
         const protocol=await site.websocket(request);if(!protocol)return new Response('Forbidden',{status:403});
+        const sourceConfig=site.config;
         const pair=new WebSocketPair();pair[1].accept();
         protocol.openRealtime(adapt(pair[1]),async()=>{
-          const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),site.config.timeoutMs);
+          const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),sourceConfig.timeoutMs);
           try{
-            const response=await fetch(new URL('/api/public/probe-ws',site.config.baseUrl),{headers:{Upgrade:'websocket','X-MMwx-Probe-Token':site.config.token},redirect:'manual',signal:controller.signal});
+            const response=await fetch(new URL('/api/public/probe-ws',sourceConfig.baseUrl),{headers:{Upgrade:'websocket','X-MMwx-Probe-Token':sourceConfig.token},redirect:'manual',signal:controller.signal});
             const ws=(response as Response&{webSocket?:WorkerSocket}).webSocket;if(response.status!==101||!ws)throw new BridgeError('UPSTREAM_WS',502,'上游实时连接失败。');ws.accept();return adapt(ws);
           }finally{clearTimeout(timer);}
         },new URL(request.url).pathname);

@@ -21,14 +21,10 @@ LeoBridge 以 Node.js 服务运行，可直接部署或使用 Docker。上游连
 
 ## 本地开发
 
-需要 Node.js 24 和 pnpm 11.25.0。已有 `.dev.vars` 时保留它，不重复生成身份绑定。
+需要 Node.js 24 和 pnpm 11.25.0。新实例无需创建 `.dev.vars`，启动后在后台配置数据源。已有配置和身份绑定继续保留。
 
 ```sh
 pnpm install --frozen-lockfile
-cp .dev.vars.example .dev.vars   # 仅首次
-# 编辑 .dev.vars，填写已授权主控地址及探针 Token
-pnpm configure                  # 首次只读生成绑定，随后人工审查
-pnpm configure:admin            # 可选：将初始管理凭据写入本机配置
 pnpm check
 pnpm dev
 ```
@@ -36,6 +32,8 @@ pnpm dev
 - 展示入口：[127.0.0.1:8787](http://127.0.0.1:8787)
 - 管理入口：[127.0.0.1:8787/admin](http://127.0.0.1:8787/admin)
 - 预览：从管理站打开对应主题，与默认站点共用端口；浏览器需要支持 `*.localhost`。已有独立源配置保留原模式，设 `BRIDGE_ROUTING=single` 可切换。
+
+登录并完成首次改密后，在“数据源设置”填写主控地址和探针 Token，点击“检查连接”，核对节点身份及 Ping 目标后保存。配置立即生效并随状态目录持久化；Token 不回显。已有环境变量配置仍可使用，首次从后台保存后以后台配置为准。`pnpm configure` 保留为旧式文件配置工具，不再是首次使用的必要步骤。
 
 默认管理用户名为 `admin`，初始密码为 `admin`；已有自定义初始密码继续有效。首次登录必须设置12–128位、包含大小写字母、数字和符号的新密码，完成前无法使用管理功能。改密后全部旧会话失效，使用新密码重新登录。密码以加盐摘要持久化在状态存储中，重启不会恢复默认密码；`BRIDGE_ADMIN_PASSWORD` 仅在尚未改密时生效。初始配置和状态备份不要提交或公开。主控 Token 只保护上游；展示站的 `local/public/private` 策略与管理登录分别配置。完整变量及身份维护方法见 [配置参考](docs/configuration.md)。
 

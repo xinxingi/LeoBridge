@@ -1,5 +1,15 @@
 # 配置参考
 
+## 后台配置数据源
+
+新实例没有上游配置也能启动。打开 `/admin/`，登录并完成强制改密后，在“数据源设置”填写主控 origin 和探针 Token。检查连接只读取公开探针快照；核对每台节点的稳定身份和最多8个 Ping 目标后，勾选确认并保存。保存前重新读取快照校验一一对应关系，失败不会替换当前配置。
+
+未变更的已有节点沿用原ID；改名或更换主控时，在每台节点的下拉框明确选择旧身份或新建身份。未再选择的旧身份会移除；完全相同的公开描述无法安全区分时拒绝保存。名称隐藏时不在检查页面返回名称。空公开列表可以明确确认保存，不伪造节点。
+
+Token 不在任何管理响应或主题响应中回显。同一主控留空保留原 Token；更换主控时不会携带旧 Token。后台保存的地址、Token、绑定和 Ping 目标整体优先于旧环境变量，重启保留；未从后台保存的旧站点仍使用环境配置。Node 将这些秘密保存在状态目录的 `state.json`（文件权限0600），备份需按凭据保护；Workers 沿用私有 DO 状态存储，云端尚未验收。
+
+配置保存使用独立版本号防止并发覆盖，需要有效管理会话、首次改密、Origin与CSRF校验。保存后重建两个协议的数据源及缓存，关闭本进程旧实时连接；迟到HTTP结果和旧版本实时帧被拒绝。其他Worker实例在后续请求/实时输出时检查版本。网络监听、域名/TLS和展示访问策略仍由部署参数配置。
+
 ## 配置与访问控制
 
 | 变量 | 含义 |
@@ -17,7 +27,7 @@
 | `BRIDGE_ADMIN_ORIGIN` | isolated模式管理源，默认`http://admin.localhost:8786`；single使用BRIDGE_ORIGIN |
 | `BRIDGE_DISPLAY_ORIGIN` / `BRIDGE_DISPLAY_DOMAIN` | 展示根源和版本子域后缀，Node默认`http://127.0.0.1:8787`及`display.localhost` |
 | `BRIDGE_PREVIEW_ORIGIN` | 预览子域基源；single默认与站点同端口的`preview.localhost`，isolated默认`http://preview.localhost:8789` |
-| `BRIDGE_THEME_STORE` | Node主题与管理会话存储目录，默认`work/theme-store`；不提交该目录 |
+| `BRIDGE_THEME_STORE` | Node主题、数据源凭据与管理会话存储目录，默认`work/theme-store`；不提交该目录 |
 | `PORT` | 未显式配置站点源时的Node单端口，默认8787；旧isolated模式不改变管理/预览端口 |
 | `BRIDGE_DEV_PROXY` | 可选Node开发HTTP CONNECT代理，例如本机已核实的`http://127.0.0.1:7897`；HTTP和WS均显式接入，Worker不读取 |
 
@@ -36,7 +46,7 @@
 
 ## 协议与数据语义
 
-CFSM版本站提供`/api/config`、`/api/servers`、`/api/server?id=…`、`/api/history/all?id=…&hours=…`、`/api/ws`；默认前台旗帜和系统图标本地构建。Komari版本站提供JSON-RPC 2.0 `POST /api/rpc2`及同路径WebSocket，包含节点、公开设置、最新状态、近期观察、系统历史与Ping历史所需方法，并提供有限只读REST兼容。协议按安装版本选择，不把CFSM JSON直接交给Komari。single根站的`/admin`提供管理；版本/预览站拒绝`/admin`和`/manage`；管理接口只用于主题管理，不包含上游管理或远程控制。
+CFSM版本站提供`/api/config`、`/api/servers`、`/api/server?id=…`、`/api/history/all?id=…&hours=…`、`/api/ws`；默认前台旗帜和系统图标本地构建。Komari版本站提供JSON-RPC 2.0 `POST /api/rpc2`及同路径WebSocket，包含节点、公开设置、最新状态、近期观察、系统历史与Ping历史所需方法，并提供有限只读REST兼容。协议按安装版本选择，不把CFSM JSON直接交给Komari。single根站的`/admin`提供管理；版本/预览站拒绝`/admin`和`/manage`；管理接口用于主题和桥接数据源配置，不包含主控服务器管理或远程控制。
 
 - 统一模型采用byte、B/s、百分比；CFSM容量转MiB，速度仍B/s；Komari接收字节，主题自行格式化。缺失为未知值，实际0保留；上游故障、过期和服务器离线分开。在线时间戳是桥接观察时间，启动时间由uptime推算。
 - 系统及Ping真实支持1h/6h/24h/7d；其他已开放小范围从上一级真实聚合裁剪。七天依据`history_days`及真实`range=7d`验证，不足七天不补齐。

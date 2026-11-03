@@ -1,6 +1,6 @@
 const $=id=>document.getElementById(id)
 const apiRoot=location.pathname.startsWith('/admin/')?'/admin/api/':'/manage/api/'
-let csrf='',state=null,view='installed',busy=false,loginHintRequest=0
+let csrf='',state=null,view='installed',busy=false,loginHintRequest=0,sourceStatus=null,sourceReview=null,sourceDraftRevision=0
 const catalogCache={}
 function element(tag,text,className){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node}
 function notice(message,error=false){$('notice').textContent=message;$('notice').className=error?'error':'';$('notice').hidden=!message}
@@ -46,10 +46,14 @@ function catalogCard(entry,ecosystem){
   },true));else buttons.append(element('span','当前不可安装','badge unknown'));
   card.append(buttons);return card;
 }
-async function render(){document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===view));$('heading').textContent=view==='installed'?'主题工作台':`${view==='cfsm'?'CFSM':'Komari'} 主题商店`;$('section-title').textContent=view==='installed'?'已安装版本':'探索主题';$('section-note').textContent=view==='installed'?'资源和协议一起切换。切换后请刷新展示页面。':'目录收录不代表已安装或兼容；包安全、许可信息和实际兼容性分别记录。';const cards=$('cards');cards.replaceChildren();if(view==='installed'){Object.values(state.installations).forEach(item=>cards.append(installedCard(item)));if(!cards.children.length)cards.append(element('p','尚未安装主题。','empty'));return}if(!catalogCache[view]){cards.append(element('p','正在读取官方主题目录…','empty'));catalogCache[view]=await api(`catalog?ecosystem=${view}&refresh=1`)}const data=catalogCache[view];$('section-note').textContent=`官方目录 ${data.catalogRevision.slice(0,12)} · ${data.entries.length} 个主题。安装固定所见目录版本，兼容性另行验证。`;cards.replaceChildren();const entries=data.entries||data.themes||[];entries.forEach(entry=>cards.append(catalogCard(entry,view)));if(!entries.length)cards.append(element('p','目录没有可显示条目。','empty'))}
-async function showLogin(){csrf='';state=null;for(const key of Object.keys(catalogCache))delete catalogCache[key];for(const id of ['sidebar','workspace','password-change','logout','display-link','change-password'])$(id).hidden=true;$('login').hidden=false;$('password-form').reset();$('initial-password-hint').hidden=true;const request=++loginHintRequest;try{const response=await fetch(apiRoot+'login-info',{cache:'no-store'});if(!response.ok)return;const data=await response.json();if(request===loginHintRequest&&!$('login').hidden)$('initial-password-hint').hidden=data.showInitialPasswordHint!==true}catch{/* Keep initialization guidance hidden when its status is unavailable. */}}
-function showPasswordChange(required){state=null;for(const id of ['sidebar','login','workspace','display-link','change-password'])$(id).hidden=true;$('password-change').hidden=false;$('logout').hidden=false;$('cancel-password').hidden=required;$('password-heading').textContent=required?'设置高强度密码':'修改管理密码';$('password-intro').textContent=required?'首次登录必须先更改密码，完成后才能使用管理功能。':'改密后所有已登录会话将退出，请使用新密码重新登录。'}
-async function signedIn(){const session=await api('session');csrf=session.csrf;if(session.mustChangePassword){showPasswordChange(true);return}$('login').hidden=true;$('password-change').hidden=true;$('workspace').hidden=false;$('logout').hidden=false;$('change-password').hidden=false;await refreshState();await render();$('sidebar').hidden=false}
+async function render(){
+  $('workspace').hidden=view==='source';$('source-settings').hidden=view!=='source';
+  $('subtitle').textContent=view==='source'?'连接主控，核对节点身份后保存。配置立即生效。':'安装一次，预览后切换。保留每个版本，随时回退。';
+  if(view==='source'){document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===view));$('heading').textContent='数据源设置';await loadSource();return}
+document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===view));$('heading').textContent=view==='installed'?'主题工作台':`${view==='cfsm'?'CFSM':'Komari'} 主题商店`;$('section-title').textContent=view==='installed'?'已安装版本':'探索主题';$('section-note').textContent=view==='installed'?'资源和协议一起切换。切换后请刷新展示页面。':'目录收录不代表已安装或兼容；包安全、许可信息和实际兼容性分别记录。';const cards=$('cards');cards.replaceChildren();if(view==='installed'){Object.values(state.installations).forEach(item=>cards.append(installedCard(item)));if(!cards.children.length)cards.append(element('p','尚未安装主题。','empty'));return}if(!catalogCache[view]){cards.append(element('p','正在读取官方主题目录…','empty'));catalogCache[view]=await api(`catalog?ecosystem=${view}&refresh=1`)}const data=catalogCache[view];$('section-note').textContent=`官方目录 ${data.catalogRevision.slice(0,12)} · ${data.entries.length} 个主题。安装固定所见目录版本，兼容性另行验证。`;cards.replaceChildren();const entries=data.entries||data.themes||[];entries.forEach(entry=>cards.append(catalogCard(entry,view)));if(!entries.length)cards.append(element('p','目录没有可显示条目。','empty'))}
+async function showLogin(){csrf='';state=null;sourceStatus=null;clearSourceReview();$('source-form').reset();for(const key of Object.keys(catalogCache))delete catalogCache[key];for(const id of ['sidebar','workspace','source-settings','password-change','logout','display-link','change-password'])$(id).hidden=true;$('login').hidden=false;$('password-form').reset();$('initial-password-hint').hidden=true;const request=++loginHintRequest;try{const response=await fetch(apiRoot+'login-info',{cache:'no-store'});if(!response.ok)return;const data=await response.json();if(request===loginHintRequest&&!$('login').hidden)$('initial-password-hint').hidden=data.showInitialPasswordHint!==true}catch{/* Keep initialization guidance hidden when its status is unavailable. */}}
+function showPasswordChange(required){state=null;for(const id of ['sidebar','login','workspace','source-settings','display-link','change-password'])$(id).hidden=true;$('password-change').hidden=false;$('logout').hidden=false;$('cancel-password').hidden=required;$('password-heading').textContent=required?'设置高强度密码':'修改管理密码';$('password-intro').textContent=required?'首次登录必须先更改密码，完成后才能使用管理功能。':'改密后所有已登录会话将退出，请使用新密码重新登录。'}
+async function signedIn(){const session=await api('session');csrf=session.csrf;if(session.mustChangePassword){showPasswordChange(true);return}$('login').hidden=true;$('password-change').hidden=true;$('workspace').hidden=false;$('logout').hidden=false;$('change-password').hidden=false;await refreshState();sourceStatus=await api('source');if(!sourceStatus.configured)view='source';await render();$('sidebar').hidden=false}
 $('login-form').addEventListener('submit',event=>{event.preventDefault();task(async()=>{const form=new FormData(event.target);const result=await api('login',{username:form.get('username'),password:form.get('password')});csrf=result.csrf;event.target.elements.password.value='';await signedIn();notice('')})})
 for(const id of ['logout','password-logout'])$(id).addEventListener('click',()=>task(async()=>{await api('logout',{});showLogin();notice('已退出管理会话。')}))
 $('change-password').addEventListener('click',()=>{showPasswordChange(false);notice('')})
@@ -57,4 +61,43 @@ $('cancel-password').addEventListener('click',()=>task(async()=>{$('password-for
 $('password-form').addEventListener('submit',event=>{event.preventDefault();task(async()=>{const form=new FormData(event.target);const newPassword=form.get('newPassword');if(newPassword!==form.get('confirmPassword'))throw new Error('两次输入的新密码不一致。');await api('password',{currentPassword:form.get('currentPassword'),newPassword,confirmPassword:form.get('confirmPassword')});showLogin();notice('密码已更改，所有旧会话已退出。请使用新密码登录。')})})
 document.querySelectorAll('[data-view]').forEach(node=>node.addEventListener('click',()=>task(async()=>{if(!state)return;view=node.dataset.view;notice('');await render()})))
 $('refresh').addEventListener('click',()=>task(async()=>{delete catalogCache[view];await refreshState();await render();notice('已刷新。')}))
+function clearSourceReview(){sourceReview=null;$('source-review').hidden=true;$('source-nodes').replaceChildren();$('source-targets').replaceChildren();$('source-confirm').checked=false}
+async function loadSource(){
+  clearSourceReview();sourceStatus=await api('source');
+  $('source-form').elements.baseUrl.value=sourceStatus.baseUrl;$('source-form').elements.token.value='';
+  $('source-status').textContent=sourceStatus.configured?`已配置 · ${sourceStatus.bindingCount} 个节点身份 · ${sourceStatus.storage==='saved'?'后台保存':'环境变量配置'}。保存后以后台配置为准，重启仍有效。`:'尚未配置。填写主控地址和探针 Token，检查成功后核对节点身份。';
+  $('source-token-hint').textContent=sourceStatus.hasToken?'已保存 Token，不会回显。同一主控留空保留原值；更换主控请重新填写。':'Token 仅保存在服务端，不会回显。公开且无需鉴权的主控可留空。';
+}
+function renderSourceReview(review){
+  clearSourceReview();sourceReview=review;$('source-review').hidden=false;
+  review.candidates.forEach((item,index)=>{
+    const row=element('div',undefined,'source-node'),label=element('label',`节点 ${index+1} · ${item.match.name||'名称未公开'}`),select=element('select');select.dataset.sourceIdentity='true';select.setAttribute('aria-label',`节点 ${index+1} 的稳定身份`);
+    const add=(value,text)=>{const option=element('option',text);option.value=value;select.append(option)};
+    add('','请选择身份');add(item.newId,`新建身份 · ${item.newId}`);
+    for(const old of review.previous)add(old.id,`沿用 ${old.match.name||'已有节点'} · ${old.id}`);
+    select.value=item.suggestedId;label.append(select);row.append(label,element('p',Object.entries(item.match).map(([key,value])=>`${key}: ${value}`).join(' · ')));$('source-nodes').append(row);
+  });
+  if(!review.candidates.length)$('source-nodes').append(element('p','主控当前公开 0 台节点。保存后绑定列表将为空。'));
+  for(const [index,slot]of ['ct','cu','cm','bd','node_1','node_2','node_3','node_4'].entries()){
+    const label=element('label',`目标 ${index+1}`),select=element('select');select.dataset.sourcePing='true';
+    const empty=element('option','不展示');empty.value='';select.append(empty);
+    for(const target of review.targets){const option=element('option',`${target.label} · ${target.key}`);option.value=target.key;select.append(option)}
+    select.value=review.pingTargets[slot]?.key||'';label.append(select);$('source-targets').append(label);
+  }
+}
+$('source-form').addEventListener('input',()=>{sourceDraftRevision++;clearSourceReview()});
+$('source-form').addEventListener('submit',event=>{event.preventDefault();task(async()=>{
+  clearSourceReview();notice('正在检查连接和公开节点…');const form=event.target;
+  const revision=sourceDraftRevision;const payload={version:sourceStatus.version,baseUrl:form.elements.baseUrl.value,token:form.elements.token.value};
+  const review=await api('source/check',payload);if(revision!==sourceDraftRevision){notice('配置已编辑，请重新检查连接。');return}form.elements.token.value='';renderSourceReview(review);notice('连接成功。请核对节点身份和 Ping 目标，15 分钟内确认保存。');
+})});
+$('source-cancel').addEventListener('click',()=>{clearSourceReview();notice('已取消，当前配置未变更。')});
+$('source-save').addEventListener('click',()=>task(async()=>{
+  if(!sourceReview||!$('source-confirm').checked)throw new Error('请核对并勾选确认后保存。');
+  const assignments=[...document.querySelectorAll('[data-source-identity]')].map(select=>select.value);
+  if(assignments.some(id=>!id)||new Set(assignments).size!==assignments.length)throw new Error('请为每台节点选择不同的稳定身份。');
+  const pingKeys=[...document.querySelectorAll('[data-source-ping]')].map(select=>select.value);
+  notice('正在复核节点并保存配置…');await api('source/save',{reviewId:sourceReview.reviewId,assignments,pingKeys,confirmed:true});
+  await loadSource();notice('数据源已保存并生效。可前往主题商店安装、预览并启用主题。');
+}));
 signedIn().catch(error=>{if(!error.message.includes('请登录'))notice(error.message,true);$('login').hidden=false})
