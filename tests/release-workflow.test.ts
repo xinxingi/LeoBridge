@@ -81,3 +81,36 @@ for (const releases of ['v0.1.0\n', '']) {
     assert.equal(result.calls.length, 2);
   });
 }
+
+const latestStep = workflow.split('      - name: Update latest after image verification\n')[1]?.split('\n  release:')[0];
+assert.ok(latestStep);
+const latestScript = latestStep.split('        run: |\n')[1].split('\n')
+  .filter(line => line.startsWith('          ')).map(line => line.slice(10)).join('\n');
+
+for (const [version, failure] of [['0.2.1', false], ['0.2.1-rc.1', false], ['0.2.1', true]] as const) {
+  test(`latest promotion: ${version}, failure=${failure}`, async t => {
+    const root = await mkdtemp(join(tmpdir(), 'leobridge latest '));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await writeFile(join(root, 'calls.jsonl'), '');
+    await writeFile(join(root, 'gh'), '#!/bin/sh\nexit 99\n', { mode: 0o755 });
+    await writeFile(join(root, 'docker'), `#!${process.execPath}
+const fs = require('node:fs');
+fs.appendFileSync('calls.jsonl', JSON.stringify(process.argv.slice(2)) + '\\n');
+process.exit(${failure ? 17 : 0});
+`, { mode: 0o755 });
+    const result = spawnSync('/bin/bash', ['-c', latestScript], {
+      cwd: root, encoding: 'utf8', timeout: 10_000,
+      env: { PATH: `${root}:/usr/bin:/bin`, RELEASE_VERSION: version,
+        IMAGE: `staractive/leobridge:${version}`, DIGEST: 'sha256:verified', GITHUB_STEP_SUMMARY: join(root, 'summary') },
+    });
+    assert.ifError(result.error);
+    const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    assert.equal(result.status, failure ? 17 : 0);
+    if (version.includes('-')) assert.deepEqual(calls, []);
+    else {
+      assert.deepEqual(calls[0], ['buildx', 'imagetools', 'create', '--tag', 'staractive/leobridge:latest', `staractive/leobridge:${version}@sha256:verified`]);
+      assert.equal(calls.length, failure ? 1 : 2);
+      if (!failure) assert.deepEqual(calls[1], ['buildx', 'imagetools', 'inspect', 'staractive/leobridge:latest']);
+    }
+  });
+}

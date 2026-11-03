@@ -2,7 +2,7 @@ name: leobridge
 
 services:
   app:
-    image: staractive/leobridge:0.2.0
+    image: staractive/leobridge:latest
     restart: unless-stopped
     init: true
     read_only: true
