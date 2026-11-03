@@ -28,7 +28,7 @@ pnpm install --frozen-lockfile
 cp .dev.vars.example .dev.vars   # 仅首次
 # 编辑 .dev.vars，填写已授权主控地址及探针 Token
 pnpm configure                  # 首次只读生成绑定，随后人工审查
-pnpm configure:admin            # 独立管理密码只写入本机配置
+pnpm configure:admin            # 可选：将初始管理凭据写入本机配置
 pnpm check
 pnpm dev
 ```
@@ -37,7 +37,7 @@ pnpm dev
 - 管理入口：[admin.localhost:8786](http://admin.localhost:8786)
 - 预览：从管理站打开对应主题。浏览器需要支持 `*.localhost`。
 
-管理凭据保存在本机 `.dev.vars`，不要提交或公开。主控 Token 只保护上游；展示站的 `local/public/private` 策略与管理登录分别配置。完整变量及身份维护方法见 [配置参考](docs/configuration.md)。
+默认管理用户名为 `admin`，初始密码为 `admin`；已有自定义初始密码继续有效。首次登录必须设置12–128位、包含大小写字母、数字和符号的新密码，完成前无法使用管理功能。改密后全部旧会话失效，使用新密码重新登录。密码以加盐摘要持久化在状态存储中，重启不会恢复默认密码；`BRIDGE_ADMIN_PASSWORD` 仅在尚未改密时生效。初始配置和状态备份不要提交或公开。主控 Token 只保护上游；展示站的 `local/public/private` 策略与管理登录分别配置。完整变量及身份维护方法见 [配置参考](docs/configuration.md)。
 
 ## 项目结构
 

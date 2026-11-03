@@ -5,7 +5,7 @@ import { installationUrl,type ManagementConfig } from './config.ts';
 import { fetchCatalog,ThemePackageError } from '../themes/catalog.ts';
 import { installCatalogTheme } from '../themes/package.ts';
 
-function constantEqual(a:string,b:string){let diff=a.length^b.length;for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);return diff===0;}
+import { constantEqual,hashPassword,validatePassword,verifyPassword } from './password.ts';
 const token=()=>[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('');
 export class Admin {
   private attempts=new Map<string,{count:number;until:number}>();
@@ -16,8 +16,8 @@ export class Admin {
   private async session(request:Request){
     const raw=request.headers.get('cookie')?.split(';').map(s=>s.trim()).find(s=>s.startsWith(`${this.cookieName()}=`))?.split('=')[1]||'';
     if(!/^[a-f0-9]{64}$/.test(raw))return null;
-    const id=await sha256(raw),session=(await this.store.state()).sessions[id];
-    return session&&session.expires>Date.now()?{id,...session}:null;
+    const id=await sha256(raw),state=await this.store.state(),session=state.sessions[id],credentialVersion=state.adminCredential?.version??0;
+    return session&&session.expires>Date.now()&&(session.credentialVersion??0)===credentialVersion?{id,...session,credentialVersion,mustChangePassword:!state.adminCredential}:null;
   }
   async handle(request:Request):Promise<Response>{
     const url=new URL(request.url);
@@ -28,7 +28,6 @@ export class Admin {
         if(!['/','/app.js','/appearance.js','/styles.css','/logo.svg'].includes(url.pathname))return new Response('Not found',{status:404});
         return this.secure(await this.loadUi(url.pathname==='/'?'index.html':url.pathname.slice(1)));
       }
-      if(!this.config.password)throw new BridgeError('ADMIN_NOT_CONFIGURED',503,'请先运行pnpm configure:admin配置独立管理凭据。');
       if(request.method!=='GET'&&request.headers.get('origin')!==this.config.adminOrigin)throw new BridgeError('ORIGIN_REJECTED',403,'管理操作必须来自管理站本身。');
       if(request.method==='POST'&&request.headers.get('content-type')?.split(';')[0]!=='application/json')throw new BridgeError('CONTENT_TYPE',415,'管理请求必须为JSON。');
       let body:Record<string,unknown>={};
@@ -41,16 +40,31 @@ export class Admin {
         if(this.attempts.size>1000)this.attempts.clear();
         let attempt=this.attempts.get(client);if(!attempt||attempt.until<now){attempt={count:0,until:now+60000};this.attempts.set(client,attempt);}
         if(++attempt.count>10)throw new BridgeError('LOGIN_THROTTLED',429,'尝试过于频繁，请稍后重试。');
-        if(!constantEqual(String(body.username||''),this.config.username)||!constantEqual(String(body.password||''),this.config.password))throw new BridgeError('LOGIN_FAILED',401,'用户名或密码错误。');
-        const raw=token(),csrf=token();await this.store.command({type:'session',id:await sha256(raw),session:{csrf,expires:now+4*3600000}});
-        this.attempts.delete(client);const response=json({ok:true,csrf});response.headers.set('Set-Cookie',this.cookie(raw));return this.secure(response);
+        const credential=(await this.store.state()).adminCredential;
+        if(!constantEqual(String(body.username||''),this.config.username)||typeof body.password!=='string'||!(credential?await verifyPassword(body.password,credential):constantEqual(body.password,this.config.password)))throw new BridgeError('LOGIN_FAILED',401,'用户名或密码错误。');
+        const raw=token(),csrf=token();await this.store.command({type:'session',id:await sha256(raw),session:{csrf,expires:now+4*3600000,credentialVersion:credential?.version??0}});
+        this.attempts.delete(client);const response=json({ok:true,csrf,mustChangePassword:!credential});response.headers.set('Set-Cookie',this.cookie(raw));return this.secure(response);
       }
       const session=await this.session(request);if(!session)throw new BridgeError('LOGIN_REQUIRED',401,'请登录LeoBridge管理站。');
       if(request.method!=='GET'&&!constantEqual(request.headers.get('x-csrf-token')||'',session.csrf))throw new BridgeError('CSRF_REJECTED',403,'管理会话校验失败。');
-      if(url.pathname==='/manage/api/session'&&request.method==='GET')return this.secure(json({csrf:session.csrf,username:this.config.username}));
+      if(url.pathname==='/manage/api/session'&&request.method==='GET')return this.secure(json({csrf:session.csrf,username:this.config.username,mustChangePassword:session.mustChangePassword}));
       if(url.pathname==='/manage/api/logout'&&request.method==='POST'){
         await this.store.command({type:'logout',id:session.id});const response=json({ok:true});response.headers.set('Set-Cookie',this.cookie('',0));return this.secure(response);
       }
+      if(url.pathname==='/manage/api/password'&&request.method==='POST'){
+        const key=`password:${session.id}`,now=Date.now();
+        let attempt=this.attempts.get(key);if(!attempt||attempt.until<now){attempt={count:0,until:now+60000};this.attempts.set(key,attempt);}
+        if(++attempt.count>10)throw new BridgeError('LOGIN_THROTTLED',429,'尝试过于频繁，请稍后重试。');
+        const credential=(await this.store.state()).adminCredential;
+        if((credential?.version??0)!==session.credentialVersion)throw new BridgeError('LOGIN_REQUIRED',401,'密码已变更，请重新登录。');
+        if(typeof body.currentPassword!=='string'||!(credential?await verifyPassword(body.currentPassword,credential):constantEqual(body.currentPassword,this.config.password)))throw new BridgeError('CURRENT_PASSWORD',400,'当前密码错误。');
+        validatePassword(body.newPassword);
+        if(body.newPassword!==body.confirmPassword)throw new BridgeError('PASSWORD_MISMATCH',400,'两次输入的新密码不一致。');
+        if(constantEqual(body.newPassword,body.currentPassword)||constantEqual(body.newPassword,this.config.password))throw new BridgeError('PASSWORD_UNCHANGED',400,'新密码不能与当前密码或初始密码相同。');
+        await this.store.command({type:'password',sessionId:session.id,expectedVersion:session.credentialVersion,credential:await hashPassword(body.newPassword,session.credentialVersion+1)});
+        this.attempts.delete(key);const response=json({ok:true});response.headers.set('Set-Cookie',this.cookie('',0));return this.secure(response);
+      }
+      if(session.mustChangePassword)throw new BridgeError('PASSWORD_CHANGE_REQUIRED',403,'首次登录必须先设置高强度密码。');
       if(url.pathname==='/manage/api/state'&&request.method==='GET'){
         const state=publicThemeState(await this.store.state());
         return this.secure(json({...state,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));

@@ -4,7 +4,8 @@ MMWX_PROBE_TOKEN=replace-with-your-probe-token
 BRIDGE_ACCESS=local
 BRIDGE_TITLE=LeoBridge
 # Themes are selected in the management UI, not through a build-time variable.
-# pnpm configure:admin creates independent management credentials locally.
+# Default admin / admin; first login requires a strong replacement.
+# pnpm configure:admin optionally writes these initial credentials locally.
 # BRIDGE_ADMIN_USERNAME=admin
 # BRIDGE_ADMIN_PASSWORD=use-a-separate-random-password-at-least-20-characters
 # Node local origins. Hostnames must differ; ports alone do not isolate cookies.

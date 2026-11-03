@@ -13,6 +13,7 @@ import type { ProtocolApplication } from '../src/app/protocols.ts';
 
 const encoder = new TextEncoder();
 const password = 'synthetic-admin-password-for-tests';
+const newPassword = 'New-fixture-Password-2026!';
 const ids = ['a'.repeat(32), 'b'.repeat(32), 'c'.repeat(32)];
 const ui = async () => new Response('<html>synthetic admin</html>');
 const management = () => managementConfig({
@@ -55,10 +56,16 @@ function request(path: string, options: {method?: string; body?: unknown; cookie
   return new Request(`${options.base ?? management().adminOrigin}${path}`, {method, headers, ...(options.body === undefined ? {} : {body: JSON.stringify(options.body)})});
 }
 async function login(admin: Admin) {
-  const response = await admin.handle(request('/manage/api/login', {method: 'POST', body: {username: 'admin', password}}));
+  const response = await admin.handle(request('/manage/api/login', {method: 'POST', body: {username: 'admin', password:(await admin.store.state()).adminCredential?newPassword:password}}));
   assert.equal(response.status, 200);
-  const setCookie = response.headers.get('set-cookie')!;
-  const body = await response.json() as {csrf: string};
+  let setCookie = response.headers.get('set-cookie')!;
+  let body = await response.json() as {csrf: string; mustChangePassword: boolean};
+  if(body.mustChangePassword){
+    const changed=await admin.handle(request('/manage/api/password',{method:'POST',cookie:setCookie.split(';')[0],csrf:body.csrf,body:{currentPassword:password,newPassword,confirmPassword:newPassword}}));
+    assert.equal(changed.status,200);
+    const loggedIn=await admin.handle(request('/manage/api/login',{method:'POST',body:{username:'admin',password:newPassword}}));
+    assert.equal(loggedIn.status,200);setCookie=loggedIn.headers.get('set-cookie')!;body=await loggedIn.json();
+  }
   return {cookie: setCookie.split(';')[0], csrf: body.csrf, setCookie};
 }
 async function seed(store: ThemeStore, count = 2) {
@@ -66,14 +73,13 @@ async function seed(store: ThemeStore, count = 2) {
 }
 async function code(response: Response) { return (await response.json() as {code: string}).code; }
 
-test('management is disabled until independent credentials are configured', async () => {
+test('unconfigured management uses the default password and requires rotation', async () => {
   const admin = new Admin(managementConfig({}), new MemoryStore(), ui);
-  const response = await admin.handle(request('/manage/api/login', {
-    method: 'POST', base: admin.config.adminOrigin, origin: admin.config.adminOrigin,
-    body: {username: 'admin', password: ''},
-  }));
-  assert.equal(response.status, 503);
-  assert.equal(await code(response), 'ADMIN_NOT_CONFIGURED');
+  assert.equal(admin.config.password,'admin');
+  const options={method:'POST',base:admin.config.adminOrigin,origin:admin.config.adminOrigin};
+  assert.equal((await admin.handle(request('/manage/api/login',{...options,body:{username:'admin',password:''}}))).status,401);
+  const response=await admin.handle(request('/manage/api/login',{...options,body:{username:'admin',password:'admin'}}));
+  assert.equal(response.status,200);assert.equal((await response.json()).mustChangePassword,true);
 });
 
 test('appearance bootstrap is available before login only on the management origin', async () => {
@@ -270,4 +276,81 @@ test('management rejects same-host isolation and non-local cleartext configurati
   assert.throws(() => managementConfig({BRIDGE_ADMIN_ORIGIN: 'http://localhost:8786', BRIDGE_DISPLAY_ORIGIN: 'http://localhost:8787'}), {code: 'ORIGIN_ISOLATION'});
   assert.throws(() => managementConfig({BRIDGE_ADMIN_ORIGIN: 'http://admin.example.test'}), {code: 'MANAGEMENT_CONFIGURATION'});
   assert.throws(() => managementConfig({BRIDGE_ADMIN_ORIGIN: 'https://admin.preview.localhost'}), {code: 'ORIGIN_ISOLATION'});
+});
+
+async function rawLogin(admin:Admin,password=admin.config.password){
+  const response=await admin.handle(request('/manage/api/login',{method:'POST',body:{username:'admin',password}}));
+  const body=await response.json();
+  return {response,data:body,cookie:response.headers.get('set-cookie')?.split(';')[0],csrf:body.csrf};
+}
+const replacement=(currentPassword:string,newPassword='Fresh-fixture-Secret-2026!')=>({currentPassword,newPassword,confirmPassword:newPassword});
+
+test('bootstrap sessions, including legacy sessions, cannot bypass mandatory rotation',async()=>{
+  const store=new MemoryStore(),admin=new Admin({...management(),password:'admin'},store,ui);
+  const session=await rawLogin(admin);
+  assert.equal(session.data.mustChangePassword,true);
+  const resumed=new Admin(admin.config,store,ui);
+  assert.equal((await (await resumed.handle(request('/manage/api/session',session))).json()).mustChangePassword,true);
+  // Old deployments had no credentialVersion. They must also enter the restricted flow.
+  delete Object.values(store.value.sessions)[0].credentialVersion;
+  for(const path of ['state','catalog?ecosystem=cfsm','install','activate','rollback']){
+    const response=await resumed.handle(request(`/manage/api/${path}`,{...session,...(['install','activate','rollback'].includes(path)?{method:'POST',body:{}}:{})}));
+    assert.equal(response.status,403);assert.equal(await code(response),'PASSWORD_CHANGE_REQUIRED');
+  }
+  const loggedOut=await resumed.handle(request('/manage/api/logout',{...session,method:'POST',body:{}}));
+  assert.equal(loggedOut.status,200);
+});
+
+test('password changes enforce origin, CSRF, current password, strength and confirmation on the server',async()=>{
+  const store=new MemoryStore(),admin=new Admin({...management(),password:'admin'},store,ui),session=await rawLogin(admin);
+  const change=(body:unknown,options={})=>admin.handle(request('/manage/api/password',{...session,method:'POST',body,...options}));
+  assert.equal(await code(await change(replacement('admin'),{origin:management().displayOrigin})),'ORIGIN_REJECTED');
+  assert.equal(await code(await change(replacement('admin'),{csrf:'wrong'})),'CSRF_REJECTED');
+  assert.equal(await code(await change(replacement('wrong'))),'CURRENT_PASSWORD');
+  for(const weak of ['admin','Short1!','lowercase-only-123!','UPPERCASE-ONLY-123!','No-Numbers-Here!','MissingSymbols123','Password123!','A1!a'.repeat(33)]){
+    assert.equal(await code(await change(replacement('admin',weak))),'WEAK_PASSWORD');
+  }
+  // Policy validation failures consume the same bounded attempt budget.
+  assert.equal((await change({...replacement('admin'),confirmPassword:'different'})).status,400);
+  assert.equal(await code(await change(replacement('admin'))),'LOGIN_THROTTLED');
+  assert.equal(store.value.adminCredential,undefined);
+  const another=await rawLogin(admin);
+  const mismatch=await admin.handle(request('/manage/api/password',{...another,method:'POST',body:{...replacement('admin'),confirmPassword:'different'}}));
+  assert.equal(await code(mismatch),'PASSWORD_MISMATCH');
+});
+
+test('password rotation is durable, stores only a salted hash and revokes every old session',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'bridge-password-'));
+  try{
+    const store=new FileThemeStore(root),config={...management(),password:'admin'},admin=new Admin(config,store,ui);
+    await seed(store);
+    const first=await rawLogin(admin),second=await rawLogin(admin),before=await store.state(),body=replacement('admin');
+    const changed=await admin.handle(request('/manage/api/password',{...first,method:'POST',body}));
+    assert.equal(changed.status,200);assert.match(changed.headers.get('set-cookie')!,/Max-Age=0/);
+    const saved=await store.state();
+    assert.equal(saved.generation,before.generation);assert.equal(saved.active,before.active);
+    assert.equal(saved.adminCredential?.iterations,600000);assert.equal(saved.adminCredential?.version,1);
+    assert.match(saved.adminCredential!.salt,/^[a-f0-9]{32}$/);assert.match(saved.adminCredential!.hash,/^[a-f0-9]{64}$/);
+    assert.ok(!JSON.stringify(saved).includes(body.newPassword));assert.ok(!JSON.stringify(saved).includes('"admin"'));
+    const restarted=new Admin({...config,password:'Other-bootstrap-password-2026'},new FileThemeStore(root),ui);
+    for(const session of [first,second])assert.equal((await restarted.handle(request('/manage/api/session',session))).status,401);
+    for(const old of ['admin','Other-bootstrap-password-2026'])assert.equal((await rawLogin(restarted,old)).response.status,401);
+    const current=await rawLogin(restarted,body.newPassword);assert.equal(current.response.status,200);assert.equal(current.data.mustChangePassword,false);
+    const publicResponse=await restarted.handle(request('/manage/api/state',current)),text=await publicResponse.text();
+    assert.equal(publicResponse.status,200);
+    for(const secret of ['adminCredential','sessions',saved.adminCredential!.hash,saved.adminCredential!.salt])assert.ok(!text.includes(secret));
+    const unchanged=await restarted.handle(request('/manage/api/password',{...current,method:'POST',body:replacement(body.newPassword,body.newPassword)}));
+    assert.equal(await code(unchanged),'PASSWORD_UNCHANGED');
+  }finally{await rm(root,{recursive:true,force:true});}
+});
+
+test('concurrent rotations have exactly one winner and stale login commits are rejected',async()=>{
+  const store=new MemoryStore(),admin=new Admin(management(),store,ui),first=await rawLogin(admin),second=await rawLogin(admin);
+  const responses=await Promise.all([first,second].map((session,index)=>admin.handle(request('/manage/api/password',{...session,method:'POST',body:replacement(password,`Concurrent-fixture-${index}-2026!`)}))));
+  assert.deepEqual(responses.map(r=>r.status).sort(),[200,401]);
+  assert.equal(store.value.adminCredential?.version,1);assert.deepEqual(store.value.sessions,{});
+  await assert.rejects(store.command({type:'session',id:'stale',session:{csrf:'old',expires:Date.now()+60000,credentialVersion:0}}),/密码已变更/);
+  const winner=responses.findIndex(r=>r.status===200);
+  assert.equal((await rawLogin(admin,`Concurrent-fixture-${winner}-2026!`)).response.status,200);
+  assert.equal((await rawLogin(admin,`Concurrent-fixture-${1-winner}-2026!`)).response.status,401);
 });

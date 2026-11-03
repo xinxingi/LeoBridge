@@ -10,7 +10,7 @@ Worker使用R2保存主题资源、Durable Object保存主题元数据与管理�
 
 - [ ] 审查代码、锁文件、关键测试、两套前台补丁、许可证及真实浏览器记录；确认身份约束与历史读取期间列表不变的前提。
 - [ ] 明确目标Cloudflare账号、Worker名、环境、域名及部署授权；不默认公开private数据。
-- [ ] 决定`BRIDGE_ACCESS=public/private`。private配置独立展示用户名/密码；管理站另配用户名及至少20字符密码，上游Token不得复用。
+- [ ] 决定`BRIDGE_ACCESS=public/private`。private配置独立展示用户名/密码；管理站默认初始凭据为 `admin` / `admin`，也可另配至少20字符的初始密码；首次登录须改密，上游Token不得复用。
 - [ ] 运行`pnpm install --frozen-lockfile`、`pnpm check`、`pnpm deploy:dry-run`；以实际输出记录结果，不预填测试数量。
 - [ ] 审查静态包限制、第三方CSP限制、未验证主题确认流程及尚无主题配置编辑UI的范围。
 - [ ] 核实目标账号R2、DO、Worker存储/读写/CPU/连接额度和费用，决定访问规模与监控方式，不承诺免费或无限连接。

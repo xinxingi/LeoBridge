@@ -167,6 +167,15 @@ test('Node proxy subprocess: isolated origins, both native protocols, persisted 
   const adminHeaders = { Origin: `https://${adminHost}` };
   response = await request(port, adminHost, '/manage/api/login', { method: 'POST', headers: adminHeaders, body: { username: 'admin', password } });
   assert.equal(response.status, 200, response.text);
+  assert.equal(response.json.mustChangePassword,true);
+  const initialSession={...adminHeaders,Cookie:response.headers['set-cookie']![0]!.split(';')[0]!, 'X-CSRF-Token':response.json.csrf};
+  assert.equal((await request(port,adminHost,'/manage/api/state',{headers:initialSession})).status,403);
+  const newPassword='Runtime-fixture-New-2026!';
+  response=await request(port,adminHost,'/manage/api/password',{method:'POST',headers:initialSession,body:{currentPassword:password,newPassword,confirmPassword:newPassword}});
+  assert.equal(response.status,200,response.text);
+  assert.equal((await request(port,adminHost,'/manage/api/session',{headers:initialSession})).status,401);
+  response=await request(port,adminHost,'/manage/api/login',{method:'POST',headers:adminHeaders,body:{username:'admin',password:newPassword}});
+  assert.equal(response.status,200,response.text);assert.equal(response.json.mustChangePassword,false);
   const setCookie = response.headers['set-cookie']![0]!;
   assert.match(setCookie, /^__Host-leobridge_admin=/); assert.match(setCookie, /; Secure/); assert.match(setCookie, /; HttpOnly/); assert.doesNotMatch(setCookie, /Domain=/i);
   const session = { ...adminHeaders, Cookie: setCookie.split(';')[0]!, 'X-CSRF-Token': response.json.csrf };

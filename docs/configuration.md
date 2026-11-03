@@ -11,7 +11,7 @@
 | `BRIDGE_TITLE` | 展示站名称，默认LeoBridge |
 | `BRIDGE_BINDINGS` | 服务端JSON数组`{id, match:{…}}`，初始化后显式维护 |
 | `BRIDGE_PING_TARGETS` | CFSM槽位映射`{ct:{key,label}, …}`，最多8个固定目标，Komari也使用该选择集 |
-| `BRIDGE_ADMIN_USERNAME` / `BRIDGE_ADMIN_PASSWORD` | 管理站独立凭据，密码至少20字符；空密码拒绝登录，绝非上游Token或展示站密码 |
+| `BRIDGE_ADMIN_USERNAME` / `BRIDGE_ADMIN_PASSWORD` | 初始管理凭据，默认 `admin` / `admin`；自定义初始密码至少20字符。首次登录强制改密，改密后环境变量密码不再用于登录；独立于上游Token和展示密码 |
 | `BRIDGE_ADMIN_ORIGIN` | 管理源，Node默认`http://admin.localhost:8786` |
 | `BRIDGE_DISPLAY_ORIGIN` / `BRIDGE_DISPLAY_DOMAIN` | 展示根源和版本子域后缀，Node默认`http://127.0.0.1:8787`及`display.localhost` |
 | `BRIDGE_PREVIEW_ORIGIN` | 预览子域基源，Node默认`http://preview.localhost:8789` |
@@ -57,7 +57,7 @@ Node最多50个访客实时连接；Workers无跨isolate共享限流，DO当前�
 
 | 参数 | 行为 |
 | --- | --- |
-| `BRIDGE_NODE_MODE` | 默认local；proxy为生产反代模式，必须显式public/private及管理密码 |
+| `BRIDGE_NODE_MODE` | 默认local；proxy为生产反代模式，必须显式public/private；管理密码首次登录后强制更改 |
 | `BRIDGE_LISTEN_HOST` | 默认127.0.0.1；proxy容器可设0.0.0.0，local只允许回环 |
 | `BRIDGE_LISTEN_PORT` | proxy单端口，默认8787；local仍按三个origin各自端口监听 |
 | `BRIDGE_TRUSTED_PROXIES` | 代理IP/CIDR逗号列表，默认127.0.0.1/32,::1/128；Docker示例只信任nginx固定IP |
@@ -67,3 +67,9 @@ Node最多50个访客实时连接；Workers无跨isolate共享限流，DO当前�
 proxy要求三个origin全部HTTPS，并拒绝BRIDGE_DEV_PROXY。Host必须匹配配置范围；Forwarded和X-Forwarded-Host不用于生成站点地址。只有受信任代理的单一X-Forwarded-Proto=https和单IP X-Real-IP有效。HTTP与WS一致校验，客户端伪造CF-Connecting-IP无法绕过登录节流。
 
 Docker的.env由Compose解析并传环境，systemd的runtime.env由Node解析；不要将两个不同用途的文件直接互换。不要同时让多个解析器重复解释引号和JSON。完整示例见[VPS部署](deployment/vps.md)。
+
+## 管理密码持久化
+
+首次登录只能查看会话、修改密码或退出，管理API在服务端拒绝其他操作。新密码要求12–128位、包含大小写英文字母、数字和符号；拒绝常见弱口令、当前密码和初始密码。保存时校验当前密码及两次新密码一致性。改密撤销所有会话，需要重新登录；以后可在管理页点击“修改密码”。
+
+Node将随机盐和PBKDF2-SHA256摘要（600,000次）写入状态目录的 `state.json`，不保存新密码明文，公开状态API排除凭据和会话。备份和迁移必须包含整个状态目录；删除状态目录会同时丢失主题管理状态和已更改的密码，不能作为常规改密方法。已有部署在升级后首次登录也需完成一次改密；不重置其自定义初始密码。

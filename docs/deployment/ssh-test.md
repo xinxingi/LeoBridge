@@ -14,7 +14,7 @@ Debian13发行版包中daemon、CLI和Compose分别为`docker.io`、`docker-cli`
 
 - `MMWX_BASE_URL`和`MMWX_PROBE_TOKEN`：授权主控及只读探针密钥。
 - `BRIDGE_BINDINGS`和`BRIDGE_PING_TARGETS`：已审查的绑定，保留原稳定ID。
-- `BRIDGE_ADMIN_USERNAME`和至少20字符的独立`BRIDGE_ADMIN_PASSWORD`。
+- 初始管理账号默认 `admin` / `admin`；已有自定义 `BRIDGE_ADMIN_PASSWORD` 保留。首次登录必须完成强密码更换。
 - 可选`BRIDGE_TITLE`。不要复制本机开发代理或全部开发配置。
 
 已有完整本地配置时，可运行`node --import tsx scripts/prepare-ssh-test.ts .dev.vars work/private/ssh-test`。该工具仅复制必要的源配置与稳定绑定，生成独立管理密码并私存`runtime.env`，拒绝覆盖已有文件，不连接网络。通过SSH安全传输该文件；从私有文件读取管理密码，不使用服务器root密码。

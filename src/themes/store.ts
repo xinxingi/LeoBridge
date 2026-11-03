@@ -9,10 +9,12 @@ export interface Installation {
   catalogRevision?:string;
   files:Record<string,{contentType:string;size:number;offset?:number}>; bundled:boolean;
 }
-export interface AdminSession {expires:number;csrf:string;}
+export interface AdminSession {expires:number;csrf:string;credentialVersion?:number;}
+export interface AdminCredential {version:number;algorithm:'PBKDF2-SHA256';salt:string;iterations:number;hash:string;}
 export interface ThemeState {
   schema:1; generation:number; active:string|null; previous:string|null;
   installations:Record<string,Installation>; sessions:Record<string,AdminSession>;
+  adminCredential?:AdminCredential;
   events:{at:string;action:string;installationId:string;generation:number}[];
 }
 export type ThemeCommand=
@@ -21,6 +23,7 @@ export type ThemeCommand=
   |{type:'rollback';expectedGeneration:number}
   |{type:'bundled-evidence';id:string;compatibility:Compatibility;evidence:string}
   |{type:'session';id:string;session:AdminSession}
+  |{type:'password';sessionId:string;expectedVersion:number;credential:AdminCredential}
   |{type:'logout';id:string};
 export interface ThemeStore {
   state():Promise<ThemeState>;
@@ -36,10 +39,16 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
   const next=structuredClone(state);
   for(const [id,session]of Object.entries(next.sessions))if(session.expires<=now)delete next.sessions[id];
   if(command.type==='session'){
+    if((command.session.credentialVersion??0)!==(next.adminCredential?.version??0))throw new BridgeError('LOGIN_REQUIRED',401,'密码已变更，请重新登录。');
     if(Object.keys(next.sessions).length>=100)throw new BridgeError('SESSION_LIMIT',429,'管理会话数量已达上限。');
     next.sessions[command.id]=command.session;return next;
   }
   if(command.type==='logout'){delete next.sessions[command.id];return next;}
+  if(command.type==='password'){
+    const session=next.sessions[command.sessionId],version=next.adminCredential?.version??0;
+    if(!session||(session.credentialVersion??0)!==version||command.expectedVersion!==version||command.credential.version!==version+1)throw new BridgeError('LOGIN_REQUIRED',401,'会话或密码已变更，请重新登录。');
+    next.adminCredential=command.credential;next.sessions={};return next;
+  }
   if(command.type==='bundled-evidence'){
     const item=next.installations[command.id];if(!item?.bundled)throw new BridgeError('EVIDENCE_SCOPE',409,'只能更新当前内置包的验收记录。');
     item.compatibility=command.compatibility;item.evidence=command.evidence;return next;
@@ -64,7 +73,7 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
   next.events.push({at:new Date(now).toISOString(),action:command.type,installationId:command.type==='install'?command.installation.id:next.active!,generation:next.generation});
   next.events=next.events.slice(-30);return next;
 }
-export function publicThemeState(state:ThemeState){const {sessions,...publicState}=state;return publicState;}
+export function publicThemeState(state:ThemeState){const {sessions,adminCredential,...publicState}=state;return publicState;}
 
 /** Complete immutable files before publishing metadata; failures leave active untouched. */
 export async function commitInstallation(store:ThemeStore,item:Installation,files:{path:string;bytes:Uint8Array;contentType:string}[],activateIfEmpty=false){

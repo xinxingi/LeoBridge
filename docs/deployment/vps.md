@@ -55,7 +55,7 @@ docker compose ps
 
 - `MMWX_BASE_URL` 为授权主控的完整源，例如 `https://controller.example`，不带 API 路径、用户名或查询参数。`MMWX_PROBE_TOKEN` 仅服务端使用。
 - 显式选择 `BRIDGE_ACCESS=public` 或 `private`。public 公开所选探针数据；private 为展示 HTML、资源、HTTP、WS 增加独立 Basic Auth。private 的 `BRIDGE_USERNAME` 非空、`BRIDGE_PASSWORD` 至少16字符，浏览器可能在不同版本/预览源分别要求认证。
-- `BRIDGE_ADMIN_PASSWORD` 使用至少20字符的独立随机口令，与上游Token和展示密码分开。管理站使用自己的登录会话，无法用展示 Basic Auth 替代。
+- `BRIDGE_ADMIN_PASSWORD` 可留空，默认初始密码为 `admin`，用户名默认 `admin`；自定义初始口令至少20字符。首次登录必须更换为12–128位且包含大小写字母、数字和符号的强密码。改密结果随状态卷持久化，旧会话全部失效，后续环境变量初始口令不再生效。管理站使用自己的登录会话。
 - `BRIDGE_BINDINGS` 是审查后的完整绑定 JSON；`BRIDGE_PING_TARGETS` 是已确认目标键的 JSON。可以将已完成本地配置中的这两项私下迁移，保留原稳定ID。不要复制整个开发配置，也不要把本地开发代理和localhost源带到生产。
 - 尚未初始化绑定的新站点，先按仓库 README 的本地只读配置流程取得、审查绑定。`[]` 只是占位，不能为已有服务器提供身份映射；改名/隐藏/增删节点后需要显式维护，不能自动按名称或下标映射。
 - 值可用单引号包围以保留字面 `$`，JSON不要改成多行 shell 命令；不要将秘密放进命令参数。

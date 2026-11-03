@@ -1,5 +1,6 @@
 import { BridgeError } from '../core/errors.ts';
 import type { Env } from '../core/config.ts';
+import { DEFAULT_ADMIN_PASSWORD } from './password.ts';
 export interface ManagementConfig {adminOrigin:string;displayOrigin:string;displayDomain:string;previewOrigin:string;username:string;password:string;}
 export function managementConfig(env:Env):ManagementConfig {
   const config={adminOrigin:env.BRIDGE_ADMIN_ORIGIN||'http://admin.localhost:8786',displayOrigin:env.BRIDGE_DISPLAY_ORIGIN||`http://127.0.0.1:${env.PORT||8787}`,displayDomain:env.BRIDGE_DISPLAY_DOMAIN||'display.localhost',previewOrigin:env.BRIDGE_PREVIEW_ORIGIN||'http://preview.localhost:8789',username:env.BRIDGE_ADMIN_USERNAME||'admin',password:env.BRIDGE_ADMIN_PASSWORD||''};
@@ -9,7 +10,8 @@ export function managementConfig(env:Env):ManagementConfig {
   }
   const admin=new URL(config.adminOrigin),display=new URL(config.displayOrigin),preview=new URL(config.previewOrigin);
   if(admin.hostname===display.hostname||admin.hostname===preview.hostname||admin.hostname===config.displayDomain||admin.hostname.endsWith(`.${config.displayDomain}`)||admin.hostname.endsWith(`.${preview.hostname}`)||preview.hostname===config.displayDomain||!/^[a-z0-9.-]+$/.test(config.displayDomain))throw new BridgeError('ORIGIN_ISOLATION',503,'后台、展示与预览必须使用不同主机名，不能仅分端口或路径。');
-  if(config.password&&config.password.length<20)throw new BridgeError('ADMIN_PASSWORD',503,'独立管理密码至少20字符。');
+  config.password ||= DEFAULT_ADMIN_PASSWORD;
+  if(config.password!==DEFAULT_ADMIN_PASSWORD&&config.password.length<20)throw new BridgeError('ADMIN_PASSWORD',503,'自定义初始管理密码至少20字符。');
   return config;
 }
 export function installationUrl(config:ManagementConfig,id:string,preview=false){

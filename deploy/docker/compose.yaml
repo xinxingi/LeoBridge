@@ -33,7 +33,7 @@ services:
       BRIDGE_USERNAME: ${BRIDGE_USERNAME:-}
       BRIDGE_PASSWORD: ${BRIDGE_PASSWORD:-}
       BRIDGE_ADMIN_USERNAME: ${BRIDGE_ADMIN_USERNAME:-admin}
-      BRIDGE_ADMIN_PASSWORD: ${BRIDGE_ADMIN_PASSWORD:?Set an independent admin password}
+      BRIDGE_ADMIN_PASSWORD: ${BRIDGE_ADMIN_PASSWORD:-admin}
       BRIDGE_BINDINGS: ${BRIDGE_BINDINGS:?Set reviewed stable server bindings}
       BRIDGE_PING_TARGETS: ${BRIDGE_PING_TARGETS:?Set a JSON object, optionally empty}
     volumes:
