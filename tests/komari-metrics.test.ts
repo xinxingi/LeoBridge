@@ -4,7 +4,7 @@ import { queryMetrics,metricDefinitions } from '../src/protocols/komari/metrics.
 import { pingTaskId } from '../src/protocols/komari/adapter.ts';
 import { KomariService } from '../src/protocols/komari/service.ts';
 import { Upstream } from '../src/upstream/client.ts';
-import { readConfig } from '../src/core/config.ts';
+import { readConfig } from './helpers/config.ts';
 
 const now=Date.parse('2026-11-03T05:00:00Z');
 test('official metric series preserve zero, missing capacity, units, timestamps and source gaps',()=>{

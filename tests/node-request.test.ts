@@ -134,7 +134,7 @@ class MemoryStore implements ThemeStore {
 
 test('TLS proxy requests reach real admin origin checks and produce a Secure host-only session cookie', async () => {
   const admin = new Admin(management, new MemoryStore(), async () => new Response('synthetic'));
-  const body = Buffer.from(JSON.stringify({ username: 'admin', password: env.BRIDGE_ADMIN_PASSWORD }));
+  const body = Buffer.from(JSON.stringify({ username: 'admin', password: 'admin' }));
   const request = nodeRequest(input({ method: 'POST', url: '/manage/api/login', headers: [...forwarded,
     ['Origin', management.adminOrigin], ['Content-Type', 'application/json']] }), runtime, management, body);
   const response = await admin.handle(request);
@@ -170,5 +170,15 @@ test('single listener accepts only configured origins; direct HTTP requires expl
   const req=nodeRequest(input({host:'192.0.2.42:8080',peer:'198.51.100.7',url:'/admin/api/session',headers:[['X-Real-IP','192.0.2.1'],['X-Forwarded-Proto','https']]}),direct,site);
   assert.equal(req.headers.get('cf-connecting-ip'),'198.51.100.7');assert.equal(new URL(req.url).protocol,'http:');
   rejects(()=>nodeRequest(input({host:'other.invalid:8080'}),direct,site),421);
-  for(const overrides of [{BRIDGE_ACCESS:'local'},{BRIDGE_ADMIN_PASSWORD:''},{BRIDGE_ROUTING:'isolated'}])rejects(()=>readNodeRuntimeConfig({...values,...overrides}),503);
+  for(const overrides of [{BRIDGE_ACCESS:'local'},{BRIDGE_ROUTING:'isolated'}])rejects(()=>readNodeRuntimeConfig({...values,...overrides}),503);
+});
+
+
+test('HTTPS proxy single mode needs only the one public origin',()=>{
+  const values={BRIDGE_NODE_MODE:'proxy',BRIDGE_ORIGIN:'https://single.example.test',BRIDGE_LISTEN_PORT:'8787'};
+  const runtime=readNodeRuntimeConfig(values),config=managementConfig(values);
+  assert.equal(config.routing,'single');assert.equal(config.previewOrigin,config.displayOrigin);
+  const preview=installationUrl(config,'a'.repeat(32),true);
+  const req=nodeRequest(input({host:'single.example.test',url:new URL(preview).pathname+new URL(preview).search,headers:[['X-Forwarded-Proto','https']]}),runtime,config);
+  assert.equal(req.url,preview);
 });

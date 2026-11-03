@@ -16,7 +16,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const upstreamPort = 8791, workerPort = 8795;
 const syntheticToken = 'synthetic-token';
 // Deliberately synthetic and local-only; matches the existing workerd fixture.
-const syntheticPassword = 'Synthetic-worker-only-password-2026';
+const syntheticPassword = 'Synthetic-worker-only-password-2026!';
 const { values } = parseArgs({ options: {
   check: { type: 'boolean', default: false },
   'serve-upstream': { type: 'boolean', default: false },
@@ -95,14 +95,11 @@ async function configure() {
   if (!Array.isArray(bundles) || bundles.length !== 0) throw new Error('Expected a theme-free product build; run pnpm build.');
   await readFile(resolve(bundleRoot, '_management/index.html'));
   const env: Record<string, string> = {
-    MMWX_BASE_URL: `http://127.0.0.1:${upstreamPort}`, MMWX_PROBE_TOKEN: syntheticToken,
     BRIDGE_ACCESS: 'local', BRIDGE_TITLE: 'LeoBridge Synthetic Worker Fixture',
-    BRIDGE_ADMIN_USERNAME: 'admin', BRIDGE_ADMIN_PASSWORD: syntheticPassword,
+    BRIDGE_ADMIN_USERNAME: 'admin',
     BRIDGE_ADMIN_ORIGIN: `http://admin.worker.localhost:${workerPort}`,
     BRIDGE_DISPLAY_ORIGIN: `http://127.0.0.1:${workerPort}`, BRIDGE_DISPLAY_DOMAIN: 'display.worker.localhost',
     BRIDGE_PREVIEW_ORIGIN: `http://preview.worker.localhost:${workerPort}`,
-    BRIDGE_BINDINGS: JSON.stringify(snapshot(0).servers.map((server, index) => ({ id: `synthetic-${index + 1}`, match: { name: server.name } }))),
-    BRIDGE_PING_TARGETS: JSON.stringify({ ct: { key: 'target-a', label: 'Synthetic target' } }),
   };
   const note = '# Generated synthetic-only local fixture. Never deploy or use as real credentials.\n';
   const toml = `${note}name = "leobridge-worker-fixture"

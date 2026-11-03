@@ -5,14 +5,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Admin } from '../src/management/admin.ts';
 import { Site } from '../src/app/site.ts';
-import { readConfig } from '../src/core/config.ts';
+import { readConfig } from './helpers/config.ts';
 import { managementConfig, installationUrl, installationFromUrl } from '../src/management/config.ts';
 import { applyThemeCommand, commitInstallation, emptyThemeState, sha256, type Installation, type ThemeCommand, type ThemeStore } from '../src/themes/store.ts';
 import { FileThemeStore } from '../src/runtime/file-theme-store.ts';
 import type { ProtocolApplication } from '../src/app/protocols.ts';
 
 const encoder = new TextEncoder();
-const password = 'synthetic-admin-password-for-tests';
+const password = 'admin';
 const newPassword = 'New-fixture-Password-2026!';
 const ids = ['a'.repeat(32), 'b'.repeat(32), 'c'.repeat(32)];
 const ui = async () => new Response('<html>synthetic admin</html>');
@@ -75,7 +75,6 @@ async function code(response: Response) { return (await response.json() as {code
 
 test('unconfigured management uses the default password and requires rotation', async () => {
   const admin = new Admin(managementConfig({}), new MemoryStore(), ui);
-  assert.equal(admin.config.password,'admin');
   const options={method:'POST',base:admin.config.adminOrigin,origin:admin.config.adminOrigin};
   assert.equal((await admin.handle(request('/admin/api/login',{...options,body:{username:'admin',password:''}}))).status,401);
   const response=await admin.handle(request('/admin/api/login',{...options,body:{username:'admin',password:'admin'}}));
@@ -88,7 +87,7 @@ test('login guidance exposes only initialization status on both management route
     const path=config.routing==='single'?'/admin/api/login-info':'/manage/api/login-info';
     const response=await admin.handle(request(path,{base:config.adminOrigin}));
     assert.equal(response.status,200);
-    assert.deepEqual(await response.json(),{showInitialPasswordHint:true});
+    assert.deepEqual(await response.json(),{showInitialPasswordHint:true,credentialSource:'default'});
     assert.equal(response.headers.get('cache-control'),'no-store');
     assert.equal(response.headers.get('set-cookie'),null);
     assert.equal((await admin.handle(request(path,{base:'https://unrelated.example.test'}))).status,404);
@@ -335,12 +334,12 @@ test('single origin defaults to root theme and /admin, with namespaced resources
   assert.equal(await site.websocket(rootWs),site.protocols['komari-adhesive-v1']);
   assert.equal(await site.websocket(new Request(rootWs.url,{headers:{origin:'https://other.invalid'}})),null);
   const preview=installationUrl(config,ids[0],true);
-  assert.equal((await site.fetch(new Request(preview+'/admin/api/state',{headers:{cookie}}))).status,404);
+  assert.equal((await site.fetch(new Request(new URL('/admin/api/state'+new URL(preview).search,preview),{headers:{cookie}}))).status,404);
   assert.equal((await call('/admin/api/logout',{method:'POST',cookie,csrf,body:{}})).status,200);
   assert.equal((await call('/admin/api/state',{cookie})).status,401);
 });
 
-async function rawLogin(admin:Admin,password=admin.config.password){
+async function rawLogin(admin:Admin,password='admin'){
   const response=await admin.handle(request('/manage/api/login',{method:'POST',body:{username:'admin',password}}));
   const body=await response.json();
   return {response,data:body,cookie:response.headers.get('set-cookie')?.split(';')[0],csrf:body.csrf};
@@ -348,7 +347,7 @@ async function rawLogin(admin:Admin,password=admin.config.password){
 const replacement=(currentPassword:string,newPassword='Fresh-fixture-Secret-2026!')=>({currentPassword,newPassword,confirmPassword:newPassword});
 
 test('bootstrap sessions, including legacy sessions, cannot bypass mandatory rotation',async()=>{
-  const store=new MemoryStore(),admin=new Admin({...management(),password:'admin'},store,ui);
+  const store=new MemoryStore(),admin=new Admin(management(),store,ui);
   const session=await rawLogin(admin);
   assert.equal(session.data.mustChangePassword,true);
   const resumed=new Admin(admin.config,store,ui);
@@ -364,7 +363,7 @@ test('bootstrap sessions, including legacy sessions, cannot bypass mandatory rot
 });
 
 test('password changes enforce origin, CSRF, current password, strength and confirmation on the server',async()=>{
-  const store=new MemoryStore(),admin=new Admin({...management(),password:'admin'},store,ui),session=await rawLogin(admin);
+  const store=new MemoryStore(),admin=new Admin(management(),store,ui),session=await rawLogin(admin);
   const change=(body:unknown,options={})=>admin.handle(request('/manage/api/password',{...session,method:'POST',body,...options}));
   assert.equal(await code(await change(replacement('admin'),{origin:management().displayOrigin})),'ORIGIN_REJECTED');
   assert.equal(await code(await change(replacement('admin'),{csrf:'wrong'})),'CSRF_REJECTED');
@@ -384,9 +383,9 @@ test('password changes enforce origin, CSRF, current password, strength and conf
 test('password rotation is durable, stores only a salted hash and revokes every old session',async()=>{
   const root=await mkdtemp(join(tmpdir(),'bridge-password-'));
   try{
-    const store=new FileThemeStore(root),config={...management(),password:'admin'},admin=new Admin(config,store,ui);
+    const store=new FileThemeStore(root),config=management(),admin=new Admin(config,store,ui);
     await seed(store);
-    assert.deepEqual(await (await admin.handle(request('/manage/api/login-info'))).json(),{showInitialPasswordHint:true});
+    assert.deepEqual(await (await admin.handle(request('/manage/api/login-info'))).json(),{showInitialPasswordHint:true,credentialSource:'default'});
     const first=await rawLogin(admin),second=await rawLogin(admin),before=await store.state(),body=replacement('admin');
     const changed=await admin.handle(request('/manage/api/password',{...first,method:'POST',body}));
     assert.equal(changed.status,200);assert.match(changed.headers.get('set-cookie')!,/Max-Age=0/);
@@ -395,8 +394,8 @@ test('password rotation is durable, stores only a salted hash and revokes every 
     assert.equal(saved.adminCredential?.iterations,600000);assert.equal(saved.adminCredential?.version,1);
     assert.match(saved.adminCredential!.salt,/^[a-f0-9]{32}$/);assert.match(saved.adminCredential!.hash,/^[a-f0-9]{64}$/);
     assert.ok(!JSON.stringify(saved).includes(body.newPassword));assert.ok(!JSON.stringify(saved).includes('"admin"'));
-    const restarted=new Admin({...config,password:'Other-bootstrap-password-2026'},new FileThemeStore(root),ui);
-    assert.deepEqual(await (await restarted.handle(request('/manage/api/login-info'))).json(),{showInitialPasswordHint:false});
+    const restarted=new Admin(config,new FileThemeStore(root),ui);
+    assert.deepEqual(await (await restarted.handle(request('/manage/api/login-info'))).json(),{showInitialPasswordHint:false,credentialSource:'saved'});
     for(const session of [first,second])assert.equal((await restarted.handle(request('/manage/api/session',session))).status,401);
     for(const old of ['admin','Other-bootstrap-password-2026'])assert.equal((await rawLogin(restarted,old)).response.status,401);
     const current=await rawLogin(restarted,body.newPassword);assert.equal(current.response.status,200);assert.equal(current.data.mustChangePassword,false);
@@ -410,7 +409,7 @@ test('password rotation is durable, stores only a salted hash and revokes every 
 
 test('concurrent rotations have exactly one winner and stale login commits are rejected',async()=>{
   const store=new MemoryStore(),admin=new Admin(management(),store,ui),first=await rawLogin(admin),second=await rawLogin(admin);
-  const responses=await Promise.all([first,second].map((session,index)=>admin.handle(request('/manage/api/password',{...session,method:'POST',body:replacement(password,`Concurrent-fixture-${index}-2026!`)}))));
+  const responses=await Promise.all([first,second].map((session,index)=>admin.handle(request('/manage/api/password',{...session,method:'POST',body:replacement('admin',`Concurrent-fixture-${index}-2026!`)}))));
   assert.deepEqual(responses.map(r=>r.status).sort(),[200,401]);
   assert.equal(store.value.adminCredential?.version,1);assert.deepEqual(store.value.sessions,{});
   await assert.rejects(store.command({type:'session',id:'stale',session:{csrf:'old',expires:Date.now()+60000,credentialVersion:0}}),/密码已变更/);
@@ -505,4 +504,44 @@ test('empty distribution manifest seeds nothing and leaves existing installation
   await seedBundled(store,load);assert.deepEqual(await store.state(),emptyThemeState());
   await seed(store);await store.command({type:'activate',id:ids[1],expectedGeneration:store.value.generation});
   const before=await store.state();await seedBundled(store,load);assert.deepEqual(await store.state(),before);
+});
+
+test('single-domain previews bind each request to its version without changing active theme or sharing cookies',async()=>{
+  const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test'}),store=new MemoryStore();await seed(store);
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'public'}),config,store,ui);
+  site.protocols['cfsm-609cc0b']=fakeProtocol('cfsm');site.protocols['komari-adhesive-v1']=fakeProtocol('komari');
+  const get=(path:string,headers?:Record<string,string>)=>site.fetch(new Request(config.displayOrigin+path,{headers}));
+  const preview=`?__preview=${ids[1]}`;
+  assert.equal(installationUrl(config,ids[1],true),config.displayOrigin+'/'+preview);
+  assert.equal(config.previewOrigin,config.displayOrigin);
+  assert.deepEqual(await (await get('/api/protocol'+preview)).json(),{protocol:'komari'});
+  assert.deepEqual(await (await get('/api/protocol')).json(),{protocol:'cfsm'});
+  const html=await get('/'+preview);assert.match(await html.text(),/__preview/);
+  assert.equal(html.headers.get('set-cookie'),null);assert.equal(html.headers.get('referrer-policy'),'same-origin');
+  assert.equal(html.headers.get('cache-control'),'no-store');
+  const referrer=config.displayOrigin+'/'+preview;
+  const asset=await get('/index.html?original=1',{referer:referrer});
+  assert.equal(asset.status,307);assert.equal(asset.headers.get('location'),config.displayOrigin+'/index.html?original=1&__preview='+ids[1]);
+  assert.equal(asset.headers.get('vary'),'Referer');assert.equal(asset.headers.get('cache-control'),'no-store');
+  const nested=await get('/image.png',{referer:asset.headers.get('location')!});assert.equal(nested.status,307);
+  assert.equal((await get('/index.html',{referer:'https://external.invalid/'+preview})).status,200);
+  assert.equal((await get('/admin/api/state'+preview)).status,404);
+  for(const invalid of ['bad','',ids[1]+'&__preview='+ids[0]])assert.equal((await get('/?__preview='+invalid)).status,400);
+  assert.equal((await get('/?__preview='+ids[2])).status,404);
+  const ws=new Request(config.displayOrigin+'/api/rpc2'+preview,{headers:{Origin:config.displayOrigin}});
+  assert.equal(await site.websocket(ws),site.protocols['komari-adhesive-v1']);
+  assert.equal(await site.websocket(new Request(ws.url,{headers:{Origin:'https://external.invalid'}})),null);
+  await store.command({type:'activate',id:ids[1],expectedGeneration:(await store.state()).generation});
+  assert.deepEqual(await (await get('/api/protocol?__preview='+ids[0])).json(),{protocol:'cfsm'});
+  assert.deepEqual(await (await get('/api/protocol')).json(),{protocol:'komari'});
+  await store.command({type:'rollback',expectedGeneration:(await store.state()).generation});
+  assert.deepEqual(await (await get('/api/protocol'+preview)).json(),{protocol:'komari'});
+});
+
+test('same-domain preview respects private display access for HTML, APIs and websocket',async()=>{
+  const config=managementConfig({}),store=new MemoryStore();await seed(store);
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'private',BRIDGE_USERNAME:'viewer',BRIDGE_PASSWORD:'synthetic-viewer-password'}),config,store,ui);
+  site.protocols['cfsm-609cc0b']=fakeProtocol('cfsm');
+  for(const path of ['/','/index.html','/api/protocol'])assert.equal((await site.fetch(new Request(config.displayOrigin+path+'?__preview='+ids[0]))).status,401);
+  assert.equal(await site.websocket(new Request(config.displayOrigin+'/api/ws?__preview='+ids[0])),null);
 });

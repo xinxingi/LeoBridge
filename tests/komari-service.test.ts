@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readConfig } from '../src/core/config.ts';
+import { readConfig } from './helpers/config.ts';
 import { Upstream,type Fetcher } from '../src/upstream/client.ts';
 import { KomariService,type RpcResponse } from '../src/protocols/komari/service.ts';
 const now=Date.parse('2026-11-02T12:00:00Z');

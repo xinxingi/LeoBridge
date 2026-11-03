@@ -13,7 +13,7 @@ class Element {
   append(...children:Element[]){this.children.push(...children);}
   reset(){this.values={};}
 }
-async function fixture(required=true,initiallyLoggedIn=true,infoFails=false){
+async function fixture(required=true,initiallyLoggedIn=true,infoFails=false,credentialSource=required?'default':'saved'){
   const elements=new Map<string,Element>();
   const get=(id:string)=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id)!;};
   let loggedIn=initiallyLoggedIn,mustChangePassword=required;
@@ -25,13 +25,14 @@ async function fixture(required=true,initiallyLoggedIn=true,infoFails=false){
     fetch:async(url:string,options:any)=>{
       const path=url.replace('/admin/api/',''),body=options.body?JSON.parse(options.body):undefined;calls.push({path,body});
       let data:any={};let status=200;
-      if(path==='login-info'){status=infoFails?503:200;data={showInitialPasswordHint:mustChangePassword};}
+      if(path==='login-info'){status=infoFails?503:200;data={showInitialPasswordHint:mustChangePassword,credentialSource};}
       else if(path==='login'){loggedIn=true;data={csrf:'new-csrf'};}
       else if(!loggedIn){status=401;data={message:'请登录LeoBridge管理站。'};}
       else if(path==='session')data={csrf:'csrf',mustChangePassword};
       else if(path==='password'){
         if(body.newPassword==='weak'){status=400;data={message:'密码强度不足'};}
-        else {mustChangePassword=false;loggedIn=false;data={ok:true};}
+        else if(body.newPassword==='Abcd123!'){status=400;data={message:'新密码须为12–128位，当前为8位。密码未更改。'};}
+        else {mustChangePassword=false;credentialSource='saved';loggedIn=false;data={ok:true};}
       }
       else if(path==='state')data={installations:{},displayOrigin:'https://synthetic.invalid'};
       else if(path==='source')data={configured:true};
@@ -57,7 +58,7 @@ test('resumed bootstrap session shows mandatory form without loading management 
   await f.submit('password-form',{currentPassword:'admin',newPassword:strong,confirmPassword:strong});
   assert.equal(f.get('login').hidden,false);assert.equal(f.get('password-change').hidden,true);
   assert.equal(f.get('initial-password-hint').hidden,true);
-  assert.deepEqual(f.get('password-form').values,{});assert.match(f.get('notice').textContent,/密码已更改/);
+  assert.deepEqual(f.get('password-form').values,{});assert.match(f.get('notice').textContent,/密码已修改/);
   await f.submit('login-form',{username:'admin',password:strong});
   assert.equal(f.get('workspace').hidden,false);assert.equal(f.get('change-password').hidden,false);
   assert.equal(f.get('login').hidden,true);assert.equal(f.get('login-form').elements.password.value,'');
@@ -84,7 +85,21 @@ test('initial password guidance follows server initialization on a fresh login p
   const configured=await fixture(false,false);
   assert.equal(configured.get('login').hidden,false);
   assert.equal(configured.get('initial-password-hint').hidden,true);
+  const environment=await fixture(false,false,false,'environment');
+  assert.equal(environment.get('initial-password-hint').hidden,true);
+  assert.doesNotMatch(environment.get('initial-password-hint').textContent,/初始密码/);
   const unavailable=await fixture(true,false,true);
   assert.equal(unavailable.get('login').hidden,false);
   assert.equal(unavailable.get('initial-password-hint').hidden,true);
+});
+
+
+test('short password rejection remains on the form and never shows save success',async()=>{
+  const f=await fixture();
+  await f.submit('password-form',{currentPassword:'admin',newPassword:'Abcd123!',confirmPassword:'Abcd123!'});
+  assert.equal(f.get('password-change').hidden,false);
+  assert.equal(f.get('password-error').hidden,false);
+  assert.match(f.get('password-error').textContent,/当前为8位.*密码未更改/);
+  assert.doesNotMatch(f.get('notice').textContent,/密码已修改/);
+  assert.equal(f.get('login').hidden,true);
 });

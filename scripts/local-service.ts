@@ -81,7 +81,8 @@ async function start() {
       child.once('message', message => { clearTimeout(timer); done(message as State); });
     });
     say(`LeoBridge 已后台启动（PID ${state.pid}）。管理后台：${state.admin}`);
-    say('查看状态：./leobridge.sh status；查看日志：./leobridge.sh logs');
+    const launcher = await exists(join(root, 'deploy/local/leobridge.sh')) ? './deploy/local/leobridge.sh' : './leobridge.sh';
+    say(`查看状态：${launcher} status；查看日志：${launcher} logs`);
   } finally { if (child.connected) child.disconnect(); child.unref(); }
 }
 async function stop() {

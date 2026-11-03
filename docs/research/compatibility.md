@@ -9,7 +9,7 @@ LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议
 
 两个历史适配包曾通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见[来源档案](../references/retired-themes/README.md)。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect配置拒绝，managed使用默认值。
 
-LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服务器管理、终端、远程控制与告警功能。上游Token不提供给主题。single模式的同源主题不与管理后台隔离，只应启用可信主题；需要隔离时使用isolated模式。
+LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服务器管理、终端、远程控制与告警功能。上游Token不提供给主题。single模式的正式主题及预览均与管理后台同源，只应预览和启用可信主题；需要隔离时使用isolated模式。
 
 ## 当前主题获取方式
 

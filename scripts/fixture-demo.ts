@@ -1,6 +1,10 @@
 /** Synthetic-only browser fixture. Never reads real source credentials or data. */
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import { mkdtemp,writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { emptyThemeState } from '../src/themes/store.ts';
 import { WebSocketServer } from 'ws';
 const upstreamPort=8791,displayPort=8790;
 let tick=0;
@@ -31,7 +35,11 @@ server.on('upgrade',(req,socket,head)=>{
 });
 const timer=setInterval(()=>{tick++;for(const ws of wss.clients)if(ws.readyState===1)ws.send(JSON.stringify(snapshot()));},5000);
 await new Promise<void>(resolve=>server.listen(upstreamPort,'127.0.0.1',resolve));
-const child=spawn(process.execPath,['--import','tsx','src/runtime/node.ts'],{stdio:'inherit',env:{...process.env,PORT:String(displayPort),BRIDGE_ADMIN_ORIGIN:'http://admin.fixture.localhost:8793',BRIDGE_DISPLAY_DOMAIN:'display.fixture.localhost',BRIDGE_PREVIEW_ORIGIN:'http://preview.fixture.localhost:8794',BRIDGE_THEME_STORE:'work/private/fixture-theme-store',MMWX_BASE_URL:`http://127.0.0.1:${upstreamPort}`,MMWX_PROBE_TOKEN:'synthetic-token',BRIDGE_ACCESS:'local',BRIDGE_DEV_PROXY:'',BRIDGE_TITLE:'LeoBridge Synthetic Fixture',BRIDGE_BINDINGS:JSON.stringify(snapshot().servers.map((s,i)=>({id:`synthetic-${i+1}`,match:{name:s.name}}))),BRIDGE_PING_TARGETS:JSON.stringify({ct:{key:'target-a',label:'Synthetic target'}})}});
+const stateDir=await mkdtemp(join(tmpdir(),'leobridge-synthetic-'));
+await writeFile(join(stateDir,'state.json'),JSON.stringify({...emptyThemeState(),source:{version:1,baseUrl:`http://127.0.0.1:${upstreamPort}`,token:'synthetic-token',bindings:snapshot().servers.map((s,i)=>({id:`synthetic-${i+1}`,match:{name:s.name}})),pingTargets:{ct:{key:'target-a',label:'Synthetic target'}}}}),{mode:0o600});
+await writeFile(join(stateDir,'runtime.env'),'');
+const child=spawn(process.execPath,['--import','tsx','src/runtime/node.ts'],{stdio:'inherit',env:{PATH:process.env.PATH,BRIDGE_ENV_FILE:join(stateDir,'runtime.env'),PORT:String(displayPort),BRIDGE_ADMIN_ORIGIN:'http://admin.fixture.localhost:8793',BRIDGE_DISPLAY_DOMAIN:'display.fixture.localhost',BRIDGE_PREVIEW_ORIGIN:'http://preview.fixture.localhost:8794',BRIDGE_THEME_STORE:stateDir,BRIDGE_ACCESS:'local',BRIDGE_TITLE:'LeoBridge Synthetic Fixture'}});
+
 console.log(`Synthetic fixture only: http://127.0.0.1:${displayPort}`);
 function close(){clearInterval(timer);child.kill('SIGTERM');for(const ws of wss.clients)ws.close();wss.close();server.close();}
 process.on('SIGINT',close);process.on('SIGTERM',close);child.on('exit',close);

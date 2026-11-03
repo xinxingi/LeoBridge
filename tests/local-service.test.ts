@@ -31,7 +31,7 @@ async function command(root: string, action: string, extra: Record<string,string
 async function fixture(t: TestContext) {
   const root = await mkdtemp(join(tmpdir(), 'leobridge local '));
   for (const dir of ['work/local', 'dist/bundled/_management', 'node_modules']) await mkdir(join(root, dir), { recursive: true });
-  await copyFile(join(source, 'leobridge.sh'), join(root, 'leobridge.sh'));
+  await copyFile(join(source, 'deploy/local/leobridge.sh'), join(root, 'leobridge.sh'));
   await writeFile(join(root, 'dist/local-service.js'), (await transform(await readFile(join(source, 'scripts/local-service.ts'), 'utf8'), {loader:'ts',format:'esm',target:'node24'})).code);
   await writeFile(join(root, 'package.json'), JSON.stringify({ type: 'module', packageManager: 'pnpm@11.25.0' }));
   await writeFile(join(root, 'dist/bundled/_management/index.html'), 'synthetic');

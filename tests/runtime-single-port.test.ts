@@ -1,3 +1,5 @@
+import { emptyThemeState } from '../src/themes/store.ts';
+import { hashPassword } from '../src/management/password.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest, type Server } from 'node:http';
@@ -110,10 +112,10 @@ test('Node single port: root probe, admin path, active protocol switch and resta
   const configuration = {
     BRIDGE_NODE_MODE: 'direct', BRIDGE_ROUTING: 'single', BRIDGE_ORIGIN: `http://${displayHost}`, BRIDGE_LISTEN_HOST: '127.0.0.1', BRIDGE_LISTEN_PORT: String(port), BRIDGE_ACCESS: 'public',
     BRIDGE_ADMIN_ORIGIN: `http://${adminHost}`, BRIDGE_DISPLAY_ORIGIN: `http://${displayHost}`, BRIDGE_DISPLAY_DOMAIN: 'themes.example.test',
-    BRIDGE_PREVIEW_ORIGIN: 'http://preview.example.test', BRIDGE_ADMIN_PASSWORD: password, BRIDGE_ASSETS_DIR: assets, BRIDGE_THEME_STORE: store,
-    MMWX_BASE_URL: `http://127.0.0.1:${upstreamPort}`, MMWX_PROBE_TOKEN: 'synthetic-probe-token',
-    BRIDGE_BINDINGS: JSON.stringify(snapshot.servers.map((server: { name: string }) => ({ id: server.name, match: { name: server.name } }))),
+    BRIDGE_PREVIEW_ORIGIN: 'http://preview.example.test', BRIDGE_ASSETS_DIR: assets, BRIDGE_THEME_STORE: store,
   };
+  await mkdir(store,{recursive:true});
+  await writeFile(join(store,'state.json'),JSON.stringify({...emptyThemeState(),adminCredential:await hashPassword(password,1),source:{version:1,baseUrl:`http://127.0.0.1:${upstreamPort}`,token:'synthetic-probe-token',bindings:snapshot.servers.map((server:{name:string})=>({id:server.name,match:{name:server.name}})),pingTargets:{}}}),{mode:0o600});
   await writeFile(envFile, Object.entries(configuration).map(([key, value]) => `${key}='${value}'`).join('\n'), { mode: 0o600 });
   async function launch() {
     // Whitelist the child environment: no inherited .dev.vars or network proxy settings.
@@ -172,6 +174,8 @@ test('Node single port: root probe, admin path, active protocol switch and resta
   assert.match(setCookie, /^leobridge_admin_path=/); assert.match(setCookie, /; Path=\/admin;/); assert.doesNotMatch(setCookie, /; Secure/); assert.match(setCookie, /; HttpOnly/); assert.doesNotMatch(setCookie, /Domain=/i);
   const session = { ...adminHeaders, Cookie: setCookie.split(';')[0]!, 'X-CSRF-Token': response.json.csrf };
   const state = await request(port, adminHost, '/admin/api/state', { headers: session });
+  assert.equal(state.json.links[komariId].preview,`http://${displayHost}/?__preview=${komariId}`);
+  assert.equal((await request(port,displayHost,`/__bridge/version?__preview=${komariId}`)).json.id,komariId);
   assert.equal(state.json.active, cfsmId); assert.equal(Object.keys(state.json.installations).length, 2); assert.equal(state.json.sessions, undefined);
   response = await request(port, cfsmHost, '/api/history/all?id=fixture-online&hours=1');
   assert.equal(response.status, 200, response.text);
@@ -188,7 +192,7 @@ test('Node single port: root probe, admin path, active protocol switch and resta
     return { socket, messages, errors };
   }
   const cfsm = await openSocket(displayHost, '/api/ws');
-  const preview = await openSocket(cfsmHost, '/api/ws');
+  const preview = await openSocket(displayHost, '/api/ws?__preview='+cfsmId);
   preview.socket.send(JSON.stringify({ type: 'subscribe', scope: 'all', ids: ['fixture-online'] }));
   cfsm.socket.send(JSON.stringify({ type: 'subscribe', scope: 'all', ids: ['fixture-online'] }));
   await until(() => cfsm.messages.filter(message => message.type === 'batchUpdate' && message.transport === 'websocket').length >= 2, 'CFSM native updates missing');

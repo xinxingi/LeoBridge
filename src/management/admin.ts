@@ -4,14 +4,17 @@ import { commitInstallation,publicThemeState,sha256,INSTALL_NOTICE_VERSION,INSTA
 import { installationUrl,type ManagementConfig } from './config.ts';
 import { fetchCatalog,ThemePackageError } from '../themes/catalog.ts';
 import { installCatalogTheme } from '../themes/package.ts';
+import { StoreNetwork } from './store-network.ts';
+import { CatalogStars } from '../themes/stars.ts';
 import type { SourceManagement } from './source.ts';
 
-import { constantEqual,hashPassword,validatePassword,verifyPassword } from './password.ts';
+import { DEFAULT_ADMIN_PASSWORD,constantEqual,hashPassword,validatePassword,verifyPassword } from './password.ts';
 const token=()=>[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('');
 export class Admin {
   private attempts=new Map<string,{count:number;until:number}>();
   private installing=false;
-  constructor(readonly config:ManagementConfig,readonly store:ThemeStore,private loadUi:(path:string)=>Promise<Response>,private source?:SourceManagement){ }
+  private stars=new CatalogStars();
+  constructor(readonly config:ManagementConfig,readonly store:ThemeStore,private loadUi:(path:string)=>Promise<Response>,private source?:SourceManagement,private network=new StoreNetwork(store)){ }
   private cookieName(){return this.config.routing==='single'?(this.config.adminOrigin.startsWith('https:')?'__Secure-leobridge_admin_path':'leobridge_admin_path'):(this.config.adminOrigin.startsWith('https:')?'__Host-leobridge_admin':'leobridge_admin_local');}
   private cookie(value:string,maxAge=14400){return `${this.cookieName()}=${value}; Path=${this.config.routing==='single'?'/admin':'/'}; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${this.config.adminOrigin.startsWith('https:')?'; Secure':''}`;}
   private async session(request:Request){
@@ -41,14 +44,17 @@ export class Admin {
         const text=await request.text();if(text.length>(url.pathname.startsWith('/manage/api/source')?131072:8192))throw new BridgeError('REQUEST_TOO_LARGE',413,'请求过大。');
         try{body=JSON.parse(text);if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();}catch{throw new BridgeError('BAD_REQUEST',400,'请求JSON无效。');}
       }
-      if(url.pathname==='/manage/api/login-info'&&request.method==='GET')return this.secure(json({showInitialPasswordHint:!(await this.store.state()).adminCredential}));
+      if(url.pathname==='/manage/api/login-info'&&request.method==='GET'){
+        const credentialSource=(await this.store.state()).adminCredential?'saved':'default';
+        return this.secure(json({showInitialPasswordHint:credentialSource==='default',credentialSource}));
+      }
       if(url.pathname==='/manage/api/login'&&request.method==='POST'){
         const client=request.headers.get('cf-connecting-ip')||'local';const now=Date.now();
         if(this.attempts.size>1000)this.attempts.clear();
         let attempt=this.attempts.get(client);if(!attempt||attempt.until<now){attempt={count:0,until:now+60000};this.attempts.set(client,attempt);}
         if(++attempt.count>10)throw new BridgeError('LOGIN_THROTTLED',429,'尝试过于频繁，请稍后重试。');
         const credential=(await this.store.state()).adminCredential;
-        if(!constantEqual(String(body.username||''),this.config.username)||typeof body.password!=='string'||!(credential?await verifyPassword(body.password,credential):constantEqual(body.password,this.config.password)))throw new BridgeError('LOGIN_FAILED',401,'用户名或密码错误。');
+        if(!constantEqual(String(body.username||''),this.config.username)||typeof body.password!=='string'||!(credential?await verifyPassword(body.password,credential):constantEqual(body.password,DEFAULT_ADMIN_PASSWORD)))throw new BridgeError('LOGIN_FAILED',401,'用户名或密码错误。');
         const raw=token(),csrf=token();await this.store.command({type:'session',id:await sha256(raw),session:{csrf,expires:now+4*3600000,credentialVersion:credential?.version??0}});
         this.attempts.delete(client);const response=json({ok:true,csrf,mustChangePassword:!credential});response.headers.set('Set-Cookie',this.cookie(raw));return this.secure(response);
       }
@@ -64,14 +70,16 @@ export class Admin {
         if(++attempt.count>10)throw new BridgeError('LOGIN_THROTTLED',429,'尝试过于频繁，请稍后重试。');
         const credential=(await this.store.state()).adminCredential;
         if((credential?.version??0)!==session.credentialVersion)throw new BridgeError('LOGIN_REQUIRED',401,'密码已变更，请重新登录。');
-        if(typeof body.currentPassword!=='string'||!(credential?await verifyPassword(body.currentPassword,credential):constantEqual(body.currentPassword,this.config.password)))throw new BridgeError('CURRENT_PASSWORD',400,'当前密码错误。');
+        if(typeof body.currentPassword!=='string'||!(credential?await verifyPassword(body.currentPassword,credential):constantEqual(body.currentPassword,DEFAULT_ADMIN_PASSWORD)))throw new BridgeError('CURRENT_PASSWORD',400,'当前密码错误。');
         validatePassword(body.newPassword);
         if(body.newPassword!==body.confirmPassword)throw new BridgeError('PASSWORD_MISMATCH',400,'两次输入的新密码不一致。');
-        if(constantEqual(body.newPassword,body.currentPassword)||constantEqual(body.newPassword,this.config.password))throw new BridgeError('PASSWORD_UNCHANGED',400,'新密码不能与当前密码或初始密码相同。');
+        if(constantEqual(body.newPassword,body.currentPassword)||constantEqual(body.newPassword,DEFAULT_ADMIN_PASSWORD))throw new BridgeError('PASSWORD_UNCHANGED',400,'新密码不能与当前密码或初始密码相同。');
         await this.store.command({type:'password',sessionId:session.id,expectedVersion:session.credentialVersion,credential:await hashPassword(body.newPassword,session.credentialVersion+1)});
         this.attempts.delete(key);const response=json({ok:true});response.headers.set('Set-Cookie',this.cookie('',0));return this.secure(response);
       }
       if(session.mustChangePassword)throw new BridgeError('PASSWORD_CHANGE_REQUIRED',403,'首次登录必须先设置高强度密码。');
+      if(url.pathname==='/manage/api/store-proxy'&&request.method==='GET')return this.secure(json(await this.network.status()));
+      if(url.pathname==='/manage/api/store-proxy'&&request.method==='POST')return this.secure(json(await this.network.save(body,session.id)));
       if(this.source){
         if(url.pathname==='/manage/api/source'&&request.method==='GET')return this.secure(json(await this.source.status()));
         if(url.pathname==='/manage/api/source/check'&&request.method==='POST')return this.secure(json(await this.source.check(body,session.id)));
@@ -83,7 +91,7 @@ export class Admin {
       }
       if(url.pathname==='/manage/api/catalog'&&request.method==='GET'){
         const ecosystem=url.searchParams.get('ecosystem');if(ecosystem!=='cfsm'&&ecosystem!=='komari')throw new BridgeError('ECOSYSTEM',400,'请选择CFSM或Komari商店。');
-        return this.secure(json(await fetchCatalog(ecosystem,undefined,{latest:true,refresh:url.searchParams.get('refresh')==='1'})));
+        return this.secure(json(await this.network.run(async fetcher=>this.stars.enrich(await fetchCatalog(ecosystem,fetcher,{latest:true,refresh:url.searchParams.get('refresh')==='1'}),fetcher))));
       }
       if(url.pathname==='/manage/api/prepare-install'&&request.method==='POST'){
         const ecosystem=body.ecosystem;
@@ -92,7 +100,7 @@ export class Admin {
         if(this.installing)throw new BridgeError('INSTALL_BUSY',409,'当前有下载任务，请稍后重试。');
         this.installing=true;
         try{
-          const pkg=await installCatalogTheme(ecosystem,body.id,{expectedCatalogRevision:body.catalogRevision});
+          const pkg=await this.network.run(fetcher=>installCatalogTheme(ecosystem,body.id as string,{fetcher,expectedCatalogRevision:body.catalogRevision as string}));
           const review:InstallReview={id:token(),expires:Date.now()+15*60_000,ecosystem,themeId:body.id,catalogRevision:body.catalogRevision,pinnedVersion:pkg.pinnedVersion,digest:pkg.digest,noticeVersion:INSTALL_NOTICE_VERSION};
           await this.store.command({type:'review',sessionId:session.id,review});
           return this.secure(json({reviewId:review.id,expires:review.expires,name:pkg.name,source:pkg.source,catalogSource:pkg.catalogSource,pinnedVersion:pkg.pinnedVersion,license:pkg.license,digest:pkg.digest,noticeVersion:INSTALL_NOTICE_VERSION,noticeText:INSTALL_NOTICE_TEXT}));
@@ -106,7 +114,7 @@ export class Admin {
         this.installing=true;
         try{
           const ecosystem=review.ecosystem;
-          const pkg=await installCatalogTheme(ecosystem,review.themeId,{expectedCatalogRevision:review.catalogRevision,...(ecosystem==='cfsm'?{expectedBuildRevision:review.pinnedVersion}:{})});
+          const pkg=await this.network.run(fetcher=>installCatalogTheme(ecosystem,review.themeId,{fetcher,expectedCatalogRevision:review.catalogRevision,...(ecosystem==='cfsm'?{expectedBuildRevision:review.pinnedVersion}:{})}));
           if(pkg.digest!==review.digest)throw new BridgeError('INSTALL_PACKAGE_CHANGED',409,'主题内容与确认时不一致，请重新查看。');
           const protocolProfile=ecosystem==='cfsm'?'cfsm-609cc0b':'komari-adhesive-v1';
           const id=(await sha256(`${ecosystem}:${protocolProfile}:${pkg.id}`)).slice(0,32);

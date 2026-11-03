@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readConfig, authorize } from '../src/core/config.ts';
+import { readConfig, authorize } from './helpers/config.ts';
 import { Bridge } from '../src/protocols/cfsm/service.ts';
 import { Upstream } from '../src/upstream/client.ts';
 import { applyPing } from '../src/protocols/cfsm/ping.ts';

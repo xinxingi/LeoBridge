@@ -1,6 +1,7 @@
 import { authorize,type Config } from '../core/config.ts';
+import type { StoreNetwork } from '../management/store-network.ts';
 import { Admin } from '../management/admin.ts';
-import { installationFromUrl,installationUrl,type ManagementConfig } from '../management/config.ts';
+import { installationFromUrl,installationUrl,PREVIEW_PARAMETER,type ManagementConfig } from '../management/config.ts';
 import { protocolApplications,type ProtocolApplication } from './protocols.ts';
 import type { ThemeStore,Installation } from '../themes/store.ts';
 import { errorResponse,json } from '../core/http.ts';
@@ -8,6 +9,7 @@ import { BridgeError } from '../core/errors.ts';
 import { sourceConfig } from '../core/source.ts';
 import { SourceManagement } from '../management/source.ts';
 import { Upstream } from '../upstream/client.ts';
+import { previewHtml, previewRedirect } from './preview.ts';
 export class Site {
   readonly admin:Admin;
   onActiveThemeChange:()=>void=()=>{};
@@ -15,9 +17,9 @@ export class Site {
   private sourceVersion=0;
   private sourceSessions=new Set<{close():void}>();
   private initial:Config;
-  constructor(public config:Config,readonly management:ManagementConfig,readonly store:ThemeStore,loadUi:(path:string)=>Promise<Response>){
+  constructor(public config:Config,readonly management:ManagementConfig,readonly store:ThemeStore,loadUi:(path:string)=>Promise<Response>,network?:StoreNetwork){
     this.initial=config;
-    this.admin=new Admin(management,store,loadUi,new SourceManagement(config,store,c=>new Upstream(c).snapshot(true)));
+    this.admin=new Admin(management,store,loadUi,new SourceManagement(config,store,c=>new Upstream(c).snapshot(true)),network);
     this.protocols=this.applications();
   }
   private applications(){
@@ -44,11 +46,13 @@ export class Site {
     }
   }
   private async version(url:URL){
-    if(this.management.routing==='single'&&url.origin===this.management.displayOrigin){
+    if(this.management.routing==='single'&&url.origin===this.management.displayOrigin&&!url.searchParams.has(PREVIEW_PARAMETER)){
       const state=await this.store.state(),item=state.active?state.installations[state.active]:undefined;
       return item?{item,id:item.id,preview:false}:null;
     }
-    const selected=installationFromUrl(this.management,url);if(!selected)return null;const item=(await this.store.state()).installations[selected.id];return item?{item,...selected}:null;}
+    const selected=installationFromUrl(this.management,url);if(!selected)return null;const item=(await this.store.state()).installations[selected.id];
+    if(!item)throw new BridgeError('PREVIEW_NOT_FOUND',404,'此主题版本不存在，请从后台重新打开预览。');
+    return {item,...selected};}
   async websocket(request:Request):Promise<ProtocolApplication|null>{
     await this.syncSource();if(!this.config.baseUrl)return null;
     const url=new URL(request.url);
@@ -60,6 +64,7 @@ export class Site {
   async fetch(request:Request):Promise<Response>{
     const url=new URL(request.url);
     const single=this.management.routing==='single';
+    if(single&&url.searchParams.has(PREVIEW_PARAMETER)&&(url.pathname.startsWith('/admin')||url.pathname.startsWith('/manage')))return new Response('预览不提供管理接口。',{status:404});
     if(url.origin===this.management.adminOrigin&&(!single||url.pathname==='/admin'||url.pathname.startsWith('/admin/'))){
       const response=await this.admin.handle(request);
       if(request.method==='POST'&&response.ok&&url.pathname.endsWith('/source/save'))await this.syncSource();
@@ -67,6 +72,10 @@ export class Site {
       return response;
     }
     try{
+      if(single&&url.origin===this.management.displayOrigin){
+        const denied=authorize(request,this.config);if(denied)return denied;
+        const redirect=previewRedirect(request);if(redirect)return redirect;
+      }
       await this.syncSource();const sourceVersion=this.sourceVersion;
       const isRoot=url.origin===this.management.displayOrigin;
       const selected=isRoot&&!single?null:await this.version(url);
@@ -95,7 +104,7 @@ export class Site {
       let asset=item.files[path]?await this.store.asset(item.id,path):null;
       if(!asset&&request.headers.get('accept')?.includes('text/html')&&!path.split('/').at(-1)?.includes('.'))asset=await this.store.asset(item.id,item.entry);
       if(!asset)return new Response('Theme asset not found',{status:404});
-      return this.assetResponse(request,item,asset);
+      return this.assetResponse(request,item,asset,single&&isRoot&&selected.preview);
     }catch(error){return errorResponse(error);}
   }
   private setupResponse(request:Request,sourceMissing=false){
@@ -106,9 +115,10 @@ export class Site {
     const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LeoBridge · 初始化</title><body><main><h1>LeoBridge</h1><p>${sourceMissing?'尚未配置数据源。请管理员登录后台，填写主控地址和探针 Token，检查连接并确认节点绑定。':'尚未启用展示主题。请管理员登录后台，从 CFSM 或 Komari 商店按需安装主题，完成预览后启用。'}</p><p>本项目默认不内置第三方主题。</p><a href="${href}">进入管理后台</a></main></body></html>`;
     return new Response(request.method==='HEAD'?null:html,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'; base-uri 'none'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
   }
-  private assetResponse(request:Request,item:Installation,asset:{bytes:Uint8Array;contentType:string}){
+  private assetResponse(request:Request,item:Installation,asset:{bytes:Uint8Array;contentType:string},preview=false){
     const url=new URL(request.url),wsOrigin=url.origin.replace(/^http/,'ws');
-    const response=new Response(request.method==='HEAD'?null:asset.bytes as BodyInit,{headers:{'Content-Type':asset.contentType,'Cache-Control':(this.management.routing==='single'&&url.origin===this.management.displayOrigin)||asset.contentType.startsWith('text/html')?'no-store':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':'same-origin','X-Frame-Options':'DENY'}});
+    const body=preview&&asset.contentType.startsWith('text/html')?previewHtml(new TextDecoder().decode(asset.bytes),item.id):asset.bytes as BodyInit;
+    const response=new Response(request.method==='HEAD'?null:body,{headers:{'Content-Type':asset.contentType,'Cache-Control':(this.management.routing==='single'&&url.origin===this.management.displayOrigin)||asset.contentType.startsWith('text/html')?'no-store':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Referrer-Policy':preview?'same-origin':'no-referrer','Vary':'Referer','Cross-Origin-Resource-Policy':'same-origin','X-Frame-Options':'DENY'}});
     response.headers.set('Content-Security-Policy',`default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${wsOrigin}; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`);
     return response;
   }

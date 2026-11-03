@@ -1,4 +1,4 @@
-import { PING_SLOTS, readConfig, type Config } from '../core/config.ts';
+import { PING_SLOTS, type Config } from '../core/config.ts';
 import { BridgeError } from '../core/errors.ts';
 import { IDENTITY_FIELDS, resolveBindings, type Binding } from '../core/identity.ts';
 import type { Snapshot } from '../core/model.ts';
@@ -10,13 +10,13 @@ export class SourceManagement {
   private async current(){const state=await this.store.state();return {version:state.source?.version??0,config:state.source?sourceConfig(this.initial,state.source):this.initial};}
   async status(){
     const {version,config}=await this.current();
-    return {version,configured:!!config.baseUrl,baseUrl:config.baseUrl,hasToken:!!config.token,bindingCount:config.bindings.length,storage:version?'saved':'environment'};
+    return {version,configured:!!config.baseUrl,baseUrl:config.baseUrl,hasToken:!!config.token,bindingCount:config.bindings.length,storage:version?'saved':'unconfigured'};
   }
   async check(body:Record<string,unknown>,sessionId:string){
     const {version,config:current}=await this.current();
     if(body.version!==version)throw new BridgeError('SOURCE_CONFLICT',409,'数据源已变更，请刷新后重试。');
     if(typeof body.baseUrl!=='string'||typeof body.token!=='string'||body.token.length>4096||/[\u0000-\u001f\u007f]/.test(body.token))throw new BridgeError('SOURCE_INPUT',400,'请填写有效的主控地址和 Token。');
-    const baseUrl=readConfig({MMWX_BASE_URL:body.baseUrl.trim()}).baseUrl;
+    const baseUrl=sourceConfig(current,{baseUrl:body.baseUrl.trim(),token:'',bindings:[],pingTargets:{}}).baseUrl;
     // A retained credential must never be sent to a different origin.
     const token=body.token || (baseUrl===current.baseUrl?current.token:'');
     const candidate=sourceConfig(current,{baseUrl,token,bindings:[],pingTargets:{}});

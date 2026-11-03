@@ -1,5 +1,6 @@
-import { readConfig, type Config } from './config.ts';
-import type { Binding } from './identity.ts';
+import { PING_SLOTS, type Config } from './config.ts';
+import { BridgeError } from './errors.ts';
+import { parseBindings, type Binding } from './identity.ts';
 
 /** Private server-side settings. Never include these in theme/public state. */
 export interface SourceSettings {
@@ -12,6 +13,16 @@ export interface SourceReview {
   previous:Binding[]; targets:{key:string;label:string}[];
 }
 export function sourceConfig(base:Config,source:SourceSettings):Config {
-  const checked=readConfig({MMWX_BASE_URL:source.baseUrl,MMWX_PROBE_TOKEN:source.token,BRIDGE_BINDINGS:JSON.stringify(source.bindings),BRIDGE_PING_TARGETS:JSON.stringify(source.pingTargets)});
-  return {...base,baseUrl:checked.baseUrl,token:checked.token,bindings:checked.bindings,pingTargets:checked.pingTargets};
+  let url:URL;
+  try { url=new URL(source.baseUrl); } catch { throw new BridgeError('CONFIGURATION',503,'未配置有效的上游地址。'); }
+  if(!['https:','http:'].includes(url.protocol)||url.username||url.password||url.search||url.hash||url.pathname!=='/')throw new BridgeError('CONFIGURATION',503,'上游地址必须为不含凭据、路径和查询参数的 HTTP(S) 源。');
+  if(typeof source.token!=='string'||source.token.length>4096||/[\u0000-\u001f\u007f]/.test(source.token))throw new BridgeError('CONFIGURATION',503,'数据源Token无效。');
+  const pingTargets=source.pingTargets;
+  if(!pingTargets||Array.isArray(pingTargets)||typeof pingTargets!=='object')throw new BridgeError('CONFIGURATION',503,'Ping目标配置无效。');
+  const keys=new Set<string>();
+  for(const [slot,target]of Object.entries(pingTargets)){
+    if(!(PING_SLOTS as readonly string[]).includes(slot)||!target||typeof target.key!=='string'||!target.key||typeof target.label!=='string'||!target.label||keys.has(target.key))throw new BridgeError('CONFIGURATION',503,'Ping目标配置无效。');
+    keys.add(target.key);
+  }
+  return {...base,baseUrl:url.origin,token:source.token,bindings:parseBindings(JSON.stringify(source.bindings)),pingTargets};
 }

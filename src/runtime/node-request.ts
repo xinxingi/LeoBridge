@@ -48,7 +48,7 @@ export function readNodeRuntimeConfig(env: Env): NodeRuntimeConfig {
       else trustedProxies.addSubnet(address!, Number(prefix), family === 4 ? 'ipv4' : 'ipv6');
     } catch { throw configuration(); }
   }
-  if (mode === 'direct' && (managementConfig(env).routing !== 'single' || env.BRIDGE_ACCESS === 'local' || !['public','private'].includes(env.BRIDGE_ACCESS || '') || !env.BRIDGE_ADMIN_PASSWORD)) throw configuration();
+  if (mode === 'direct' && (managementConfig(env).routing !== 'single' || env.BRIDGE_ACCESS === 'local' || !['public','private'].includes(env.BRIDGE_ACCESS || ''))) throw configuration();
   if (mode === 'proxy') {
     if (env.BRIDGE_DEV_PROXY) throw configuration();
     proxyOrigins(managementConfig(env));

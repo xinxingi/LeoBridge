@@ -20,7 +20,7 @@ class Store {
   async putAsset(){} async asset(){return null}
 }
 const credential=await hashPassword('Synthetic-source-2026!',1);
-const base=()=>readConfig({},true);
+const base=()=>readConfig({});
 const raw=()=>({enabled:true,show_name:true,servers:[{name:'alpha',arch:'amd64',ping:[{key:'edge',label:'Edge'}]},{name:'beta',arch:'arm64'}]});
 async function fixture(initial=base()){
   const store=new Store();store.value.adminCredential=credential;store.value.sessions.s={csrf:'csrf',expires:Date.now()+60_000,credentialVersion:1};
@@ -31,8 +31,8 @@ async function fixture(initial=base()){
   return {store,manager,calls,check,save,set:(value:ReturnType<typeof raw>)=>{snapshot=value}};
 }
 
-test('empty configuration serves management and setup; strict legacy parser still rejects missing origin',async()=>{
-  assert.throws(()=>readConfig({}));assert.equal(base().baseUrl,'');
+test('empty configuration serves management and setup without environment source fallback',async()=>{
+  assert.equal(base().baseUrl,'');assert.equal(readConfig({MMWX_BASE_URL:'https://ignored.test'}).baseUrl,'');
   const site=new Site(base(),managementConfig({}),new Store(),async()=>new Response('admin UI'));
   assert.equal(await (await site.fetch(new Request('http://127.0.0.1:8787/admin/'))).text(),'admin UI');
   assert.match(await (await site.fetch(new Request('http://127.0.0.1:8787/'))).text(),/尚未配置数据源/);

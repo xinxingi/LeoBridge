@@ -1,3 +1,4 @@
+import { parseStoreProxy,type SavedStoreProxy,type StoreProxySettings } from '../core/store-proxy.ts';
 import { BridgeError } from '../core/errors.ts';
 import type { LicenseRecord } from './package.ts';
 import type { SavedSource, SourceReview, SourceSettings } from '../core/source.ts';
@@ -24,9 +25,11 @@ export interface ThemeState {
   installations:Record<string,Installation>; sessions:Record<string,AdminSession>;
   adminCredential?:AdminCredential;
   source?:SavedSource;
+  storeProxy?:SavedStoreProxy;
   events:{at:string;action:string;installationId:string;generation:number}[];
 }
 export type ThemeCommand=
+  |{type:'store-proxy';sessionId:string;expectedVersion:number;settings:StoreProxySettings}
   |{type:'source-review';sessionId:string;review:SourceReview}
   |{type:'source';sessionId:string;reviewId:string;expectedVersion:number;settings:SourceSettings}
   |{type:'install';installation:Installation;activateIfEmpty?:boolean;review?:{sessionId:string;id:string}}
@@ -50,6 +53,13 @@ export function validAssetPath(path:string){return !!path&&!path.startsWith('/')
 export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date.now()):ThemeState {
   const next=structuredClone(state);
   for(const [id,session]of Object.entries(next.sessions))if(session.expires<=now)delete next.sessions[id];
+  if(command.type==='store-proxy'){
+    const session=next.sessions[command.sessionId];
+    if(!session||!next.adminCredential||(session.credentialVersion??0)!==next.adminCredential.version)throw new BridgeError('LOGIN_REQUIRED',401,'请重新登录。');
+    const version=next.storeProxy?.version??0;
+    if(command.expectedVersion!==version)throw new BridgeError('STORE_PROXY_CONFLICT',409,'商店代理设置已变更，请重新载入后再保存。');
+    next.storeProxy={...parseStoreProxy(command.settings.enabled,command.settings.url),version:version+1};return next;
+  }
   if(command.type==='source-review'||command.type==='source'){
     const session=next.sessions[command.sessionId];
     if(!session||!next.adminCredential||(session.credentialVersion??0)!==next.adminCredential.version)throw new BridgeError('LOGIN_REQUIRED',401,'请重新登录。');
@@ -110,7 +120,7 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
   next.events.push({at:new Date(now).toISOString(),action:command.type,installationId:command.type==='install'?command.installation.id:next.active!,generation:next.generation});
   next.events=next.events.slice(-30);return next;
 }
-export function publicThemeState(state:ThemeState){const {sessions,adminCredential,source,...publicState}=state;return publicState;}
+export function publicThemeState(state:ThemeState){const {sessions,adminCredential,source,storeProxy,...publicState}=state;return publicState;}
 
 /** Complete immutable files before publishing metadata; failures leave active untouched. */
 export async function commitInstallation(store:ThemeStore,item:Installation,files:{path:string;bytes:Uint8Array;contentType:string}[],activateIfEmpty=false,review?:{sessionId:string;id:string}){

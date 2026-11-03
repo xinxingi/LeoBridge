@@ -1,5 +1,5 @@
 /** Explicit local-workerd acceptance. Never targets Node production/dev state,
- * cloud services, catalogs or remote downloads. Mutations are login, selecting
+ * cloud services, catalogs or remote downloads. Mutations include initial password/source setup, login, selecting
  * existing local bundles, rollback, and logout on port 8795 only.
  * BRIDGE_RUNTIME_PASSWORD must contain the synthetic local-worker test password.
  */
@@ -131,11 +131,28 @@ async function socket(origin:URL,id:string){
 
 try {
   const denied=await adminCall('before-login','/manage/api/state');record('admin-before-login',denied.status===401,{status:denied.status});
-  const login=await adminCall('login','/manage/api/login',{username:'admin',password});
-  const setCookie=login.headers['set-cookie'];const firstCookie=Array.isArray(setCookie)?setCookie[0]:setCookie;
-  requireCheck('admin-login',login.status===200&&isRecord(login.body)&&typeof login.body.csrf==='string'&&typeof firstCookie==='string',{status:login.status});
-  csrf=(login.body as {csrf:string}).csrf;cookie=String(firstCookie).split(';')[0]!;
-  record('admin-cookie-isolation',/HttpOnly/i.test(String(firstCookie))&&/SameSite=Strict/i.test(String(firstCookie))&&!/Domain=/i.test(String(firstCookie)));
+  const info=await adminCall('login-info','/manage/api/login-info');
+  const initial=isRecord(info.body)&&info.body.credentialSource==='default';
+  const signIn=async(value:string)=>{
+    const login=await adminCall('login','/manage/api/login',{username:'admin',password:value});
+    const setCookie=login.headers['set-cookie'],firstCookie=Array.isArray(setCookie)?setCookie[0]:setCookie;
+    requireCheck('admin-login',login.status===200&&isRecord(login.body)&&typeof login.body.csrf==='string'&&typeof firstCookie==='string',{status:login.status});
+    csrf=(login.body as {csrf:string}).csrf;cookie=String(firstCookie).split(';')[0]!;
+    record('admin-cookie-isolation',/HttpOnly/i.test(String(firstCookie))&&/SameSite=Strict/i.test(String(firstCookie))&&!/Domain=/i.test(String(firstCookie)));
+  };
+  await signIn(initial?'admin':password);
+  if(initial){
+    const changed=await adminCall('setup-password','/manage/api/password',{currentPassword:'admin',newPassword:password,confirmPassword:password});
+    requireCheck('setup-password',changed.status===200,{status:changed.status});await signIn(password);
+  }
+  const source=await adminCall('source','/manage/api/source');
+  if(isRecord(source.body)&&!source.body.configured){
+    const checked=await adminCall('source-check','/manage/api/source/check',{version:0,baseUrl:'http://127.0.0.1:8791',token:'synthetic-token'});
+    requireCheck('source-check',checked.status===200,{status:checked.status});
+    const review=checked.body as {reviewId:string;candidates:{suggestedId:string}[]};
+    const saved=await adminCall('source-save','/manage/api/source/save',{reviewId:review.reviewId,assignments:review.candidates.map(c=>c.suggestedId),pingKeys:['target-a','','','','','','',''],confirmed:true});
+    requireCheck('source-save',saved.status===200,{status:saved.status});
+  }
   let current=await state('initial-state');
   record('state-hides-sessions',!Object.hasOwn(current,'sessions'));
   const definitions=Object.values(current.installations as Record<string,{id:string;ecosystem:string}>);

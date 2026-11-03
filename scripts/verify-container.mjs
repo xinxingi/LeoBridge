@@ -26,7 +26,7 @@ assert.ok(process.argv.slice(2).every(argument => argument === '--amd64'), 'Only
 const image = process.argv.includes('--amd64') ? 'leobridge:acceptance-amd64' : 'leobridge:acceptance';
 const records = [], commands = [];
 const admin = 'admin.container.test', display = 'monitor.container.test';
-const password = 'Synthetic-container-admin-password';
+const password = 'Synthetic-container-admin-password-2026!';
 const authorization = `Basic ${Buffer.from('synthetic-viewer:synthetic-container-viewer-password').toString('base64')}`;
 await mkdir(directory, { recursive: true, mode: 0o700 });
 async function run(command, args, allowedFailure = false) {
@@ -75,9 +75,15 @@ async function volumeManifest(volume, name) {
   return manifest;
 }
 async function login() {
-  const response = await request(admin, '/manage/api/login', { body: { username: 'admin', password } });
+  const info=await request(admin,'/manage/api/login-info');
+  const initial=info.json.credentialSource==='default';
+  const response = await request(admin, '/manage/api/login', { body: { username: 'admin', password:initial?'admin':password } });
   assert.equal(response.status, 200); const setCookie = response.headers['set-cookie'][0];
   cookie = setCookie.split(';')[0]; csrf = response.json.csrf;
+  if(initial){
+    assert.equal((await request(admin,'/manage/api/password',{body:{currentPassword:'admin',newPassword:password,confirmPassword:password}})).status,200);
+    await login();
+  }
   check('tls-admin-cookie', /^__Host-/.test(setCookie) && /Secure/.test(setCookie) && /HttpOnly/.test(setCookie) && /SameSite=Strict/.test(setCookie) && !/Domain=/i.test(setCookie));
 }
 async function websocket(host, protocol, authenticate = true) {
@@ -122,14 +128,13 @@ try {
   ca = await readFile(resolve(directory, 'tls/fullchain.pem'));
   const environment = { LEOBRIDGE_IMAGE: image, TLS_DIRECTORY: resolve(directory, 'tls'),
     BRIDGE_ADMIN_HOST: admin, BRIDGE_DISPLAY_HOST: display, BRIDGE_DISPLAY_DOMAIN: 'themes.container.test', BRIDGE_PREVIEW_HOST: 'preview.container.test',
-    MMWX_BASE_URL: 'http://fixture:8791', MMWX_PROBE_TOKEN: 'synthetic-container-token', BRIDGE_ACCESS: 'private',
-    BRIDGE_USERNAME: 'synthetic-viewer', BRIDGE_PASSWORD: 'synthetic-container-viewer-password', BRIDGE_ADMIN_PASSWORD: password,
-    BRIDGE_BINDINGS: JSON.stringify(['online', 'offline', 'missing'].map((name, i) => ({ id: `synthetic-${i + 1}`, match: { name: `Synthetic ${name}` } }))),
-    BRIDGE_PING_TARGETS: JSON.stringify({ ct: { key: 'target-a', label: 'Synthetic target' } }), THEME_STORE_VOLUME: originalVolume,
+    BRIDGE_ACCESS: 'private',
+    BRIDGE_USERNAME: 'synthetic-viewer', BRIDGE_PASSWORD: 'synthetic-container-viewer-password',
+    THEME_STORE_VOLUME: originalVolume,
     BACKEND_SUBNET: '172.30.184.0/24', BACKEND_DYNAMIC_RANGE: '172.30.184.128/25', PROXY_IPV4: '172.30.184.2' };
   const envFile = resolve(directory, 'synthetic.env');
   await writeFile(envFile, Object.entries(environment).map(([key, value]) => `${key}='${value}'`).join('\n'));
-  config = JSON.parse((await docker('compose', '--env-file', envFile, '-f', resolve(root, 'deploy/docker/compose.yaml'), 'config', '--format', 'json')).stdout);
+  config = JSON.parse((await docker('compose', '--env-file', envFile, '-f', resolve(root, 'tests/fixtures/container-proxy/compose.yaml'), 'config', '--format', 'json')).stdout);
   config.name = project;
   for (const service of Object.values(config.services)) service.restart = 'no';
   config.services.nginx.ports = [{ target: 80, published: String(httpPort), host_ip: '127.0.0.1', protocol: 'tcp' }, { target: 443, published: String(httpsPort), host_ip: '127.0.0.1', protocol: 'tcp' }];
@@ -152,6 +157,12 @@ try {
   check('private-root-denied', (await request(display, '/', { auth: false })).status === 401);
   check('admin-denied-before-login', (await request(admin, '/manage/api/state')).status === 401);
   await login();
+  const source=await request(admin,'/manage/api/source');
+  if(!source.json.configured){
+    const checked=await request(admin,'/manage/api/source/check',{body:{version:0,baseUrl:'http://fixture:8791',token:'synthetic-container-token'}});
+    assert.equal(checked.status,200);const review=checked.json;
+    assert.equal((await request(admin,'/manage/api/source/save',{body:{reviewId:review.reviewId,assignments:review.candidates.map(c=>c.suggestedId),pingKeys:['target-a','','','','','','',''],confirmed:true}})).status,200);
+  }
   let current = await state();
   const cfsm = Object.values(current.installations).find(item => item.ecosystem === 'cfsm');
   const komari = Object.values(current.installations).find(item => item.ecosystem === 'komari');

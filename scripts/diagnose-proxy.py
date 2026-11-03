@@ -11,6 +11,7 @@ import struct
 import subprocess
 import time
 from pathlib import Path
+from saved_source import load_source
 from urllib.parse import urlsplit
 
 os.umask(0o077)
@@ -22,13 +23,8 @@ PATH = '/api/public/probe-series?server=0&metric=system&range=1h'
 
 
 def config():
-    values = {}
-    for line in (ROOT / '.dev.vars').read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith('#') and '=' in line:
-            key, value = line.split('=', 1)
-            values[key.strip()] = value.strip().strip('\"\'')
-    url = urlsplit(values['MMWX_BASE_URL'])
+    values = load_source(ROOT)
+    url = urlsplit(values['baseUrl'])
     if url.scheme not in ('http', 'https') or not url.hostname or url.username or url.password:
         raise ValueError('Invalid configured upstream origin')
     return values, url
@@ -104,8 +100,8 @@ def curl_case(case, proxy=None, websocket=False):
     values, _ = config()
     OUT.mkdir(parents=True, exist_ok=True, mode=0o700)
     path = '/api/public/probe-ws' if websocket else PATH
-    cfg = 'url = ' + json.dumps(values['MMWX_BASE_URL'].rstrip('/') + path) + '\n'
-    cfg += 'header = ' + json.dumps('X-MMwx-Probe-Token: ' + values['MMWX_PROBE_TOKEN']) + '\n'
+    cfg = 'url = ' + json.dumps(values['baseUrl'].rstrip('/') + path) + '\n'
+    cfg += 'header = ' + json.dumps('X-MMwx-Probe-Token: ' + values['token']) + '\n'
     if proxy:
         cfg += 'proxy = ' + json.dumps(proxy) + '\n'
     if websocket:

@@ -43,7 +43,7 @@ export async function packageLocal(nodeDirectory: string, outputDirectory: strin
   if (Number(runtime.version.split('.')[0]) < 24 || runtime.platform !== process.platform || runtime.arch !== process.arch) throw new Error('Provide an official Node 24+ distribution matching the build host OS and architecture.');
   const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as Package;
   if (!/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(pkg.version)) throw new Error('Invalid release version.');
-  for (const path of ['dist/node.js', 'dist/local-service.js', 'dist/bundled/index.json', 'dist/bundled/_management/index.html', 'LICENSE', 'leobridge.sh']) await access(join(root, path));
+  for (const path of ['dist/node.js', 'dist/local-service.js', 'dist/bundled/index.json', 'dist/bundled/_management/index.html', 'LICENSE', 'deploy/local/leobridge.sh']) await access(join(root, path));
   await access(join(nodeDir, 'LICENSE'));
   await mkdir(output, { recursive: true });
   const name = `leobridge-${pkg.version}-${runtime.platform}-${runtime.arch}`;
@@ -56,7 +56,8 @@ export async function packageLocal(nodeDirectory: string, outputDirectory: strin
   const bundle = join(temp, name);
   try {
     await mkdir(join(bundle, 'runtime/bin'), { recursive: true });
-    for (const file of ['dist/node.js', 'dist/local-service.js', 'dist/bundled', 'LICENSE', 'leobridge.sh']) await cp(join(root, file), join(bundle, file), { recursive: true });
+    for (const file of ['dist/node.js', 'dist/local-service.js', 'dist/bundled', 'LICENSE']) await cp(join(root, file), join(bundle, file), { recursive: true });
+    await cp(join(root, 'deploy/local/leobridge.sh'), join(bundle, 'leobridge.sh'));
     await cp(join(nodeDir, 'bin/node'), join(bundle, 'runtime/bin/node'), { dereference: true });
     await cp(join(nodeDir, 'LICENSE'), join(bundle, 'runtime/LICENSE'));
     await mkdir(join(bundle, 'node_modules'), { recursive: true });
@@ -74,8 +75,15 @@ Quiet:   ./leobridge.sh start --quiet
 
 The package includes Node and production dependencies. No install or build step.
 Default admin URL: http://127.0.0.1:8787/admin/
-Initial login: admin / admin; change the password before configuring the source.
-Only loopback access is enabled by default. Configuration can be set in .dev.vars.
+首次登录：全新状态且未自定义账号时使用admin/admin，默认密码须先修改。
+已有实例使用当前已保存的密码。
+默认仅本机访问，无需创建.dev.vars；主控地址和Token在后台检查并保存。
+
+.dev.vars生效规则：
+- BRIDGE_LISTEN_PORT、BRIDGE_ADMIN_USERNAME、BRIDGE_TITLE、BRIDGE_THEME_STORE等运行参数，
+  修改后执行 ./leobridge.sh restart。环境变量优先于同名文件项。
+- 管理密码和数据源只在后台设置，统一保存在state.json，立即生效且不回写.dev.vars。
+- BRIDGE_THEME_STORE默认work/theme-store；切换目录不迁移原数据，升级须保留原目录。
 Data: work/theme-store (includes credentials). Logs and control state: work/local.
 Stop before backing up or upgrading. Preserve all of work/theme-store and your
 private configuration; never copy work/local control state to another instance.

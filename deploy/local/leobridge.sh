@@ -3,12 +3,16 @@
 set -euo pipefail
 umask 077
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# The source checkout stores this launcher under deploy/local; releases put it at the root.
+if [[ "$ROOT" == */deploy/local ]] && [ ! -f "$ROOT/release.json" ] && [ -f "$ROOT/../../scripts/local-service.ts" ] && [ -f "$ROOT/../../package.json" ]; then
+  ROOT="$(cd -- "$ROOT/../.." && pwd -P)"
+fi
 cd "$ROOT"
 COMMAND="${1:-start}"
 case "$COMMAND" in
   start|stop|restart|status|logs) ;;
   help|-h|--help)
-    echo '用法: ./leobridge.sh [start|stop|restart|status|logs] [--quiet]'
+    echo "用法: ${BASH_SOURCE[0]} [start|stop|restart|status|logs] [--quiet]"
     echo '直接运行已构建程序，默认后台启动；不安装依赖或编译。'
     exit 0 ;;
   *) echo "不支持的命令: $COMMAND。用户请下载完整运行包；源码构建见 docs/development/build.md。" >&2; exit 2 ;;
