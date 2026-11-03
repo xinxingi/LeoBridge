@@ -4,6 +4,7 @@ Uses only configured upstream, does not follow redirects or print credentials.
 """
 import argparse, json, os, subprocess, time
 from pathlib import Path
+from saved_source import load_source
 from urllib.parse import urlsplit
 
 os.umask(0o077)
@@ -11,22 +12,18 @@ ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'work/private/live-contract'
 
 def config():
-    d={}
-    for line in (ROOT/'.dev.vars').read_text().splitlines():
-        line=line.strip()
-        if line and not line.startswith('#') and '=' in line:
-            k,v=line.split('=',1);d[k.strip()]=v.strip().strip('\"\'')
-    return d
+    return load_source(ROOT)
+
 
 def fetch(path, name):
-    c=config();base=c['MMWX_BASE_URL'].rstrip('/')
+    c=config();base=c['baseUrl'].rstrip('/')
     parsed=urlsplit(base)
     if parsed.scheme not in ('http','https') or parsed.username or parsed.password:raise ValueError('Invalid base URL')
     if not path.startswith('/') or path.startswith('//'):raise ValueError('Relative upstream path required')
     OUT.mkdir(parents=True,exist_ok=True,mode=0o700)
     dest=OUT/(name+'.raw'); err=OUT/(name+'.stderr')
     # Feed secret/header on stdin, keeping it out of command-line process listings.
-    cfg='url = '+json.dumps(base+path)+'\nheader = '+json.dumps('X-MMwx-Probe-Token: '+c['MMWX_PROBE_TOKEN'])+'\n'
+    cfg='url = '+json.dumps(base+path)+'\nheader = '+json.dumps('X-MMwx-Probe-Token: '+c['token'])+'\n'
     start=time.monotonic()
     with err.open('w') as e:
         p=subprocess.run(['curl','--config','-','--http1.1','--silent','--show-error','--connect-timeout','15','--max-time',('180' if path.startswith('/assets/') else '45'),'--output',str(dest),'--write-out','%{http_code}'],input=cfg,text=True,stdout=subprocess.PIPE,stderr=e)
@@ -50,7 +47,7 @@ def fetch(path, name):
 
 def websocket_probe(name):
     import base64, hashlib, socket, ssl, struct
-    c=config(); u=urlsplit(c['MMWX_BASE_URL']);OUT.mkdir(parents=True,exist_ok=True,mode=0o700)
+    c=config(); u=urlsplit(c['baseUrl']);OUT.mkdir(parents=True,exist_ok=True,mode=0o700)
     summary={'case':name,'frames':[]}
     conn=None
     try:
@@ -61,7 +58,7 @@ def websocket_probe(name):
       summary['stage']='upgrade'
       conn.settimeout(25)
       key=base64.b64encode(os.urandom(16)).decode()
-      headers=['GET /api/public/probe-ws HTTP/1.1','Host: '+u.netloc,'Upgrade: websocket','Connection: Upgrade','Sec-WebSocket-Key: '+key,'Sec-WebSocket-Version: 13','X-MMwx-Probe-Token: '+c['MMWX_PROBE_TOKEN']]
+      headers=['GET /api/public/probe-ws HTTP/1.1','Host: '+u.netloc,'Upgrade: websocket','Connection: Upgrade','Sec-WebSocket-Key: '+key,'Sec-WebSocket-Version: 13','X-MMwx-Probe-Token: '+c['token']]
       conn.sendall(('\r\n'.join(headers)+'\r\n\r\n').encode())
       header=b''
       while not header.endswith(b'\r\n\r\n'):
@@ -107,8 +104,8 @@ def websocket_curl(name):
     import base64, struct
     c=config();OUT.mkdir(parents=True,exist_ok=True,mode=0o700)
     key=base64.b64encode(os.urandom(16)).decode()
-    cfg='url = '+json.dumps(c['MMWX_BASE_URL'].rstrip('/')+'/api/public/probe-ws')+'\n'
-    for h in ('X-MMwx-Probe-Token: '+c['MMWX_PROBE_TOKEN'],'Upgrade: websocket','Connection: Upgrade','Sec-WebSocket-Key: '+key,'Sec-WebSocket-Version: 13'):
+    cfg='url = '+json.dumps(c['baseUrl'].rstrip('/')+'/api/public/probe-ws')+'\n'
+    for h in ('X-MMwx-Probe-Token: '+c['token'],'Upgrade: websocket','Connection: Upgrade','Sec-WebSocket-Key: '+key,'Sec-WebSocket-Version: 13'):
       cfg+='header = '+json.dumps(h)+'\n'
     raw=OUT/(name+'.raw');hdr=OUT/(name+'.headers');err=OUT/(name+'.stderr')
     with err.open('w') as e:

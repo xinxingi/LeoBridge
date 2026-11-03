@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { normalizeServer } from '../src/core/model.ts';
 import { komariNode,komariStatus,komariRecent,komariRecord,komariPingRecords,pingTaskId } from '../src/protocols/komari/adapter.ts';
 import { normalizeSystemSeries,normalizePingSeries,Series } from '../src/upstream/series.ts';
-import { readConfig } from '../src/core/config.ts';
+import { readConfig } from './helpers/config.ts';
 import { Upstream } from '../src/upstream/client.ts';
 
 const now=Date.parse('2026-11-02T12:00:00Z');

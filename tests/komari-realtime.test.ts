@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { komariRealtime } from '../src/protocols/komari/realtime.ts';
 import { KomariService } from '../src/protocols/komari/service.ts';
-import { readConfig } from '../src/core/config.ts';
+import { readConfig } from './helpers/config.ts';
 import { Upstream,type Fetcher } from '../src/upstream/client.ts';
 import type { Socket } from '../src/protocols/cfsm/realtime.ts';
 class MockSocket implements Socket {

@@ -5,6 +5,7 @@ import { isRecord,normalizeServer,type Snapshot,type UnifiedServer } from '../..
 import { Upstream } from '../../upstream/client.ts';
 import { Series } from '../../upstream/series.ts';
 import { KOMARI_PROFILE,komariNode,komariStatus,komariRecent,komariRecord,komariTargets,komariPingRecords,type Transport } from './adapter.ts';
+import { metricDefinitions,queryMetrics } from './metrics.ts';
 
 type RpcId=string|number|null;
 export interface RpcResponse {jsonrpc:'2.0';id:RpcId;result?:unknown;error?:{code:number;message:string;data?:unknown};}
@@ -48,6 +49,19 @@ export class KomariService {
   }
   async method(method:string,params:unknown={}):Promise<unknown> {
     if(!isRecord(params))throw invalidParams();
+    if(method==='common:getVersion')method='public:getVersion';
+    if(method==='public:queryMetrics'||method==='public:getPingMetricStats') {
+      if(typeof params.entity_id!=='string'||!params.entity_id)throw invalidParams();
+      // The source exposes relative ranges only. Do not pretend to support arbitrary dates or aggregations.
+      if(params.start!==undefined||params.end!==undefined)throw new BridgeError('UNSUPPORTED_RANGE',422,'上游仅支持相对历史范围。');
+      if(params.aggregation!==undefined&&params.aggregation!=='avg')throw new BridgeError('UNSUPPORTED_AGGREGATION',422,'仅提供上游原始聚合桶。');
+      if(method==='public:queryMetrics'&&(!Array.isArray(params.metric_keys)||params.metric_keys.length>32||params.metric_keys.some(key=>typeof key!=='string')))throw invalidParams();
+      const hours=this.hours(params),end=this.now(),start=end-hours*3_600_000;
+      const series=await this.series.get(params.entity_id,hours);
+      if(method==='public:getPingMetricStats')return {start:new Date(start).toISOString(),end:new Date(end).toISOString(),stats:[],count:0,
+        bridge:{unsupported:'packet_counts_and_percentiles',note:'源桶不提供真实发包计数；请查看丢包率曲线。'}};
+      return queryMetrics(series,params.entity_id,[...new Set(params.metric_keys as string[])],this.config.pingTargets,start,end);
+    }
     if(method==='rpc.ping')return 'pong';
     if(method==='public:getVersion')return {version:'LeoBridge 0.1.0',hash:KOMARI_PROFILE};
     if(method==='public:getMe')return {username:'Guest',logged_in:false};
@@ -69,14 +83,16 @@ export class KomariService {
       }
       return komariPingRecords(await this.series.get(id,hours),id,this.config.pingTargets,taskId);
     }
-    const allowed=['public:getNodesInformation','public:getPublicSettings','public:getClientRecentRecords','public:getPublicPingTasks','common:getNodesLatestStatus'];
+    const allowed=['common:getNodes','public:listMetricDefinitions','public:getNodesInformation','public:getPublicSettings','public:getClientRecentRecords','public:getPublicPingTasks','common:getNodesLatestStatus'];
     if(!allowed.includes(method))throw new RpcError(-32601,'Method not found');
     const {snapshot,entries}=await this.current();
     const transport=this.transport(snapshot);
+    if(method==='common:getNodes')return Object.fromEntries(entries.filter(entry=>params.uuid===undefined||entry.id===this.uuid(params)).map(({id,model})=>[id,komariNode(model,id,this.config.staleMs,transport,this.now())]));
+    if(method==='public:listMetricDefinitions')return metricDefinitions(this.series.maxHours(snapshot));
     if(method==='public:getNodesInformation')return entries.map(({id,model})=>komariNode(model,id,this.config.staleMs,transport,this.now()));
     if(method==='public:getPublicSettings') {
       const hours=this.series.maxHours(snapshot);
-      return {sitename:this.config.title,description:'LeoBridge · 妙妙屋X数据展示',theme:'adhesive-note',theme_settings:{},private_site:false,
+      return {sitename:this.config.title,description:'LeoBridge · 妙妙屋X数据展示',theme:'default',theme_settings:{},private_site:false,metric_retention_days:hours/24,
         record_enabled:true,record_preserve_time:hours,ping_record_preserve_time:hours,custom_head:'',custom_body:'',oauth_enable:false,oauth_provider:'',
         disable_password_login:true,cors_origin_check_enabled:true,visitor_audit_enabled:false,
         bridge:{profile:KOMARI_PROFILE,stale_ms:this.config.staleMs,history_hours:[1,6,24,...(hours>=168?[48,96,168]:[])],

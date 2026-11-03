@@ -1,5 +1,7 @@
 # 妙妙屋X探针 API：人工整理摘录
 
+本文保留读取当日的文档摘录；历史档位、Ping时间对齐和WS的后续实测见[输入契约](../research/upstream-contract.md)。下文“需确认”描述摘录当时的信息缺口。
+
 来源：https://miaomiaowux.com/docs/probe-api/
 
 读取日期：2026-11-02；网页更新日期：2026-10-31。以下为浏览器所见正文的技术摘要，不是实测、完整原文或官方 schema。

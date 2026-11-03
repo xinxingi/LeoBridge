@@ -1,3 +1,5 @@
+import { createStoreTransport } from './store-transport.ts';
+import { StoreNetwork } from '../management/store-network.ts';
 import { setGlobalDispatcher } from 'undici';
 import { createDevTransport } from './proxy.ts';
 import { createServer,type IncomingMessage } from 'node:http';
@@ -5,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { WebSocket,WebSocketServer } from 'ws';
 import { readConfig } from '../core/config.ts';
-import { managementConfig } from '../management/config.ts';
+import { managementConfig,PREVIEW_PARAMETER } from '../management/config.ts';
 import { errorResponse } from '../core/http.ts';
 import type { Socket } from '../core/socket.ts';
 import { BridgeError } from '../core/errors.ts';
@@ -19,23 +21,27 @@ process.umask(0o077);
 let env,config,management,runtime;
 try{
   env=await loadRuntimeEnv(process.env);config=readConfig(env);management=managementConfig(env);runtime=readNodeRuntimeConfig(env);
-  if(runtime.mode==='proxy'&&(config.access==='local'||!management.password))throw new Error('Production requires explicit display access and independent admin credentials.');
-}catch{console.error('LeoBridge configuration is invalid. See docs/configuration.md and docs/deployment/vps.md.');process.exit(1);}
+  if(runtime.mode!=='local'&&config.access==='local')throw new Error('Production requires explicit display access.');
+}catch{console.error('LeoBridge configuration is invalid. See docs/configuration.md and docs/deployment/local.md.');process.exit(1);}
 const transport=createDevTransport(env.BRIDGE_DEV_PROXY,config.timeoutMs);setGlobalDispatcher(transport.http);
 if(transport.proxied)console.log('Local development proxy enabled for HTTP and WebSocket.');
 const assets=resolve(env.BRIDGE_ASSETS_DIR||'dist/bundled');
 const store=new FileThemeStore(env.BRIDGE_THEME_STORE||'work/theme-store');
 try{await seedBundled(store,async path=>new Uint8Array(await readFile(resolve(assets,path))));}
 catch{console.error('Theme initialization failed. Build the application and check theme storage permissions.');await transport.http.close();transport.webSocket?.destroy();process.exit(1);}
-const site=new Site(config,management,store,async path=>new Response(new Uint8Array(await readFile(resolve(assets,'_management',path))),{headers:{'Content-Type':path.endsWith('.html')?'text/html; charset=utf-8':path.endsWith('.css')?'text/css; charset=utf-8':path.endsWith('.svg')?'image/svg+xml':'text/javascript; charset=utf-8'}}));
+const storeTransport=createStoreTransport();
+const storeNetwork=new StoreNetwork(store,storeTransport.run);
+const site=new Site(config,management,store,async path=>new Response(new Uint8Array(await readFile(resolve(assets,'_management',path))),{headers:{'Content-Type':path.endsWith('.html')?'text/html; charset=utf-8':path.endsWith('.css')?'text/css; charset=utf-8':path.endsWith('.svg')?'image/svg+xml':'text/javascript; charset=utf-8'}}),storeNetwork);
 function socket(ws:WebSocket):Socket{return {send:data=>ws.send(data),close:(code,reason)=>ws.close(code,reason),onMessage:fn=>ws.on('message',data=>fn(data.toString())),onClose:fn=>ws.on('close',fn),onError:fn=>ws.on('error',fn)};}
 const wss=new WebSocketServer({noServer:true,maxPayload:65536});
+const rootSessions=new Set<{close:()=>void}>();
+site.onActiveThemeChange=()=>{for(const session of rootSessions)session.close();};
 const sessions=new Set<{close:()=>void}>(),sources=new Set<WebSocket>();
 let shuttingDown=false;
-const connect=()=>new Promise<Socket>((accept,reject)=>{
+const connect=(sourceConfig:typeof config)=>()=>new Promise<Socket>((accept,reject)=>{
   if(shuttingDown){reject(new BridgeError('SHUTTING_DOWN',503,'服务正在停止。'));return;}
-  const url=new URL('/api/public/probe-ws',config.baseUrl);url.protocol=url.protocol==='https:'?'wss:':'ws:';
-  const source=new WebSocket(url,{headers:{'X-MMwx-Probe-Token':config.token},handshakeTimeout:config.timeoutMs,maxPayload:12_000_000,followRedirects:false,agent:transport.webSocket});
+  const url=new URL('/api/public/probe-ws',sourceConfig.baseUrl);url.protocol=url.protocol==='https:'?'wss:':'ws:';
+  const source=new WebSocket(url,{headers:{'X-MMwx-Probe-Token':sourceConfig.token},handshakeTimeout:sourceConfig.timeoutMs,maxPayload:12_000_000,followRedirects:false,agent:transport.webSocket});
   sources.add(source);source.once('close',()=>sources.delete(source));
   source.once('open',()=>accept(socket(source)));source.on('error',()=>reject(new BridgeError('UPSTREAM_WS',502,'上游实时连接失败。')));
 });
@@ -45,7 +51,8 @@ async function body(req:IncomingMessage){
   for await(const chunk of req){length+=chunk.length;if(length>131072)throw new BridgeError('REQUEST_TOO_LARGE',413,'请求过大。');chunks.push(chunk);}
   return chunks.length?Buffer.concat(chunks):undefined;
 }
-const ports=runtime.mode==='proxy'?[runtime.port]:[...new Set([management.displayOrigin,management.adminOrigin,management.previewOrigin].map(origin=>Number(new URL(origin).port||80)))];
+const ports=runtime.mode!=='local'||management.routing==='single'?[runtime.port]:[...new Set([management.displayOrigin,management.adminOrigin,management.previewOrigin].map(origin=>Number(new URL(origin).port||80)))];
+let listening=0;
 const servers=ports.map(port=>{
   const server=createServer(async(req,res)=>{
     let response:Response;
@@ -66,20 +73,28 @@ const servers=ports.map(port=>{
       if(shuttingDown||sessions.size>=50){connection.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');return;}
       const request=nodeRequest(req,runtime,management,undefined,port),url=new URL(request.url),protocol=await site.websocket(request);
       if(!protocol||shuttingDown||sessions.size>=50){connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');return;}
-      wss.handleUpgrade(req,connection,head,ws=>{const session=protocol.openRealtime(socket(ws),connect,url.pathname);sessions.add(session);ws.on('close',()=>sessions.delete(session));});
+      const sourceConfig=site.config;
+      wss.handleUpgrade(req,connection,head,ws=>{const session=protocol.openRealtime(socket(ws),connect(sourceConfig),url.pathname);sessions.add(session);if(management.routing==='single'&&url.origin===management.displayOrigin&&!url.searchParams.has(PREVIEW_PARAMETER))rootSessions.add(session);ws.on('close',()=>{sessions.delete(session);rootSessions.delete(session);});});
     }catch{connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');}
   });
   server.once('error',()=>{console.error('LeoBridge listener failed; check address and port availability.');process.exitCode=1;shutdown();});
-  server.listen(port,runtime.host,()=>console.log(`LeoBridge ${runtime.mode} listener: ${runtime.host}:${port}`));return server;
+  server.listen(port,runtime.host,()=>{
+    console.log(`LeoBridge ${runtime.mode} listener: ${runtime.host}:${port}`);
+    if(++listening===ports.length&&!shuttingDown)process.send?.({type:'ready',admin:management.adminOrigin+(management.routing==='single'?'/admin/':'/')});
+  });return server;
 });
-console.log(`Display: ${management.displayOrigin}; administration: ${management.adminOrigin}`);
+console.log(`Display: ${management.displayOrigin}; administration: ${management.adminOrigin}${management.routing==='single'?'/admin/':'/'}`);
 function shutdown(){
   if(shuttingDown)return;shuttingDown=true;
+  if(process.connected)process.disconnect();
   for(const session of sessions)session.close();
   for(const source of sources)source.terminate();
   wss.close();for(const server of servers)server.close();
+  void storeTransport.destroy();
   void transport.http.destroy().catch(()=>{/* already closed */});transport.webSocket?.destroy();
   // Bound draining for hostile/idle clients. The deadline does not keep an idle process alive.
   const deadline=setTimeout(()=>{for(const ws of wss.clients)ws.terminate();for(const server of servers)server.closeAllConnections();},5000);deadline.unref();
 }
 process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
+// The local manager owns this process. Do not leave an orphan writer if it dies.
+if(process.connected)process.on('disconnect',shutdown);

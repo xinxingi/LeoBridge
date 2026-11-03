@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { History, systemRows, pingRows } from '../src/protocols/cfsm/history.ts';
-import { readConfig } from '../src/core/config.ts';
+import { readConfig } from './helpers/config.ts';
 import { normalizeSnapshot } from '../src/core/model.ts';
 import { BridgeError } from '../src/core/errors.ts';
 import type { Upstream } from '../src/upstream/client.ts';

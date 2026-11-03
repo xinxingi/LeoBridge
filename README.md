@@ -2,71 +2,65 @@
 
 # LeoBridge
 
-让妙妙屋X的数据，使用 CF-Server-Monitor 和 Komari 的主题展示。
+让妙妙屋X的探针数据，使用 CF-Server-Monitor 和 Komari 的主题展示。
 
-LeoBridge 只读访问妙妙屋X探针 API，转换服务器状态、历史和实时协议，并提供独立的主题管理站。采集、服务器管理和历史保存仍由妙妙屋X负责，无需安装新的 Agent。
+LeoBridge 只读访问妙妙屋X探针 API，提供独立的 CFSM / Komari 展示协议和主题管理后台。采集、服务器管理和历史保存仍由妙妙屋X负责，无需安装新的 Agent。
 
-## 可以做什么
+## 功能
 
-- 使用 CFSM 默认前台或 Komari Adhesive Note 查看首页、详情、系统历史和 Ping 图表。
-- 在独立后台浏览两个主题商店，安装固定版本、隔离预览、启用和回退，无需重新部署。
-- 切换后旧页面保留原主题资源及协议；管理会话与第三方主题按主机名隔离。
-- 优先接收上游原生 WebSocket；故障时明确显示过期或通过真实 HTTP 读取回退。
+**网页配置数据源**：填写主控地址和 Token，检查连接、核对节点身份及 Ping 目标后保存。
 
-兼容结论只覆盖经过适配的两个内置包。商店安装成功不等于实测兼容。缺失指标显示未知，历史空缺不补点；服务器身份必须通过显式绑定校验。[兼容范围与限制](docs/research/compatibility.md)
+![数据源设置：演示主控已连接并保存三个节点身份](docs/assets/screenshots/source-settings.jpg)
 
-## 部署
+**双生态主题商店**：浏览 CFSM 与 Komari 主题，查看来源、固定版本和许可信息后按需安装。
 
-LeoBridge 以 Node.js 服务运行，可直接部署或使用 Docker。上游连接、身份绑定和访问策略见[配置参考](docs/configuration.md)；安装、HTTPS 接入、持久化及升级步骤见[VPS 部署指南](docs/deployment/vps.md)。当前没有公开预构建镜像，Docker 部署需从源码构建。
+![双生态主题商店：左侧 Komari，右侧 CFSM](docs/assets/screenshots/theme-stores.jpg)
 
-## 本地开发
+**预览、切换与回退**：先预览再启用，保留已安装版本，切换主题无需重新部署。
 
-需要 Node.js 24 和 pnpm 11.25.0。已有 `.dev.vars` 时保留它，不重复生成身份绑定。
+**状态、历史与实时更新**：转换已有探针数据，缺失指标保持未知，历史空缺不补点；支持 WebSocket 和 HTTP 回退。
+
+项目默认不内置第三方主题。商店收录或安装成功不代表兼容，具体能力以[兼容说明](docs/research/compatibility.md)为准。
+
+## 快速开始
+
+普通用户选择[预编译运行包](docs/deployment/local.md)或[Docker Hub 镜像](docs/deployment/docker.md)。目前公开发行包和镜像尚未发布；发布后，下载对应平台运行包并解压，在目录中执行：
 
 ```sh
-pnpm install --frozen-lockfile
-cp .dev.vars.example .dev.vars   # 仅首次
-# 编辑 .dev.vars，填写已授权主控地址及探针 Token
-pnpm configure                  # 首次只读生成绑定，随后人工审查
-pnpm configure:admin            # 独立管理密码只写入本机配置
-pnpm check
-pnpm dev
+./leobridge.sh start
 ```
 
-- 展示入口：[127.0.0.1:8787](http://127.0.0.1:8787)
-- 管理入口：[admin.localhost:8786](http://admin.localhost:8786)
-- 预览：从管理站打开对应主题。浏览器需要支持 `*.localhost`。
+运行包自带运行环境，无需安装 Node 或 pnpm，启动时不会下载依赖或编译。默认后台运行，关闭终端后继续运行。用 `./leobridge.sh stop`、`restart`、`status`、`logs` 管理服务；加 `--quiet` 可隐藏正常输出。
 
-管理凭据保存在本机 `.dev.vars`，不要提交或公开。主控 Token 只保护上游；展示站的 `local/public/private` 策略与管理登录分别配置。完整变量及身份维护方法见 [配置参考](docs/configuration.md)。
+1. 打开 [管理后台](http://127.0.0.1:8787/admin/)。全新安装且未自定义账号时，用 `admin` / `admin` 登录，按提示设置新密码并重新登录；已有实例使用当前已保存密码。
+2. 进入「数据源设置」，填写妙妙屋X主控地址和探针 Token。点击「检查连接」，核对节点身份与 Ping 目标后保存。
+3. 进入 CFSM 或 Komari 商店，查看来源与许可信息，勾选确认后安装主题。
+4. 预览主题，确认显示正常后启用，打开 [展示首页](http://127.0.0.1:8787/)。
 
-## 项目结构
+新用户无需预填主控地址或Token到配置文件。日后改密码、换主控都在后台操作，保存后立即生效；后台不会回写配置文件。运行包默认把这些状态保存在 `work/theme-store`，Docker保存在持久卷，重启和升级继续沿用。密码和数据源统一保存到同一个`state.json`，不读取环境变量中的初始配置，详见[配置在哪里修改和保存](docs/configuration.md#配置在哪里修改和保存)。
 
-```text
-src/        中立模型、上游、协议、主题、管理、应用组合与运行时
-web/        独立管理界面及两套固定版本主题源码
-deploy/    容器、反向代理及服务管理配置示例
-scripts/    构建、配置、架构检查与只读验收工具
-tests/      核心、协议、管理及运行时测试
-docs/       用户指南、架构、协议契约与第三方参考资料
-```
+需要修改代码或自行制作产物时，使用[开发构建指南](docs/development/build.md)。Cloudflare Workers仍为后续适配方向。
 
-目录和依赖规则见 [架构说明](docs/development/architecture.md)。项目保持一个依赖锁文件；中立模块不能导入具体协议，两种协议不能互相导入，Node 专用能力放在运行时层。`pnpm check`自动检查这些边界、循环依赖、类型、测试和构建。
+## 文档与贡献
 
-## 文档
-
-| 我想要… | 从这里开始 |
+| 需要做什么 | 文档 |
 | --- | --- |
-| 部署到 VPS、备份、升级 | [VPS 部署](docs/deployment/vps.md) |
-| 配置上游、身份、访问策略 | [配置参考](docs/configuration.md) |
-| 安装、预览与切换主题 | [主题管理](docs/themes.md) |
-| 排查历史、身份或实时问题 | [排障](docs/troubleshooting.md) |
-| 开发、测试或贡献代码 | [贡献指南](CONTRIBUTING.md) · [架构](docs/development/architecture.md) |
+| 部署、备份或升级 | [Docker Hub镜像](docs/deployment/docker.md) · [运行包](docs/deployment/local.md) |
+| 配置数据源、节点身份和访问策略 | [配置参考](docs/configuration.md) |
+| 安装、预览、启用或回退主题 | [主题管理](docs/themes.md) |
 | 了解兼容范围与数据限制 | [兼容说明](docs/research/compatibility.md) |
-| 了解源码来源与许可 | [第三方声明](THIRD_PARTY_NOTICES.md) |
-| 使用项目 Logo 与横幅 | [品牌素材](docs/assets/README.md) |
+| 排查连接、历史或实时问题 | [排障指南](docs/troubleshooting.md) |
+| 开发与贡献代码 | [贡献指南](CONTRIBUTING.md) · [架构说明](docs/development/architecture.md) |
 
-## 许可与反馈
+欢迎提交问题和改进建议。问题报告请附版本、运行方式和脱敏后的复现步骤；安全问题见[安全说明](SECURITY.md)。
 
-LeoBridge 原创代码采用 [MIT](LICENSE)。CFSM、Adhesive Note 及其字体/图形保留各自许可证、固定来源与补丁记录，不以项目许可证覆盖第三方条款。
+## 致谢
 
-普通问题请附版本、运行方式和脱敏后的复现步骤。安全问题与敏感信息的处理见 [安全说明](SECURITY.md)。不要在 issue 中粘贴主控地址、Token、管理密码、身份绑定或原始响应。
+感谢以下项目的作者与贡献者：
+
+- [CF-Server-Monitor（CFSM）](https://github.com/huilang-me/CF-Server-Monitor)：提供前台、主题规范与主题生态。
+- [Komari](https://github.com/komari-monitor/komari)：提供公开展示协议、主题机制与主题生态。
+
+## 许可证
+
+LeoBridge 原创代码采用 [MIT](LICENSE)。第三方主题、依赖、字体与图形遵循各自条款，来源及许可见[第三方声明](docs/references/retired-themes/README.md)。主题安装确认记录用户的知情决定，不作为授权证明；具体流程见[主题管理](docs/themes.md#主题获取与许可信息)。

@@ -3,10 +3,10 @@ import { tokenizer } from 'acorn';
 import { fetchCatalog, fetchPublicBytes, fetchPublicJson, repositoryParts, validatePublicUrl, ThemePackageError, type CatalogEntry, type Ecosystem, type PublicFetcher } from './catalog.ts';
 export { ThemePackageError } from './catalog.ts';
 export interface ThemeFile { path: string; bytes: Uint8Array; contentType: string; }
-export interface LicenseRecord { spdx: string; text: string; source: string; sha256: string; }
+export interface LicenseRecord { spdx: string; text: string; source: string; sha256: string; status?: 'found' | 'missing'; documents?: {path:string;text:string;sha256:string}[]; }
 /** Optional independent evidence must belong to this repository and be pinned. */
 export interface LicenseEvidence { url: string; sha256: string; }
-export interface InstallOptions { fetcher?: PublicFetcher; licenseEvidence?: LicenseEvidence; expectedCatalogRevision?: string; }
+export interface InstallOptions { fetcher?: PublicFetcher; licenseEvidence?: LicenseEvidence; expectedCatalogRevision?: string; expectedBuildRevision?: string; }
 /** Manually audited exact build → source-tag license, never a repository-wide default. */
 export const AUDITED_LICENSE_EVIDENCE: Readonly<Record<string, LicenseEvidence>> = Object.freeze({
   'tokinx/cf-server-monitor-theme-emerald@0939eb9d6e7638ea301f9dd18a218eedba2420c2': {
@@ -38,7 +38,7 @@ export function safePackagePath(path: string, directory = false): string {
 }
 const MIME: Record<string, string> = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', mjs: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json; charset=utf-8', webmanifest: 'application/manifest+json', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', ico: 'image/x-icon', woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf', txt: 'text/plain; charset=utf-8', md: 'text/plain; charset=utf-8' };
 export function contentType(path: string): string | null {
-  if (/^(LICENSE|LICENCE|COPYING|NOTICE)(\.[A-Za-z]+)?$/i.test(path.split('/').at(-1)!)) return 'text/plain; charset=utf-8';
+  if (/^(LICENSE|LICENCE|COPYING|NOTICE|THIRD_PARTY)(\.[A-Za-z]+)?$/i.test(path.split('/').at(-1)!)) return 'text/plain; charset=utf-8';
   return MIME[path.split('.').at(-1)!.toLowerCase()] || null;
 }
 interface ZipMember { name: string; size: number; compressed: number; crc: number; directory: boolean; method: number; start: number; }
@@ -123,12 +123,12 @@ function recognizeLicense(text: string): string | null {
   return null;
 }
 async function licenseRecord(bytes: Uint8Array, source: string): Promise<LicenseRecord> {
-  let text: string; try { text = decoder.decode(bytes); } catch { return fail('LICENSE_ENCODING', '许可证文本编码无效。'); }
-  const spdx = recognizeLicense(text); if (!spdx) fail('LICENSE_REVIEW_REQUIRED', '主题许可证未获支持，需要独立许可审查后再安装。');
-  return { spdx, text, source, sha256: await sha256(bytes) };
+  const text = new TextDecoder().decode(bytes); // Display unrecognized encodings with replacement characters; original bytes remain in the package.
+  const spdx = recognizeLicense(text) ?? 'NOASSERTION';
+  return { spdx, text, source, sha256: await sha256(bytes), status: text.trim() ? 'found' : 'missing' };
 }
 async function independentLicense(entry: CatalogEntry, evidence: LicenseEvidence | undefined, fetcher?: PublicFetcher): Promise<LicenseRecord> {
-  if (!evidence) return fail('LICENSE_REQUIRED', '该固定版本未包含可核实许可证；需提供同仓库固定版本的独立许可证证据。');
+  if (!evidence) return {spdx:'NOASSERTION',text:'',source:'',sha256:await sha256(new Uint8Array()),status:'missing'};
   const repo = repositoryParts(entry.repositoryUrl), url = validatePublicUrl(evidence.url);
   if (!repo || url.search || url.hostname !== 'raw.githubusercontent.com' || !url.pathname.startsWith(`/${repo.owner}/${repo.repo}/`) || !new RegExp(`^/${repo.owner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/${repo.repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[a-f0-9]{40}/`).test(url.pathname) || !/^[a-f0-9]{64}$/.test(evidence.sha256)) fail('LICENSE_EVIDENCE', '独立许可证证据必须来自同仓库固定提交及明确摘要。');
   const bytes = await fetchPublicBytes(url.href, { fetcher, maxBytes: 100_000 });
@@ -152,7 +152,7 @@ function file(path: string, bytes: Uint8Array): ThemeFile {
 }
 function resolveReference(base: string, reference: string): string | null {
   if (!reference || reference.startsWith('#') || reference.startsWith('data:')) return null;
-  if (/^(?:https?:)?\/\//i.test(reference)) fail('EXTERNAL_ASSET', '主题依赖外部静态资源，需先完成资产及许可证审查。');
+  if (/^(?:https?:)?\/\//i.test(reference)) fail('EXTERNAL_ASSET', '主题依赖外部静态资源，当前仅支持包内静态资源。');
   if (/^[a-z][a-z0-9+.-]*:/i.test(reference)) fail('ASSET_PROTOCOL', '主题静态资源协议无效。');
   const cleaned = reference.split(/[?#]/, 1)[0]!;
   if (cleaned.includes('%') || cleaned.includes('\\')) fail('ASSET_PATH', '主题静态引用路径存在歧义。');
@@ -221,6 +221,7 @@ async function finish(entry: CatalogEntry, files: ThemeFile[], license: LicenseR
   if (new Set(files.map(f => f.path.toLowerCase())).size !== files.length) fail('PACKAGE_DUPLICATE', '展示根目录含重复资产路径。');
   files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   validateStaticReferences(files);
+  license.documents = await Promise.all(files.filter(f => /(?:^|\/)(?:LICENSE|LICENCE|COPYING|NOTICE|THIRD_PARTY)(?:\.[^/]*)?$|(?:^|\/)licenses?\//i.test(f.path)).filter(f => f.contentType.startsWith('text/')).map(async f => ({path:f.path,text:new TextDecoder().decode(f.bytes),sha256:await sha256(f.bytes)})));
   const descriptor = JSON.stringify({ ecosystem: entry.ecosystem, themeId: entry.id, source, pinnedVersion, license: license.sha256, files: await Promise.all(files.map(async f => [f.path, f.contentType, await sha256(f.bytes)])) });
   const digest = await sha256(encoder.encode(descriptor));
   return { id: digest.slice(0, 32), digest, themeId: entry.id, name: entry.name, ecosystem: entry.ecosystem, source, catalogSource: entry.catalogSource, catalogRevision: entry.catalogRevision, pinnedVersion, license, entry: 'index.html', files, compatibility: 'unverified', ...(configuration ? { configuration } : {}), audit: { staticReferencesChecked: true, dynamicReferencesRequireBrowser: true, notices: files.filter(f => /(?:LICENSE|LICENCE|NOTICE|THIRD_PARTY)/i.test(f.path)).map(f => f.path) } };
@@ -229,22 +230,23 @@ export async function buildKomariPackage(entry: CatalogEntry, archive: Uint8Arra
   if (entry.ecosystem !== 'komari' || !entry.sha256 || await sha256(archive) !== entry.sha256) fail('PACKAGE_SHA256', '主题ZIP与固定目录摘要不一致。');
   const unpacked = readStaticZip(archive), config = manifest(unpacked.get('komari-theme.json'), entry);
   let license: LicenseRecord | undefined;
-  for (const candidate of ['LICENSE', 'LICENSE.txt', 'LICENSE.md', 'LICENCE', 'dist/LICENSE', 'dist/LICENSE.txt']) if (unpacked.has(candidate)) { license = await licenseRecord(unpacked.get(candidate)!, `${entry.downloadUrl}#${candidate}`); break; }
+  for (const candidate of ['LICENSE', 'LICENSE.txt', 'LICENSE.md', 'LICENCE', 'LICENCE.md', 'COPYING', 'dist/LICENSE', 'dist/LICENSE.txt', 'dist/LICENSE.md', 'dist/COPYING']) if (unpacked.has(candidate)) { license = await licenseRecord(unpacked.get(candidate)!, `${entry.downloadUrl}#${candidate}`); break; }
   license ??= await independentLicense(entry, options.licenseEvidence, options.fetcher);
   const files: ThemeFile[] = [];
   for (const [path, bytes] of unpacked) {
     if (path.startsWith('dist/')) files.push(file(path.slice(5), bytes));
-    else if (/^(?:LICENSE|LICENCE|NOTICE|THIRD_PARTY)(?:\.[A-Za-z]+)?$/i.test(path)) files.push(file(path, bytes));
+    else if (/^(?:(?:LICENSE|LICENCE|COPYING|NOTICE|THIRD_PARTY)(?:\.[A-Za-z]+)?|licenses?\/.+)$/i.test(path)) files.push(file(path, bytes));
     else if (path !== 'komari-theme.json' && !/^(?:README(?:\.[A-Za-z]+)?|preview\.(?:png|webp|jpg|jpeg))$/i.test(path)) fail('PACKAGE_EXTRA_FILE', 'Komari包根目录包含非静态交付文件。');
   }
-  if (!files.some(f => /^(?:LICENSE|LICENCE)(?:\.[A-Za-z]+)?$/i.test(f.path))) files.push(file('LICENSE', encoder.encode(license.text)));
+  if (license.text && !files.some(f => /^(?:LICENSE|LICENCE|COPYING)(?:\.[A-Za-z]+)?$/i.test(f.path))) files.push(file('LICENSE', encoder.encode(license.text)));
   return finish(entry, files, license, entry.downloadUrl!, `${entry.version}@sha256:${entry.sha256}`, record(config.configuration) ? config.configuration : undefined);
 }
 interface TreeBlob { path: string; sha: string; size: number; }
 async function buildCfsmPackage(entry: CatalogEntry, options: InstallOptions): Promise<ThemePackage> {
   const repo = repositoryParts(entry.repositoryUrl); if (!repo || !entry.branch) fail('CFSM_SOURCE', 'CFSM构建来源无效。');
   const api = `https://api.github.com/repos/${repo.owner}/${repo.repo}`;
-  const commit = await fetchPublicJson(`${api}/commits/${encodeURIComponent(entry.branch)}`, { fetcher: options.fetcher });
+  if (options.expectedBuildRevision !== undefined && !/^[a-f0-9]{40}$/.test(options.expectedBuildRevision)) fail('CFSM_COMMIT', '固定构建版本无效。');
+  const commit = options.expectedBuildRevision ? {sha:options.expectedBuildRevision} : await fetchPublicJson(`${api}/commits/${encodeURIComponent(entry.branch)}`, { fetcher: options.fetcher });
   if (!record(commit) || typeof commit.sha !== 'string' || !/^[a-f0-9]{40}$/.test(commit.sha)) fail('CFSM_COMMIT', '无法将构建分支固定为Git提交。');
   const sha = commit.sha;
   const tree = await fetchPublicJson(`${api}/git/trees/${sha}?recursive=1`, { fetcher: options.fetcher, maxBytes: 4_000_000 });
@@ -254,7 +256,7 @@ async function buildCfsmPackage(entry: CatalogEntry, options: InstallOptions): P
     if (!record(node) || typeof node.path !== 'string') fail('CFSM_TREE', '构建资源树条目无效。');
     if (node.type !== 'blob') continue;
     const path = safePackagePath(node.path);
-    if (!(!path.includes('/') || /^(?:assets|flags|os-icons|fonts)\//.test(path))) continue;
+    if (!(!path.includes('/') || /^(?:assets|flags|os-icons|fonts|licenses)\//.test(path))) continue;
     if (!contentType(path)) continue;
     if (node.mode !== '100644' && node.mode !== '100755') fail('CFSM_SPECIAL_FILE', '构建资源中禁止符号链接。');
     if (typeof node.sha !== 'string' || !/^[a-f0-9]{40}$/.test(node.sha) || typeof node.size !== 'number' || node.size > PACKAGE_LIMITS.file || node.size < 0) fail('CFSM_TREE', '构建资源摘要或大小无效。');
@@ -262,7 +264,7 @@ async function buildCfsmPackage(entry: CatalogEntry, options: InstallOptions): P
   }
   if (selected.length > PACKAGE_LIMITS.files || selected.reduce((n, f) => n + f.size, 0) > PACKAGE_LIMITS.total || !selected.some(f => f.path === 'index.html')) fail('CFSM_BUILD_REQUIRED', '构建分支缺少预构建入口或超出资产配额；不会运行构建脚本。');
   const evidence = options.licenseEvidence ?? AUDITED_LICENSE_EVIDENCE[`${repo.owner}/${repo.repo}@${sha}`.toLowerCase()];
-  const hasLicense = selected.some(f => /^(?:LICENSE|LICENCE)(?:\.[A-Za-z]+)?$/i.test(f.path));
+  const hasLicense = selected.some(f => /^(?:LICENSE|LICENCE|COPYING)(?:\.[A-Za-z]+)?$/i.test(f.path));
   const independent = hasLicense ? undefined : await independentLicense(entry, evidence, options.fetcher);
   const files: ThemeFile[] = [];
   // Sequential bounded downloads avoid thousands of parallel origin requests.
@@ -274,9 +276,9 @@ async function buildCfsmPackage(entry: CatalogEntry, options: InstallOptions): P
     if (blobHash !== node.sha) fail('CFSM_BLOB_HASH', '构建资源与固定Git树摘要不一致。');
     files.push(file(node.path, bytes));
   }
-  const candidate = files.find(f => /^(?:LICENSE|LICENCE)(?:\.[A-Za-z]+)?$/i.test(f.path));
+  const candidate = files.find(f => /^(?:LICENSE|LICENCE|COPYING)(?:\.[A-Za-z]+)?$/i.test(f.path));
   const license = candidate ? await licenseRecord(candidate.bytes, `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${sha}/${candidate.path}`) : independent!;
-  if (!candidate) files.push(file('LICENSE', encoder.encode(license.text)));
+  if (!candidate && license.text) files.push(file('LICENSE', encoder.encode(license.text)));
   return finish(entry, files, license, repo.url, sha);
 }
 /** Public installer entry: IDs only; authoritative URLs come from pinned catalogs. */

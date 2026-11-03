@@ -13,7 +13,9 @@
     document.documentElement.dataset.theme = preference === 'system'
       ? (media.matches ? 'dark' : 'light') : preference
     const control = document.getElementById('appearance')
-    if (control) control.value = preference
+    control?.querySelectorAll('[data-appearance]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.appearance === preference))
+    })
   }
   apply()
 
@@ -29,11 +31,13 @@
   function bind() {
     const control = document.getElementById('appearance')
     if (!control) return
-    control.value = preference
-    control.addEventListener('change', () => {
-      preference = normalize(control.value)
-      apply()
-      try { storage?.setItem(key, preference) } catch { /* Keep the in-page choice. */ }
+    apply()
+    control.querySelectorAll('[data-appearance]').forEach(button => {
+      button.addEventListener('click', () => {
+        preference = normalize(button.dataset.appearance)
+        apply()
+        try { storage?.setItem(key, preference) } catch { /* Keep the in-page choice. */ }
+      })
     })
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind, { once: true })

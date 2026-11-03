@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, basename } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { packageLocal } from '../scripts/package-local.ts';
+
+test('local package includes runtime, transitive production dependencies and licenses; excludes local state and build tools', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'leobridge package '));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const dir of ['deploy/local', 'dist/bundled/_management', 'node_modules/.pnpm/a/node_modules/a', 'node_modules/.pnpm/a/node_modules/b', 'node_modules/compiler', 'runtime-input/bin', 'work/private', 'src']) await mkdir(join(root, dir), { recursive: true });
+  for (const file of ['dist/node.js', 'dist/local-service.js', 'dist/bundled/index.json', 'dist/bundled/_management/index.html', 'LICENSE', 'deploy/local/leobridge.sh', '.dev.vars', 'work/private/secret', 'src/source.ts']) await writeFile(join(root, file), file);
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'leobridge', version: '0.1.0-test', dependencies: { a: '1.0.0' }, devDependencies: { compiler: '1' } }));
+  await writeFile(join(root, 'node_modules/.pnpm/a/node_modules/a/package.json'), JSON.stringify({ name: 'a', version: '1.0.0', dependencies: { b: '2.0.0' }, peerDependencies: { 'optional-native': '*' }, peerDependenciesMeta: { 'optional-native': { optional: true } } }));
+  await writeFile(join(root, 'node_modules/.pnpm/a/node_modules/b/package.json'), '{"name":"b","version":"2.0.0"}');
+  await writeFile(join(root, 'node_modules/.pnpm/a/node_modules/b/LICENSE'), 'synthetic dependency license');
+  await symlink('.pnpm/a/node_modules/a', join(root, 'node_modules/a'));
+  await writeFile(join(root, 'runtime-input/LICENSE'), 'synthetic Node notice');
+  await writeFile(join(root, 'runtime-input/bin/node'), `#!/bin/sh\nexec '${process.execPath.replaceAll("'", "'\\''")}' "$@"\n`, { mode: 0o755 });
+  const archive = await packageLocal(join(root, 'runtime-input'), join(root, 'output'), root);
+  const listing = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' });
+  assert.ok(listing.split('\n').includes(basename(archive, '.tar.gz') + '/leobridge.sh'));
+  assert.doesNotMatch(listing, /deploy\/local\//);
+  assert.match(listing, /runtime\/bin\/node/);
+  assert.match(listing, /runtime\/LICENSE/);
+  assert.match(listing, /node_modules\/a\/node_modules\/b\/LICENSE/);
+  assert.doesNotMatch(listing, /(?:work\/|\.dev\.vars|compiler|\.pnpm|src\/|runtime-input|scripts\/)/);
+  assert.equal(await readFile(archive + '.sha256', 'utf8'), `${createHash('sha256').update(await readFile(archive)).digest('hex')}  ${basename(archive)}\n`);
+  await assert.rejects(packageLocal(join(root, 'runtime-input'), join(root, 'output'), root), /Refusing to overwrite/);
+});

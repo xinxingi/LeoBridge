@@ -42,7 +42,7 @@ bucketTimestampSeconds = generated_at - generated_at % bucket_sec
 
 ## WebSocket
 
-`/api/public/probe-ws` 支持 `X-MMwx-Probe-Token` 握手头；curl只读Upgrade已取得HTTP101和一个完整文本消息。消息直接是与快照同结构的JSON对象，没有CFSM的`type`包裹，必须转换。随后Node `ws`依赖收到两个内容不同的完整快照，连续消息已验证；本网络下约31秒才收齐下一帧，5秒节奏、重连与长期稳定性未获证实。详细结果见联调记录，不能仅凭连接打开推断数据新鲜。
+`/api/public/probe-ws` 支持 `X-MMwx-Probe-Token` 握手头；curl只读Upgrade已取得HTTP101和一个完整文本消息。消息直接是与快照同结构的JSON对象，没有CFSM的`type`包裹，必须转换。随后Node `ws`依赖收到两个内容不同的完整快照，连续消息已验证；本网络下约31秒才收齐下一帧，5秒节奏、重连与长期稳定性未获证实。后续原生WS与HTTP回退边界见[兼容清单](compatibility.md#实时故障与访问策略)，不能仅凭连接打开推断数据新鲜。
 
 ## 可复现只读采样
 

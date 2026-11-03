@@ -1,14 +1,33 @@
-# 真实 Komari 前台实现与契约
+# Komari 官方默认前台
+
+本文保留官方默认前台和Adhesive Note两套历史适配包的消费者审计，供维护Komari协议使用。2026-11-03起，两套应用源码及专用构建脚本均已移除；当前主题按需从商店安装，不能把下述补丁行为当作原版行为。
+
+官方前台固定为 [komari-monitor/komari-web@bed58b589da63232a17681b1dbaed9eab2423078](https://github.com/komari-monitor/komari-web/tree/bed58b589da63232a17681b1dbaed9eab2423078)。该版本无独立LICENSE，标为NOASSERTION，不套用核心MIT；原README、摘要和补丁见[来源档案](../references/retired-themes/README.md)。
+
+## 官方前台消费者契约
+
+官方首页使用 `common:getNodes`（uuid 键控节点对象）、`common:getNodesLatestStatus`；详情使用 `/api/recent/:uuid`、`public:listMetricDefinitions`、`public:queryMetrics`、`public:getPublicPingTasks` 和 `public:getPingMetricStats`。公共设置仍从 `/api/public` 获取，版本使用 `common:getVersion`。主通道是 `/api/rpc2` HTTP/WebSocket；每五秒查询实时状态，隐藏或卸载页面关闭连接。
+
+`public:queryMetrics` 接收 `entity_id`、`metric_keys`、`hours`，返回带 `metric_key/entity_id/unit/interval_seconds/points` 的序列；CPU 百分比、内存/磁盘 bytes、网速 B/s，Ping ms、丢包率百分比。保留源桶真实时间、零值和 null；图表只插入空断点，不生成数值样本，不使用 EWMA、插值或当前容量回填历史。新请求清除旧范围图，错误明确显示。
+
+支持相对历史范围，拒绝任意起止日期及非源桶聚合请求。源端不提供逐包计数与分位数，所以 `public:getPingMetricStats` 返回空统计及明确限制，丢包率由独立源桶曲线呈现。管理、终端、安装恢复页面、临时密钥 cookie 入口与 PWA 注册未纳入公共应用。
+
+固定安装 profile 为 `komari-default-bed58b5`，适配包为 `LeoBridgeKomariDefault / bed58b5-leobridge.1`。验收见[官方前台验收](komari-default-acceptance.md)。这些标识仅用于识别历史适配安装；当前构建不会生成或自动导入该包。
+
+## 旧便签纸适配记录
+
+以下为Adhesive Note适配包的来源与契约，不代表商店原包已完整兼容。
+
 
 2026-11-02。选用官方Komari商店目录中的 **Adhesive Note v1.0.0**，仓库 [stqfdyr/komari-theme-adhesive-note](https://github.com/stqfdyr/komari-theme-adhesive-note/tree/8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914)，固定提交 `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914`。不是自造占位界面。
 
-官方 `komari-monitor/komari-web` 固定源码 `bed58b589da63232a17681b1dbaed9eab2423078` 的归档没有LICENSE，GitHub元数据license=null，故未复制为应用。Adhesive Note自身MIT，完整原始许可及字体/图形许可放在 `web/themes/komari/`；原作者也明确其RPC客户端是独立实现而非复制官方未授权前台。
+Adhesive Note代码采用MIT，字体与图形适用各自条款，见[第三方素材说明](../references/retired-themes/komari/THIRD_PARTY.md)。
 
 ## 原始包与本地适配分开
 
 官方商店原包short=`AdhesiveNote`、version=`1.0.0`，目录SHA-256为`94f69c657413e7b3204cfea0bce94f1ee5deb1f897364664b27367b592d49c80`。该摘要**不代表本地修改后构建**。
 
-应用副本 `web/themes/komari/` 保存原始文件哈希 `UPSTREAM.json` 和 `PATCHES.md`。构建 `node scripts/build-komari.mjs` 输出 `dist/komari-public/`，生成清楚区分的manifest short=`LeoBridgeAdhesiveNote`、version=`1.0.0-leobridge.1`，保留原作者/来源。运行依赖由根锁文件统一固定，无需执行参考目录的打包/字体生成脚本。
+历史适配构建使用manifest short=`LeoBridgeAdhesiveNote`、version=`1.0.0-leobridge.1`，保留原作者及来源。原文件摘要与[补丁记录](../references/retired-themes/komari/PATCHES.md)仍在档案目录；原源码和构建命令不再是当前仓库入口。
 
 ## 实际调用
 

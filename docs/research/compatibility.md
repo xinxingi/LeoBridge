@@ -1,21 +1,27 @@
 # 兼容范围与限制
 
-LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议。兼容范围限于以下两个内置适配包：
+LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议。既有浏览器验收仅覆盖以下历史适配包（已不随项目交付）：
 
 | 主题 | 固定上游版本 | 展示能力 |
 | --- | --- | --- |
 | CFSM默认前台 | `609cc0b0998793510453be8eadced2064b28ad7d` | 首页、详情、系统与Ping历史、实时更新 |
-| Komari Adhesive Note v1.0.0 | `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914` | 首页、详情、系统与Ping/丢包历史、实时更新 |
+| Komari 官方默认前台 | `bed58b589da63232a17681b1dbaed9eab2423078` | 首页、详情、系统与Ping/丢包历史、实时更新 |
 
-两个内置适配包已通过本地真实数据与浏览器验证。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect配置拒绝，managed使用默认值。
+两个历史适配包曾通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见[来源档案](../references/retired-themes/README.md)。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect配置拒绝，managed使用默认值。
 
-LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服务器管理、终端、远程控制与告警功能。第三方主题不能访问管理会话或上游Token。
+LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服务器管理、终端、远程控制与告警功能。上游Token不提供给主题。single模式的正式主题及预览均与管理后台同源，只应预览和启用可信主题；需要隔离时使用isolated模式。
+
+## 当前主题获取方式
+
+默认不内置第三方主题，由管理员从商店按需安装。先展示实际固定版本、来源和许可文件，再主动勾选确认；安装时重新校验同一版本及摘要。记录知情决定，不作授权判断。许可信息缺失不代替包安全与兼容性检查；所有新商店安装仍标为未验证，详见[主题管理](../themes.md#主题获取与许可信息)。历史适配包兼容结论不覆盖商店原版。
+
+本轮实际检查了商店原版Emerald及Adhesive Note：两者首页/详情可读取真实数据，但发现未知字段被原主题显示为零、免费或无限；Emerald七天图表还要求原CFSM管理登录。它们继续保持未验证，不宣称完整兼容，见[按需安装验收记录](theme-store-transition.md)。
 
 ## 协议与来源
 
 - CFSM：`/api/config`、`/api/servers`、`/api/server`、`/api/history/all`和`/api/ws`；见[消费者契约](frontend-contract.md)。
 - Komari：`/api/rpc2`的HTTP与WebSocket JSON-RPC，以及有限REST兼容接口；见[协议说明](komari-protocol.md)和[主题前台](komari-frontend.md)。
-- 上游字段与历史格式见[输入契约](upstream-contract.md)，第三方来源与许可见[声明](../../THIRD_PARTY_NOTICES.md)。
+- 上游字段与历史格式见[输入契约](upstream-contract.md)，第三方来源与许可见[声明](../references/retired-themes/README.md)。
 
 ## 数据转换
 
@@ -28,11 +34,11 @@ LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服�
 | `cpu_threads` | 逻辑核心；不把物理`cpu_cores`无条件当逻辑线程 | 未知保持缺省 |
 | `online` | 显式true/false/null优先 | 上游不可达、数据过期不是服务器离线 |
 | `last_seen / uptime` | 离线源时间转毫秒；在线采用桥接观察时间；启动时间标记推算 | 不声称取得源端精确在线采样时间或开机时刻 |
-| `region_country / region` | 已知国家编码/Emoji转地区代码；未知不编造 | 旗帜与OS图标本地资源 |
-| Ping目标 | 显式key→CFSM槽位，不按数组位置或ISP唯一性推断 | 真实主控9目标；默认主题最多8槽，未选目标不展示 |
+| `region_country / region` | 已知国家编码/Emoji转地区代码；未知不编造 | 图标资源由各主题包提供 |
+| Ping目标 | 显式key→CFSM槽位，不按数组位置或ISP唯一性推断 | 源目标数量可变；桥接最多8槽，未选目标不展示 |
 | Ping `-1` | 无数据；保持CFSM `false`/空点语义 | 不能改为0延迟；只有明确100%丢包且无有效RTT才表示超时 |
 | `traffic_* / cumulative_*` | 累计、月流量和计费字段当前不映射，显示未知 | 计费用量为configured_period、来源xray；网卡/开机累计为current_boot。不同口径不得混用 |
-| Swap/GPU/磁盘IO/进程等 | 未支持，不填0或编造历史 | 前台显示缺省值或空图并说明限制 |
+| Swap/GPU/磁盘IO/进程等 | 未支持，不填0或编造历史 | 协议保留未知；各主题的实际显示需单独验收 |
 
 ## 历史范围
 
@@ -67,14 +73,16 @@ timestamp_ms = (floor(generated_at / bucket_sec) * bucket_sec
 
 历史读取包含前快照、并行system/Ping查询及后快照，每段上游请求截止30秒，前台允许110秒。身份、隐私或无效数据变化会使旧请求失效；单个实时连接的运输故障不应清空跨协议共享缓存。
 
-未知指标、真实零值、离线、数据过期和上游故障分别呈现。离线、隐藏、关闭采集及重排等边界具有合成测试覆盖；合成结果不代表已在所有真实上游版本观察到相同行为。上游主控及Agent具体版本尚未确认。
+协议区分未知指标、真实零值、离线、数据过期和上游故障；商店原包是否正确呈现这些状态仍需逐包验收。离线、隐藏、关闭采集及重排等边界具有合成测试覆盖；合成结果不代表已在所有真实上游版本观察到相同行为。上游主控及Agent具体版本尚未确认。
 
 Token仅用于服务端访问配置的源，拒绝重定向。展示站的local/public/private策略与主题管理认证独立；private保护HTML、资源、HTTP和WebSocket。
 
 ## 部署边界
 
-推荐[Linux VPS / Node部署](../deployment/vps.md)，文件存储按单站、单进程、单副本运行。Node实时访客连接上限为50；尚无生产容量或高可用保证。systemd模板及跨应用版本升级/降级尚未完成实际验证。
+用户部署面向[Docker Hub镜像](../deployment/docker.md)和[预编译运行包](../deployment/local.md)，目前公开发行产物尚未发布，文件存储按单站、单进程、单副本运行。Node实时访客连接上限为50；尚无生产容量或高可用保证。跨应用版本升级/降级尚未完成完整验证。
 
-[Cloudflare Workers](../deployment/workers.md)为实验性运行方式，尚未完成云端部署验证。R2存主题静态包，单站Durable Object存主题元数据与管理会话；不使用D1，不持久化采集历史。Workers尚无跨isolate共享限流。
+本地`leobridge.sh`只负责后台启停和状态/日志管理，不下载Node、不安装pnpm或依赖、不构建。运行包包含Node、已构建应用及生产依赖，发行打包由开发者完成。上一轮源码自动引导验证只保留为历史，不能代表当前运行包或已公开发布。脚本不提供开机自启或崩溃自动拉起；管理与打包检查不增加主题兼容结论。 当前macOS arm64实际运行包已完成无系统Node/npm/pnpm的解压启停、管理页及改密后重启持久化检查；Linux运行包实机验收、GitHub公开Release和Docker Hub发布均未执行。
 
-每个部署环境都应检查实际域名、TLS、上游访问和前台行为。构建、合成测试或本地运行不能替代目标环境验证。架构设计见[ADR 001](../decisions/001-theme-protocol-boundaries.md)。
+[Cloudflare Workers](../deployment/workers.md)留待后续适配，当前不作为已支持的部署方式。保留实现中，R2存主题静态包，单站Durable Object存主题元数据、管理会话及私有数据源配置；不使用D1，不持久化采集历史。Workers尚无跨isolate共享限流。
+
+每个部署环境都应检查上游访问和前台行为；本地部署无需域名或证书。对外访问时，域名、TLS及反向代理由部署者配置并单独验证。构建、合成测试或本地运行不能替代目标环境验证。架构设计见[ADR 001](../decisions/001-theme-protocol-boundaries.md)。

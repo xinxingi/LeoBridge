@@ -1,26 +1,29 @@
-# Copy once; do not overwrite an existing private .dev.vars.
-MMWX_BASE_URL=https://your-master.example.com
-MMWX_PROBE_TOKEN=replace-with-your-probe-token
-BRIDGE_ACCESS=local
-BRIDGE_TITLE=LeoBridge
-# Themes are selected in the management UI, not through a build-time variable.
-# pnpm configure:admin creates independent management credentials locally.
+# 本地开发配置（可选）：复制为项目根目录的 .dev.vars，已有文件直接编辑。
+#
+# 修改后停止并重新执行 pnpm dev 生效（终端环境变量优先于同名文件项）：
+# BRIDGE_LISTEN_PORT、BRIDGE_ADMIN_USERNAME、BRIDGE_TITLE、BRIDGE_THEME_STORE、BRIDGE_DEV_PROXY。
+# 注意：修改 BRIDGE_THEME_STORE 会切换数据目录，不会自动迁移原数据。
+#
+# 管理密码和数据源只在后台配置，统一保存到数据目录，不在本文件配置。
+
+# 首次准备依赖和构建见 docs/development/build.md；默认无需创建本文件即可 pnpm dev。
+# 管理后台：http://127.0.0.1:8787/admin/；前台运行，Ctrl+C停止。
+# 以下均可不填，按需取消注释。完整说明见 docs/configuration.md。
+
+# 本机监听端口。
+# BRIDGE_LISTEN_PORT=8787
+
+# 管理账号默认admin/admin；使用默认密码首次登录必须改密。
 # BRIDGE_ADMIN_USERNAME=admin
-# BRIDGE_ADMIN_PASSWORD=use-a-separate-random-password-at-least-20-characters
-# Node local origins. Hostnames must differ; ports alone do not isolate cookies.
-# BRIDGE_ADMIN_ORIGIN=http://admin.localhost:8786
-# BRIDGE_DISPLAY_ORIGIN=http://127.0.0.1:8787
-# BRIDGE_DISPLAY_DOMAIN=display.localhost
-# BRIDGE_PREVIEW_ORIGIN=http://preview.localhost:8789
+
+# 监控展示站名称，具体显示位置由主题决定。
+# BRIDGE_TITLE=LeoBridge
+
+# 数据目录，保存密码摘要、数据源和主题；升级保留，备份整个目录。
 # BRIDGE_THEME_STORE=work/theme-store
-# pnpm configure creates explicit BRIDGE_BINDINGS and BRIDGE_PING_TARGETS.
-# Example syntax only, not a real identity or universally unique name:
-# BRIDGE_BINDINGS='[{"id":"stable-uuid","match":{"name":"example","arch":"amd64"}}]'
-# BRIDGE_PING_TARGETS='{"ct":{"key":"actual-target-key","label":"Target label"}}'
-# Remote private display (use HTTPS):
-# BRIDGE_ACCESS=private
-# BRIDGE_USERNAME=viewer
-# BRIDGE_PASSWORD=replace-with-a-separate-password-at-least-16-characters
-# Optional Node development transport; not used by the production Worker.
-# Set only after confirming that this local port accepts HTTP CONNECT.
+
+# 可选Node开发代理；先确认端口支持HTTP CONNECT，Worker不使用此项。
 # BRIDGE_DEV_PROXY=http://127.0.0.1:7897
+
+# 主控地址、Token、节点身份及 Ping 目标在后台“数据源设置”检查并“保存并应用”。
+# Docker配置使用 deploy/docker/.env.example。

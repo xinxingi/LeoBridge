@@ -3,7 +3,7 @@ import { BridgeError } from '../../core/errors.ts';
 import type { UnifiedServer } from '../../core/model.ts';
 import type { HistoricalSeries, HistoryPoint } from '../../upstream/series.ts';
 
-export const KOMARI_PROFILE='komari-adhesive-8ac4fd2';
+export const KOMARI_PROFILE='komari-rpc2-bed58b5';
 export type Transport='websocket'|'poll';
 export function bridgeMetadata(input:UnifiedServer,staleMs:number,transport:Transport,now=Date.now()) {
   return {observed_at:input.observedAt,source_last_seen:input.sourceLastSeen,stale:now-input.observedAt>staleMs,stale_ms:staleMs,transport,timestamp_source:'bridge_observation'};

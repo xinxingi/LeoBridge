@@ -1,3 +1,5 @@
+import { emptyThemeState } from '../src/themes/store.ts';
+import { hashPassword } from '../src/management/password.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest, type Server } from 'node:http';
@@ -110,10 +112,10 @@ test('Node proxy subprocess: isolated origins, both native protocols, persisted 
   const configuration = {
     BRIDGE_NODE_MODE: 'proxy', BRIDGE_LISTEN_HOST: '127.0.0.1', BRIDGE_LISTEN_PORT: String(port), BRIDGE_ACCESS: 'public',
     BRIDGE_ADMIN_ORIGIN: `https://${adminHost}`, BRIDGE_DISPLAY_ORIGIN: `https://${displayHost}`, BRIDGE_DISPLAY_DOMAIN: 'themes.example.test',
-    BRIDGE_PREVIEW_ORIGIN: 'https://preview.example.test', BRIDGE_ADMIN_PASSWORD: password, BRIDGE_ASSETS_DIR: assets, BRIDGE_THEME_STORE: store,
-    MMWX_BASE_URL: `http://127.0.0.1:${upstreamPort}`, MMWX_PROBE_TOKEN: 'synthetic-probe-token',
-    BRIDGE_BINDINGS: JSON.stringify(snapshot.servers.map((server: { name: string }) => ({ id: server.name, match: { name: server.name } }))),
+    BRIDGE_PREVIEW_ORIGIN: 'https://preview.example.test', BRIDGE_ASSETS_DIR: assets, BRIDGE_THEME_STORE: store,
   };
+  await mkdir(store,{recursive:true});
+  await writeFile(join(store,'state.json'),JSON.stringify({...emptyThemeState(),adminCredential:await hashPassword(password,1),source:{version:1,baseUrl:`http://127.0.0.1:${upstreamPort}`,token:'synthetic-probe-token',bindings:snapshot.servers.map((server:{name:string})=>({id:server.name,match:{name:server.name}})),pingTargets:{}}}),{mode:0o600});
   await writeFile(envFile, Object.entries(configuration).map(([key, value]) => `${key}='${value}'`).join('\n'), { mode: 0o600 });
   async function launch() {
     // Whitelist the child environment: no inherited .dev.vars or network proxy settings.
@@ -167,6 +169,15 @@ test('Node proxy subprocess: isolated origins, both native protocols, persisted 
   const adminHeaders = { Origin: `https://${adminHost}` };
   response = await request(port, adminHost, '/manage/api/login', { method: 'POST', headers: adminHeaders, body: { username: 'admin', password } });
   assert.equal(response.status, 200, response.text);
+  assert.equal(response.json.mustChangePassword,false);
+  const initialSession={...adminHeaders,Cookie:response.headers['set-cookie']![0]!.split(';')[0]!, 'X-CSRF-Token':response.json.csrf};
+  assert.equal((await request(port,adminHost,'/manage/api/state',{headers:initialSession})).status,200);
+  const newPassword='Runtime-fixture-New-2026!';
+  response=await request(port,adminHost,'/manage/api/password',{method:'POST',headers:initialSession,body:{currentPassword:password,newPassword,confirmPassword:newPassword}});
+  assert.equal(response.status,200,response.text);
+  assert.equal((await request(port,adminHost,'/manage/api/session',{headers:initialSession})).status,401);
+  response=await request(port,adminHost,'/manage/api/login',{method:'POST',headers:adminHeaders,body:{username:'admin',password:newPassword}});
+  assert.equal(response.status,200,response.text);assert.equal(response.json.mustChangePassword,false);
   const setCookie = response.headers['set-cookie']![0]!;
   assert.match(setCookie, /^__Host-leobridge_admin=/); assert.match(setCookie, /; Secure/); assert.match(setCookie, /; HttpOnly/); assert.doesNotMatch(setCookie, /Domain=/i);
   const session = { ...adminHeaders, Cookie: setCookie.split(';')[0]!, 'X-CSRF-Token': response.json.csrf };

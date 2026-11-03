@@ -2,13 +2,13 @@
 # node_modules, existing builds and pinned research copies never enter the image.
 **
 !LICENSE
-!THIRD_PARTY_NOTICES.md
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
 !tsconfig.json
 !scripts/
 !scripts/build-*.mjs
+!scripts/local-service.ts
 !src/
 !src/**
 !web/

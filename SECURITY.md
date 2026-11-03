@@ -1,6 +1,6 @@
 # 安全说明
 
-LeoBridge仍处于v0.1阶段，当前没有经过生产容量、安全审计或高可用认证。部署限制见[VPS部署指南](docs/deployment/vps.md)。
+LeoBridge仍处于v0.1阶段，当前没有经过生产容量、安全审计或高可用认证。部署方式及限制见[部署说明](docs/deployment-checklist.md)。
 
 ## 报告问题
 

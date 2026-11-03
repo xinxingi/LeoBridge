@@ -5,14 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Admin } from '../src/management/admin.ts';
 import { Site } from '../src/app/site.ts';
-import { readConfig } from '../src/core/config.ts';
+import { readConfig } from './helpers/config.ts';
 import { managementConfig, installationUrl, installationFromUrl } from '../src/management/config.ts';
 import { applyThemeCommand, commitInstallation, emptyThemeState, sha256, type Installation, type ThemeCommand, type ThemeStore } from '../src/themes/store.ts';
 import { FileThemeStore } from '../src/runtime/file-theme-store.ts';
 import type { ProtocolApplication } from '../src/app/protocols.ts';
 
 const encoder = new TextEncoder();
-const password = 'synthetic-admin-password-for-tests';
+const password = 'admin';
+const newPassword = 'New-fixture-Password-2026!';
 const ids = ['a'.repeat(32), 'b'.repeat(32), 'c'.repeat(32)];
 const ui = async () => new Response('<html>synthetic admin</html>');
 const management = () => managementConfig({
@@ -55,10 +56,16 @@ function request(path: string, options: {method?: string; body?: unknown; cookie
   return new Request(`${options.base ?? management().adminOrigin}${path}`, {method, headers, ...(options.body === undefined ? {} : {body: JSON.stringify(options.body)})});
 }
 async function login(admin: Admin) {
-  const response = await admin.handle(request('/manage/api/login', {method: 'POST', body: {username: 'admin', password}}));
+  const response = await admin.handle(request('/manage/api/login', {method: 'POST', body: {username: 'admin', password:(await admin.store.state()).adminCredential?newPassword:password}}));
   assert.equal(response.status, 200);
-  const setCookie = response.headers.get('set-cookie')!;
-  const body = await response.json() as {csrf: string};
+  let setCookie = response.headers.get('set-cookie')!;
+  let body = await response.json() as {csrf: string; mustChangePassword: boolean};
+  if(body.mustChangePassword){
+    const changed=await admin.handle(request('/manage/api/password',{method:'POST',cookie:setCookie.split(';')[0],csrf:body.csrf,body:{currentPassword:password,newPassword,confirmPassword:newPassword}}));
+    assert.equal(changed.status,200);
+    const loggedIn=await admin.handle(request('/manage/api/login',{method:'POST',body:{username:'admin',password:newPassword}}));
+    assert.equal(loggedIn.status,200);setCookie=loggedIn.headers.get('set-cookie')!;body=await loggedIn.json();
+  }
   return {cookie: setCookie.split(';')[0], csrf: body.csrf, setCookie};
 }
 async function seed(store: ThemeStore, count = 2) {
@@ -66,14 +73,26 @@ async function seed(store: ThemeStore, count = 2) {
 }
 async function code(response: Response) { return (await response.json() as {code: string}).code; }
 
-test('management is disabled until independent credentials are configured', async () => {
+test('unconfigured management uses the default password and requires rotation', async () => {
   const admin = new Admin(managementConfig({}), new MemoryStore(), ui);
-  const response = await admin.handle(request('/manage/api/login', {
-    method: 'POST', base: admin.config.adminOrigin, origin: admin.config.adminOrigin,
-    body: {username: 'admin', password: ''},
-  }));
-  assert.equal(response.status, 503);
-  assert.equal(await code(response), 'ADMIN_NOT_CONFIGURED');
+  const options={method:'POST',base:admin.config.adminOrigin,origin:admin.config.adminOrigin};
+  assert.equal((await admin.handle(request('/admin/api/login',{...options,body:{username:'admin',password:''}}))).status,401);
+  const response=await admin.handle(request('/admin/api/login',{...options,body:{username:'admin',password:'admin'}}));
+  assert.equal(response.status,200);assert.equal((await response.json()).mustChangePassword,true);
+});
+
+test('login guidance exposes only initialization status on both management routes',async()=>{
+  for(const config of [management(),managementConfig({})]){
+    const admin=new Admin(config,new MemoryStore(),ui);
+    const path=config.routing==='single'?'/admin/api/login-info':'/manage/api/login-info';
+    const response=await admin.handle(request(path,{base:config.adminOrigin}));
+    assert.equal(response.status,200);
+    assert.deepEqual(await response.json(),{showInitialPasswordHint:true,credentialSource:'default'});
+    assert.equal(response.headers.get('cache-control'),'no-store');
+    assert.equal(response.headers.get('set-cookie'),null);
+    assert.equal((await admin.handle(request(path,{base:'https://unrelated.example.test'}))).status,404);
+    assert.equal((await admin.handle(request(path,{base:config.adminOrigin,origin:config.adminOrigin,method:'POST',body:{}}))).status,401);
+  }
 });
 
 test('appearance bootstrap is available before login only on the management origin', async () => {
@@ -270,4 +289,259 @@ test('management rejects same-host isolation and non-local cleartext configurati
   assert.throws(() => managementConfig({BRIDGE_ADMIN_ORIGIN: 'http://localhost:8786', BRIDGE_DISPLAY_ORIGIN: 'http://localhost:8787'}), {code: 'ORIGIN_ISOLATION'});
   assert.throws(() => managementConfig({BRIDGE_ADMIN_ORIGIN: 'http://admin.example.test'}), {code: 'MANAGEMENT_CONFIGURATION'});
   assert.throws(() => managementConfig({BRIDGE_ADMIN_ORIGIN: 'https://admin.preview.localhost'}), {code: 'ORIGIN_ISOLATION'});
+});
+
+test('single origin defaults to root theme and /admin, with namespaced resources and path-scoped login', async () => {
+  const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test',BRIDGE_ADMIN_PASSWORD:password});
+  assert.equal(config.routing,'single'); assert.equal(config.adminOrigin,config.displayOrigin);
+  const store=new MemoryStore();await seed(store);
+  const loaded:string[]=[];
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'public'}),config,store,async path=>{loaded.push(path);return ui();});
+  site.protocols['cfsm-609cc0b']=fakeProtocol('cfsm');
+  site.protocols['komari-adhesive-v1']=fakeProtocol('komari');
+  const call=(path:string,options:Parameters<typeof request>[1]={})=>site.fetch(request(path,{base:config.displayOrigin,origin:config.displayOrigin,...options}));
+  assert.equal(await (await call('/')).text(),'<html>synthetic theme</html>');
+  assert.equal((await call('/')).headers.get('location'),null);
+  assert.equal((await call('/')).headers.get('cache-control'),'no-store');
+  assert.deepEqual(await (await call('/api/protocol')).json(),{protocol:'cfsm'});
+  assert.equal((await call('/admin')).headers.get('location'),'/admin/');
+  assert.equal((await call('/admin/')).status,200);
+  assert.equal((await call('/admin/appearance.js')).status,200);
+  assert.deepEqual(loaded,['index.html','appearance.js']);
+  assert.equal((await call('/admin/missing.js')).status,404);
+  assert.equal((await call('/manage/api/state')).status,404);
+  assert.equal((await call('/admin/api/state')).status,401);
+  const response=await call('/admin/api/login',{method:'POST',body:{username:'admin',password}});
+  assert.equal(response.status,200);
+  const setCookie=response.headers.get('set-cookie')!;
+  assert.match(setCookie,/^__Secure-leobridge_admin_path=/);assert.match(setCookie,/Path=\/admin;/);assert.match(setCookie,/HttpOnly/);assert.match(setCookie,/Secure/);
+  let cookie=setCookie.split(';')[0],{csrf}=await response.json() as {csrf:string};
+  assert.equal((await call('/admin/api/state',{cookie})).status,403);
+  assert.equal((await call('/admin/api/password',{method:'POST',cookie,csrf,body:replacement(password,newPassword)})).status,200);
+  const relogin=await call('/admin/api/login',{method:'POST',body:{username:'admin',password:newPassword}});
+  assert.equal(relogin.status,200);cookie=relogin.headers.get('set-cookie')!.split(';')[0];csrf=(await relogin.json()).csrf;
+  const state=await (await call('/admin/api/state',{cookie})).json() as any;
+  assert.equal(state.links[state.active].display,config.displayOrigin);
+  let changes=0;site.onActiveThemeChange=()=>changes++;
+  const body={id:ids[1],generation:state.generation};
+  assert.equal((await call('/admin/api/activate',{method:'POST',cookie,body})).status,403);
+  assert.equal((await call('/admin/api/activate',{method:'POST',cookie,csrf,body,origin:'https://other.invalid'})).status,403);
+  assert.equal(changes,0);
+  assert.equal((await call('/admin/api/activate',{method:'POST',cookie,csrf,body})).status,200);
+  assert.equal(changes,1);
+  assert.deepEqual(await (await call('/api/protocol')).json(),{protocol:'komari'});
+  const rootWs=new Request(config.displayOrigin+'/api/rpc2',{headers:{origin:config.displayOrigin}});
+  assert.equal(await site.websocket(rootWs),site.protocols['komari-adhesive-v1']);
+  assert.equal(await site.websocket(new Request(rootWs.url,{headers:{origin:'https://other.invalid'}})),null);
+  const preview=installationUrl(config,ids[0],true);
+  assert.equal((await site.fetch(new Request(new URL('/admin/api/state'+new URL(preview).search,preview),{headers:{cookie}}))).status,404);
+  assert.equal((await call('/admin/api/logout',{method:'POST',cookie,csrf,body:{}})).status,200);
+  assert.equal((await call('/admin/api/state',{cookie})).status,401);
+});
+
+async function rawLogin(admin:Admin,password='admin'){
+  const response=await admin.handle(request('/manage/api/login',{method:'POST',body:{username:'admin',password}}));
+  const body=await response.json();
+  return {response,data:body,cookie:response.headers.get('set-cookie')?.split(';')[0],csrf:body.csrf};
+}
+const replacement=(currentPassword:string,newPassword='Fresh-fixture-Secret-2026!')=>({currentPassword,newPassword,confirmPassword:newPassword});
+
+test('bootstrap sessions, including legacy sessions, cannot bypass mandatory rotation',async()=>{
+  const store=new MemoryStore(),admin=new Admin(management(),store,ui);
+  const session=await rawLogin(admin);
+  assert.equal(session.data.mustChangePassword,true);
+  const resumed=new Admin(admin.config,store,ui);
+  assert.equal((await (await resumed.handle(request('/manage/api/session',session))).json()).mustChangePassword,true);
+  // Old deployments had no credentialVersion. They must also enter the restricted flow.
+  delete Object.values(store.value.sessions)[0].credentialVersion;
+  for(const path of ['state','catalog?ecosystem=cfsm','install','activate','rollback']){
+    const response=await resumed.handle(request(`/manage/api/${path}`,{...session,...(['install','activate','rollback'].includes(path)?{method:'POST',body:{}}:{})}));
+    assert.equal(response.status,403);assert.equal(await code(response),'PASSWORD_CHANGE_REQUIRED');
+  }
+  const loggedOut=await resumed.handle(request('/manage/api/logout',{...session,method:'POST',body:{}}));
+  assert.equal(loggedOut.status,200);
+});
+
+test('password changes enforce origin, CSRF, current password, strength and confirmation on the server',async()=>{
+  const store=new MemoryStore(),admin=new Admin(management(),store,ui),session=await rawLogin(admin);
+  const change=(body:unknown,options={})=>admin.handle(request('/manage/api/password',{...session,method:'POST',body,...options}));
+  assert.equal(await code(await change(replacement('admin'),{origin:management().displayOrigin})),'ORIGIN_REJECTED');
+  assert.equal(await code(await change(replacement('admin'),{csrf:'wrong'})),'CSRF_REJECTED');
+  assert.equal(await code(await change(replacement('wrong'))),'CURRENT_PASSWORD');
+  for(const weak of ['admin','Short1!','lowercase-only-123!','UPPERCASE-ONLY-123!','No-Numbers-Here!','MissingSymbols123','Password123!','A1!a'.repeat(33)]){
+    assert.equal(await code(await change(replacement('admin',weak))),'WEAK_PASSWORD');
+  }
+  // Policy validation failures consume the same bounded attempt budget.
+  assert.equal((await change({...replacement('admin'),confirmPassword:'different'})).status,400);
+  assert.equal(await code(await change(replacement('admin'))),'LOGIN_THROTTLED');
+  assert.equal(store.value.adminCredential,undefined);
+  const another=await rawLogin(admin);
+  const mismatch=await admin.handle(request('/manage/api/password',{...another,method:'POST',body:{...replacement('admin'),confirmPassword:'different'}}));
+  assert.equal(await code(mismatch),'PASSWORD_MISMATCH');
+});
+
+test('password rotation is durable, stores only a salted hash and revokes every old session',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'bridge-password-'));
+  try{
+    const store=new FileThemeStore(root),config=management(),admin=new Admin(config,store,ui);
+    await seed(store);
+    assert.deepEqual(await (await admin.handle(request('/manage/api/login-info'))).json(),{showInitialPasswordHint:true,credentialSource:'default'});
+    const first=await rawLogin(admin),second=await rawLogin(admin),before=await store.state(),body=replacement('admin');
+    const changed=await admin.handle(request('/manage/api/password',{...first,method:'POST',body}));
+    assert.equal(changed.status,200);assert.match(changed.headers.get('set-cookie')!,/Max-Age=0/);
+    const saved=await store.state();
+    assert.equal(saved.generation,before.generation);assert.equal(saved.active,before.active);
+    assert.equal(saved.adminCredential?.iterations,600000);assert.equal(saved.adminCredential?.version,1);
+    assert.match(saved.adminCredential!.salt,/^[a-f0-9]{32}$/);assert.match(saved.adminCredential!.hash,/^[a-f0-9]{64}$/);
+    assert.ok(!JSON.stringify(saved).includes(body.newPassword));assert.ok(!JSON.stringify(saved).includes('"admin"'));
+    const restarted=new Admin(config,new FileThemeStore(root),ui);
+    assert.deepEqual(await (await restarted.handle(request('/manage/api/login-info'))).json(),{showInitialPasswordHint:false,credentialSource:'saved'});
+    for(const session of [first,second])assert.equal((await restarted.handle(request('/manage/api/session',session))).status,401);
+    for(const old of ['admin','Other-bootstrap-password-2026'])assert.equal((await rawLogin(restarted,old)).response.status,401);
+    const current=await rawLogin(restarted,body.newPassword);assert.equal(current.response.status,200);assert.equal(current.data.mustChangePassword,false);
+    const publicResponse=await restarted.handle(request('/manage/api/state',current)),text=await publicResponse.text();
+    assert.equal(publicResponse.status,200);
+    for(const secret of ['adminCredential','sessions',saved.adminCredential!.hash,saved.adminCredential!.salt])assert.ok(!text.includes(secret));
+    const unchanged=await restarted.handle(request('/manage/api/password',{...current,method:'POST',body:replacement(body.newPassword,body.newPassword)}));
+    assert.equal(await code(unchanged),'PASSWORD_UNCHANGED');
+  }finally{await rm(root,{recursive:true,force:true});}
+});
+
+test('concurrent rotations have exactly one winner and stale login commits are rejected',async()=>{
+  const store=new MemoryStore(),admin=new Admin(management(),store,ui),first=await rawLogin(admin),second=await rawLogin(admin);
+  const responses=await Promise.all([first,second].map((session,index)=>admin.handle(request('/manage/api/password',{...session,method:'POST',body:replacement('admin',`Concurrent-fixture-${index}-2026!`)}))));
+  assert.deepEqual(responses.map(r=>r.status).sort(),[200,401]);
+  assert.equal(store.value.adminCredential?.version,1);assert.deepEqual(store.value.sessions,{});
+  await assert.rejects(store.command({type:'session',id:'stale',session:{csrf:'old',expires:Date.now()+60000,credentialVersion:0}}),/密码已变更/);
+  const winner=responses.findIndex(r=>r.status===200);
+  assert.equal((await rawLogin(admin,`Concurrent-fixture-${winner}-2026!`)).response.status,200);
+  assert.equal((await rawLogin(admin,`Concurrent-fixture-${1-winner}-2026!`)).response.status,401);
+});
+
+test('empty instances show setup only at root, preserve access control and have no websocket protocol',async()=>{
+  for(const mgmt of [management(),managementConfig({})]){
+    const config=readConfig({MMWX_BASE_URL:'https://source.invalid',MMWX_PROBE_TOKEN:'synthetic',BRIDGE_BINDINGS:'[]',BRIDGE_ACCESS:'public'});
+    const store=new MemoryStore(),site=new Site(config,mgmt,store,ui);
+    const root=new Request(mgmt.displayOrigin+'/');
+    const response=await site.fetch(root);assert.equal(response.status,200);assert.match(await response.text(),/默认不内置第三方主题/);
+    assert.equal(response.headers.get('cache-control'),'no-store');
+    assert.equal((await site.fetch(new Request(mgmt.displayOrigin+'/api/servers'))).status,404);
+    assert.equal(await site.websocket(new Request(mgmt.displayOrigin+'/api/ws')),null);
+    assert.equal((await site.fetch(new Request(mgmt.displayOrigin+'/',{method:'HEAD'}))).body,null);
+    assert.equal((await store.state()).active,null);
+    const privateSite=new Site({...config,access:'private',username:'viewer',password:'synthetic-password'},mgmt,store,ui);
+    assert.equal((await privateSite.fetch(root)).status,401);
+  }
+});
+
+test('install requires a session-bound review and explicit confirmation, durable across restart; unknown license stays unknown',async()=>{
+  const {zipSync}=await import('fflate');
+  const {INSTALL_NOTICE_VERSION}=await import('../src/themes/store.ts');
+  const archive=zipSync({'komari-theme.json':encoder.encode(JSON.stringify({short:'Synthetic',version:'1'})),'dist/index.html':encoder.encode('<p>Synthetic</p>'),LICENSE:encoder.encode('Custom terms <script>not executed</script>')});
+  const digest=await sha256(archive),revision='f'.repeat(40);
+  const realFetch=globalThis.fetch;let downloads=0;
+  globalThis.fetch=async(input)=>{
+    const url=String(input);
+    if(url.endsWith('/v1.json'))return Response.json({schema:1,themes:[{short:'Synthetic',name:'Synthetic',version:'1',url:'https://github.com/example/theme',download:'https://github.com/example/theme/releases/download/1/theme.zip',sha256:digest}]});
+    downloads++;return new Response(new Uint8Array(archive));
+  };
+  const directory=await mkdtemp(join(tmpdir(),'leobridge-review-'));
+  try{
+    const store=new FileThemeStore(directory),admin=new Admin(management(),store,ui),session=await login(admin);
+    const post=(app:Admin,path:string,body:unknown,auth=session)=>app.handle(request('/manage/api/'+path,{method:'POST',...auth,body}));
+    assert.equal(await code(await post(admin,'install',{ecosystem:'komari',id:'Synthetic',catalogRevision:revision})),'INSTALL_CONFIRMATION_REQUIRED');
+    assert.equal(downloads,0);
+    const prepared=await post(admin,'prepare-install',{ecosystem:'komari',id:'Synthetic',catalogRevision:revision});
+    assert.equal(prepared.status,200);const review=await prepared.json();
+    assert.equal(review.license.status,'found');assert.equal(review.license.spdx,'NOASSERTION');assert.match(review.license.documents[0].text,/<script>/);
+    assert.equal(Object.keys((await store.state()).installations).length,0);
+    assert.equal(JSON.stringify(publicThemeStateForTest(await store.state())).includes(review.reviewId),false);
+    const body={reviewId:review.reviewId,noticeVersion:INSTALL_NOTICE_VERSION,acknowledge:true};
+    assert.equal(await code(await post(admin,'install',{...body,acknowledge:'true'})),'INSTALL_CONFIRMATION_REQUIRED');
+    assert.equal(await code(await post(admin,'install',{...body,noticeVersion:'old'})),'INSTALL_CONFIRMATION_REQUIRED');
+    const other=await login(admin);
+    assert.equal(await code(await post(admin,'install',body,other)),'INSTALL_REVIEW_EXPIRED');
+    const restarted=new Admin(management(),new FileThemeStore(directory),ui);
+    const installed=await post(restarted,'install',body);assert.equal(installed.status,200);
+    const {id}=await installed.json(),state=await restarted.store.state(),item=state.installations[id];
+    assert.equal(state.active,null);assert.equal(item.compatibility,'unverified');assert.equal(item.bundled,false);
+    assert.equal(item.confirmation?.digest,review.digest);assert.equal(item.confirmation?.noticeVersion,INSTALL_NOTICE_VERSION);assert.equal(item.confirmation?.source,review.source);assert.ok(item.confirmation?.at);
+    assert.equal(item.license.spdx,'NOASSERTION');assert.equal(downloads,2);
+    assert.equal(await code(await post(restarted,'install',body)),'INSTALL_REVIEW_EXPIRED');
+    const next=await (await post(restarted,'prepare-install',{ecosystem:'komari',id:'Synthetic',catalogRevision:revision})).json();
+    const sessionId=await sha256(session.cookie.split('=')[1]);
+    const pending=(await restarted.store.state()).sessions[sessionId].review!;
+    await restarted.store.command({type:'review',sessionId,review:{...pending,expires:0}});
+    assert.equal(await code(await post(restarted,'install',{...body,reviewId:next.reviewId})),'INSTALL_REVIEW_EXPIRED');
+  }finally{globalThis.fetch=realFetch;await rm(directory,{recursive:true,force:true});}
+});
+function publicThemeStateForTest(state:Awaited<ReturnType<ThemeStore['state']>>){const {sessions,adminCredential,...rest}=state;return rest;}
+
+test('confirmed missing-license package still rejects changed bytes, and final commit rejects revoked reviews',async()=>{
+  const {zipSync}=await import('fflate');
+  const {INSTALL_NOTICE_VERSION}=await import('../src/themes/store.ts');
+  const archive=zipSync({'komari-theme.json':encoder.encode(JSON.stringify({short:'Synthetic',version:'1'})),'dist/index.html':encoder.encode('<p>Synthetic</p>')});
+  let changed=false;const realFetch=globalThis.fetch;
+  globalThis.fetch=async(input)=>String(input).endsWith('/v1.json')?Response.json({schema:1,themes:[{short:'Synthetic',version:'1',download:'https://github.com/example/theme/releases/download/1/theme.zip',sha256:await sha256(archive)}]}):new Response(changed?encoder.encode('changed'):new Uint8Array(archive));
+  try{
+    const store=new MemoryStore(),admin=new Admin(management(),store,ui),auth=await login(admin);
+    const post=(path:string,body:unknown)=>admin.handle(request('/manage/api/'+path,{method:'POST',...auth,body}));
+    const review=await(await post('prepare-install',{ecosystem:'komari',id:'Synthetic',catalogRevision:'a'.repeat(40)})).json();assert.equal(review.license.status,'missing');
+    const body={reviewId:review.reviewId,noticeVersion:INSTALL_NOTICE_VERSION,acknowledge:true};
+    changed=true;assert.equal(await code(await post('install',body)),'PACKAGE_SHA256');assert.equal(store.value.generation,0);
+    changed=false;const result=await post('install',body);assert.equal(result.status,200);
+    const id=(await result.json()).id;assert.equal(store.value.installations[id].confirmation?.licenseStatus,'missing');
+    assert.equal(store.value.installations[id].license.text,'');assert.equal(store.value.installations[id].files.LICENSE,undefined);
+    const item=installation(1,{packageDigest:review.digest});
+    await assert.rejects(commitInstallation(store,item,files(),false,{sessionId:'revoked',id:review.reviewId}),{code:'INSTALL_REVIEW_EXPIRED'});
+    assert.equal(store.value.installations[item.id],undefined);
+  }finally{globalThis.fetch=realFetch;}
+});
+
+test('empty distribution manifest seeds nothing and leaves existing installations and pointers intact',async()=>{
+  const {seedBundled}=await import('../src/themes/bundled.ts');
+  const store=new MemoryStore();const load=async(path:string)=>{assert.equal(path,'index.json');return encoder.encode('[]');};
+  await seedBundled(store,load);assert.deepEqual(await store.state(),emptyThemeState());
+  await seed(store);await store.command({type:'activate',id:ids[1],expectedGeneration:store.value.generation});
+  const before=await store.state();await seedBundled(store,load);assert.deepEqual(await store.state(),before);
+});
+
+test('single-domain previews bind each request to its version without changing active theme or sharing cookies',async()=>{
+  const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test'}),store=new MemoryStore();await seed(store);
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'public'}),config,store,ui);
+  site.protocols['cfsm-609cc0b']=fakeProtocol('cfsm');site.protocols['komari-adhesive-v1']=fakeProtocol('komari');
+  const get=(path:string,headers?:Record<string,string>)=>site.fetch(new Request(config.displayOrigin+path,{headers}));
+  const preview=`?__preview=${ids[1]}`;
+  assert.equal(installationUrl(config,ids[1],true),config.displayOrigin+'/'+preview);
+  assert.equal(config.previewOrigin,config.displayOrigin);
+  assert.deepEqual(await (await get('/api/protocol'+preview)).json(),{protocol:'komari'});
+  assert.deepEqual(await (await get('/api/protocol')).json(),{protocol:'cfsm'});
+  const html=await get('/'+preview);assert.match(await html.text(),/__preview/);
+  assert.equal(html.headers.get('set-cookie'),null);assert.equal(html.headers.get('referrer-policy'),'same-origin');
+  assert.equal(html.headers.get('cache-control'),'no-store');
+  const referrer=config.displayOrigin+'/'+preview;
+  const asset=await get('/index.html?original=1',{referer:referrer});
+  assert.equal(asset.status,307);assert.equal(asset.headers.get('location'),config.displayOrigin+'/index.html?original=1&__preview='+ids[1]);
+  assert.equal(asset.headers.get('vary'),'Referer');assert.equal(asset.headers.get('cache-control'),'no-store');
+  const nested=await get('/image.png',{referer:asset.headers.get('location')!});assert.equal(nested.status,307);
+  assert.equal((await get('/index.html',{referer:'https://external.invalid/'+preview})).status,200);
+  assert.equal((await get('/admin/api/state'+preview)).status,404);
+  for(const invalid of ['bad','',ids[1]+'&__preview='+ids[0]])assert.equal((await get('/?__preview='+invalid)).status,400);
+  assert.equal((await get('/?__preview='+ids[2])).status,404);
+  const ws=new Request(config.displayOrigin+'/api/rpc2'+preview,{headers:{Origin:config.displayOrigin}});
+  assert.equal(await site.websocket(ws),site.protocols['komari-adhesive-v1']);
+  assert.equal(await site.websocket(new Request(ws.url,{headers:{Origin:'https://external.invalid'}})),null);
+  await store.command({type:'activate',id:ids[1],expectedGeneration:(await store.state()).generation});
+  assert.deepEqual(await (await get('/api/protocol?__preview='+ids[0])).json(),{protocol:'cfsm'});
+  assert.deepEqual(await (await get('/api/protocol')).json(),{protocol:'komari'});
+  await store.command({type:'rollback',expectedGeneration:(await store.state()).generation});
+  assert.deepEqual(await (await get('/api/protocol'+preview)).json(),{protocol:'komari'});
+});
+
+test('same-domain preview respects private display access for HTML, APIs and websocket',async()=>{
+  const config=managementConfig({}),store=new MemoryStore();await seed(store);
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'private',BRIDGE_USERNAME:'viewer',BRIDGE_PASSWORD:'synthetic-viewer-password'}),config,store,ui);
+  site.protocols['cfsm-609cc0b']=fakeProtocol('cfsm');
+  for(const path of ['/','/index.html','/api/protocol'])assert.equal((await site.fetch(new Request(config.displayOrigin+path+'?__preview='+ids[0]))).status,401);
+  assert.equal(await site.websocket(new Request(config.displayOrigin+'/api/ws?__preview='+ids[0])),null);
 });

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { realtime, type Socket } from '../src/protocols/cfsm/realtime.ts';
-import { readConfig } from '../src/core/config.ts';
+import { readConfig } from './helpers/config.ts';
 import { Upstream, type Fetcher } from '../src/upstream/client.ts';
 import { resolveBindings } from '../src/core/identity.ts';
 import { toServer } from '../src/protocols/cfsm/adapter.ts';

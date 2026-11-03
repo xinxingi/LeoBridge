@@ -7,6 +7,6 @@
 - `snapshot-hidden-names.json`：名称隐藏与稀疏指标，验证不能凭空获取身份。
 - `snapshot-duplicate-names.json`：同名且缺少可区分属性，验证身份歧义不能静默通过。
 
-后续测试可对 basic 样例交换数组顺序，检验身份绑定；不要以当前下标作为永久ID。CFSM预期输出需要核实其源码后单独制定，不能直接从转换函数生成断言。
+可对 basic 样例交换数组顺序，检验身份绑定；不要以当前下标作为永久ID。预期输出应依据[消费者契约](../research/frontend-contract.md)和源事实制定，不能直接从转换函数生成断言。
 
-暂未提供 Ping/历史/WS 的“官方响应样例”：文档未完整定义的结构应等待真实响应验证，再以 observed 或 synthetic 区分保存。
+此目录只保存四份合成快照。Ping/历史/WS的实测结构见[输入契约](../research/upstream-contract.md)，测试内另有合成样例；真实原始响应保持私有，不作为公开fixture分发。

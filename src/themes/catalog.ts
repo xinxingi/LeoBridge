@@ -73,7 +73,7 @@ export async function fetchPublicBytes(value: string, options: { fetcher?: Publi
     throw new ThemePackageError(abort.signal.aborted ? 'DOWNLOAD_TIMEOUT' : 'DOWNLOAD_UNAVAILABLE', '公开主题来源暂时无法读取。', 502);
   } finally { clearTimeout(timer); }
 }
-export async function fetchPublicJson(value: string, options: { fetcher?: PublicFetcher; maxBytes?: number } = {}): Promise<unknown> {
+export async function fetchPublicJson(value: string, options: { fetcher?: PublicFetcher; maxBytes?: number; timeoutMs?: number } = {}): Promise<unknown> {
   const bytes = await fetchPublicBytes(value, options);
   try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw new ThemePackageError('CATALOG_JSON', '公开来源未返回有效JSON。', 502); }
 }
@@ -120,7 +120,6 @@ export function parseKomariCatalog(raw: unknown): CatalogEntry[] {
     } else entry.blockReasons.push('DOWNLOAD_REQUIRED');
     if (typeof item.sha256 === 'string' && /^[a-fA-F0-9]{64}$/.test(item.sha256)) entry.sha256 = item.sha256.toLowerCase();
     else entry.blockReasons.push('SHA256_REQUIRED');
-    if (!entry.repositoryUrl) entry.blockReasons.push('LICENSE_REPOSITORY_REQUIRED');
     entry.canAttemptInstall = entry.blockReasons.length === 0;
     return entry;
   }));
