@@ -6,8 +6,6 @@
 
 LeoBridge 只读访问妙妙屋X探针 API，转换服务器状态、历史和实时协议，并提供独立的主题管理站。采集、服务器管理和历史保存仍由妙妙屋X负责，无需安装新的 Agent。
 
-支持在 Linux VPS 上通过 Docker Compose 部署，提供 nginx 反向代理、持久化存储及备份恢复配置。
-
 ## 可以做什么
 
 - 使用 CFSM 默认前台或 Komari Adhesive Note 查看首页、详情、系统历史和 Ping 图表。
@@ -17,23 +15,9 @@ LeoBridge 只读访问妙妙屋X探针 API，转换服务器状态、历史和�
 
 兼容结论只覆盖经过适配的两个内置包。商店安装成功不等于实测兼容。缺失指标显示未知，历史空缺不补点；服务器身份必须通过显式绑定校验。[兼容范围与限制](docs/research/compatibility.md)
 
-## VPS 部署
+## 部署
 
-推荐 **Docker Compose + nginx + 持久卷**。当前没有公开预构建镜像，请从审查过的源码构建。
-
-需要 Docker Engine、Compose v2，以及管理、展示、版本和预览所需的 DNS 与 TLS 证书。不同用途的主机名是主题隔离的一部分，详细示例见 [VPS 部署指南](docs/deployment/vps.md)。
-
-```sh
-cd deploy/docker
-cp .env.example .env       # 仅首次；已有配置不要覆盖
-chmod 600 .env
-# 在编辑器中填写上游、独立密码、域名、证书路径及身份绑定
-docker compose config --quiet
-docker compose build --pull app
-docker compose up -d
-```
-
-应用容器以非 root 用户运行，不向宿主发布后端端口；只信任指定 nginx 代理。主题包、安装记录和管理状态保存在持久卷。部署指南包含首次配置、健康检查、备份恢复、升级、回退及可选 systemd 模板。
+LeoBridge 以 Node.js 服务运行，可直接部署或使用 Docker。上游连接、身份绑定和访问策略见[配置参考](docs/configuration.md)；安装、HTTPS 接入、持久化及升级步骤见[VPS 部署指南](docs/deployment/vps.md)。当前没有公开预构建镜像，Docker 部署需从源码构建。
 
 ## 本地开发
 
@@ -60,7 +44,7 @@ pnpm dev
 ```text
 src/        中立模型、上游、协议、主题、管理、应用组合与运行时
 web/        独立管理界面及两套固定版本主题源码
-deploy/    Docker/nginx 与 systemd 部署工件
+deploy/    容器、反向代理及服务管理配置示例
 scripts/    构建、配置、架构检查与只读验收工具
 tests/      核心、协议、管理及运行时测试
 docs/       用户指南、架构、协议契约与第三方参考资料

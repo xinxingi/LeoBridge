@@ -76,6 +76,22 @@ test('management is disabled until independent credentials are configured', asyn
   assert.equal(await code(response), 'ADMIN_NOT_CONFIGURED');
 });
 
+test('appearance bootstrap is available before login only on the management origin', async () => {
+  const loaded: string[] = [];
+  const admin = new Admin(management(), new MemoryStore(), async path => {
+    loaded.push(path);
+    return new Response('/* appearance bootstrap */', { headers: { 'Content-Type': 'text/javascript' } });
+  });
+  const response = await admin.handle(request('/appearance.js'));
+  assert.equal(response.status, 200);
+  assert.deepEqual(loaded, ['appearance.js']);
+  assert.match(response.headers.get('content-security-policy')!, /script-src 'self'/);
+  assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin');
+  assert.equal((await admin.handle(request('/appearance.js', { base: management().displayOrigin }))).status, 404);
+  assert.equal((await admin.handle(request('/appearance.js', { method: 'POST' }))).status, 405);
+  assert.equal((await admin.handle(request('/unknown.js'))).status, 404);
+});
+
 test('login cookie is host-only, secure and HttpOnly; state never exposes session hashes or CSRF', async () => {
   const store = new MemoryStore();
   const admin = new Admin(management(), store, ui);

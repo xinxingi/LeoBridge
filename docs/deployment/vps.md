@@ -1,10 +1,21 @@
-# VPS 部署：Node、Docker Compose 与 nginx
+# VPS 部署
 
-VPS 是当前优先交付的部署方式。本文提供可审查的部署工件。本机Docker/nginx合成验收已通过；用户提供的测试VPS按[SSH私有方式](ssh-test.md)推进，**公网DNS/TLS和生产验收仍待完成**。本地或SSH测试均不等于公开上线。Workers 保留为后续部署选项。
+LeoBridge以单个Node进程运行，主题包及管理状态保存在持久目录或卷中。可以直接运行Node，也可以使用Docker；镜像需从源码构建。
 
-应用以单个 Node 进程运行，nginx 终止 HTTPS/WSS，主题和管理状态保存在持久卷。桥接器继续只读访问已配置的妙妙屋X，历史仍由上游保存；不安装采集 Agent，也不运行 CFSM/Komari 完整后端。当前没有官方预构建公开镜像、自动发布或远程部署流程，镜像由使用者从审查过的检出本地构建。
+## HTTPS与反向代理
 
-## 准备与域名
+远程部署使用`BRIDGE_NODE_MODE=proxy`，由外部反向代理提供HTTPS/WSS。可以选择nginx、Caddy或已有网关；应用接入要求相同：
+
+- 保留原始`Host`，将管理、展示、主题版本及预览域名转发到同一个应用监听端口。
+- 支持WebSocket升级，证书覆盖所有实际使用的主机名。
+- 覆盖`X-Forwarded-Proto`为单值`https`，覆盖`X-Real-IP`为可信来源的单个客户端IP；不能原样信任访客传入的值。
+- 将代理连接应用时的实际IP/CIDR配置到`BRIDGE_TRUSTED_PROXIES`，限制后端端口仅供代理访问。
+
+使用Caddy时也需按上述要求显式配置客户端IP头，并处理版本及预览子域的证书。现有Compose文件包含nginx服务；换用Caddy时需调整代理服务、网络及可信代理地址。仓库未提供经过验证的Caddy配置。
+
+下文使用仓库内的Docker Compose与nginx模板演示完整部署流程，其中服务名、证书挂载及重载命令仅适用于该示例。直接运行Node可参考[systemd方式](#非容器备选systemd)。
+
+## Docker Compose示例：准备与域名
 
 目标机器需有 Docker Engine、Docker Compose v2（建议当前受支持版本）、可访问依赖源和授权主控的出站网络。应用构建使用 Node 24、pnpm 11.25.0 和冻结锁文件。宿主入口仅发布80/443；为容器和构建预留资源并按实际流量观察，当前没有生产容量或高可用承诺。
 
@@ -25,7 +36,7 @@ VPS 是当前优先交付的部署方式。本文提供可审查的部署工件�
 
 ## 配置及首次启动
 
-以下命令在目标机器上由部署者执行；本文没有替你运行远程部署。
+在目标机器的项目目录中执行：
 
 ```sh
 cd /path/to/LeoBridge/deploy/docker

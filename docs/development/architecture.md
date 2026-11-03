@@ -32,7 +32,7 @@ flowchart LR
 | `src/runtime` | Node/Worker入口、文件/R2/DO存储、代理 | 上述层、runtime |
 | `web/admin` | 可信管理界面 | 仅管理HTTP API |
 | `web/themes/*` | 固定版本主题副本 | 仅所在安装主机的展示API |
-| `deploy` | Docker/nginx/systemd部署模板 | 不承载业务逻辑 |
+| `deploy` | 容器、反向代理及服务管理配置示例 | 不承载业务逻辑 |
 | `scripts` / `tests` | 构建、初始化、架构检查和验证 | 可以组合被测模块，不被产品代码导入 |
 
 不新增空层或无用途的`index.ts`。目前具体入口文件就是公开契约，例如`core/socket.ts`、`themes/store.ts`；新增可复用包后再考虑package exports。旧的静态主题选择辅助仅用于兼容历史调用，活动主题选择由管理状态决定，不据它推断只支持CFSM。
@@ -40,6 +40,8 @@ flowchart LR
 `pnpm check:architecture`用TypeScript AST读取import、export、import type和字面量动态import，拒绝跨层/跨生态依赖、缺失模块、依赖环和无法检查的动态模块加载。Node内置模块及Node专用传输依赖仅允许在runtime；Worker入口会递归检查可达依赖，避免误带Node能力。它是项目内约束检查，不代替类型、行为测试或供应链审查。
 
 ## VPS运行边界
+
+反向代理由部署环境选择。应用约定HTTPS来源、Host及可信客户端IP的传递方式，不依赖nginx或Caddy的产品接口；仓库部署模板是该约定的一种配置示例。
 
 Node分两种显式模式：local保留回环多端口开发；proxy用单监听端口服务多个HTTPS源。只有允许的代理IP/CIDR可以提供单值`X-Forwarded-Proto=https`和`X-Real-IP`。Host必须匹配配置源或有效版本域；HTTP与WS使用同一验证函数。来自客户的Forwarded/X-Forwarded-Host/CF-Connecting-IP不能改变路由或绕过管理节流。
 
