@@ -1,12 +1,15 @@
 name: check
 on:
   push:
+    branches: ["**"]
   pull_request:
+  workflow_call:
 permissions:
   contents: read
 jobs:
   local-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,3 +26,4 @@ jobs:
           BRIDGE_TEST_BUILT_NODE: '1'
       - run: pnpm build:worker # Deferred adapter remains buildable; no deployment.
       - run: docker build --tag leobridge:ci --file deploy/docker/Dockerfile .
+      - run: node scripts/verify-release.mjs image leobridge:ci
