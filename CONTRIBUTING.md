@@ -20,6 +20,6 @@
 
 ## 来源与公开信息
 
-主题副本的LICENSE、UPSTREAM、PATCHES须随代码保留；第三方代码和字体许可见[声明](THIRD_PARTY_NOTICES.md)。提交之前检查凭据、原始响应、服务器名称/绑定和私有地址。安全问题按[安全说明](SECURITY.md)处理。
+主题副本的LICENSE、UPSTREAM、PATCHES须随代码保留；第三方代码和字体许可见[声明](docs/references/retired-themes/README.md)。提交之前检查凭据、原始响应、服务器名称/绑定和私有地址。安全问题按[安全说明](SECURITY.md)处理。
 
 提交内容应包括代码、必要的使用说明和可复现的验证方法。个人工作计划、AI 会话记录、临时验收日志和测试环境交接信息仅保留在本地，不提交到仓库。PR 中说明本次修改的实际验证结果与限制。

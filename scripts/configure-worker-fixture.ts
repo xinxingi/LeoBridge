@@ -1,7 +1,7 @@
 /** Reproducible, synthetic-only local workerd setup. Never reads repository
  * .dev.vars, imports the real Node runtime, starts workerd, or deploys anything.
  * Default: generate private fixture files without overwriting modified files.
- * --check: validate the generated files and both existing local build bundles.
+ * --check: validate generated files and management assets (no bundled themes).
  * --serve-upstream: explicitly run only the synthetic upstream on 127.0.0.1:8791.
  */
 import { createServer } from 'node:http';
@@ -91,12 +91,9 @@ async function configure() {
   const bundleRoot = resolve(root, 'dist/bundled');
   let bundles: unknown;
   try { bundles = JSON.parse(await readFile(resolve(bundleRoot, 'index.json'), 'utf8')); }
-  catch { throw new Error('Build both themes first: pnpm build.'); }
-  if (!Array.isArray(bundles) || !['cfsm', 'komari'].every(ecosystem => bundles.some(item => item && item.ecosystem === ecosystem && /^[a-f0-9]{32}$/.test(item.id) && item.entry === 'index.html'))) throw new Error('dist/bundled/index.json must contain both local theme builds.');
-  for (const item of bundles) {
-    if (!item || !/^[a-f0-9]{32}$/.test(item.id) || item.entry !== 'index.html') throw new Error('Invalid local theme build manifest.');
-    await readFile(resolve(bundleRoot, item.id, 'index.html'));
-  }
+  catch { throw new Error('Build management assets first: pnpm build.'); }
+  if (!Array.isArray(bundles) || bundles.length !== 0) throw new Error('Expected a theme-free product build; run pnpm build.');
+  await readFile(resolve(bundleRoot, '_management/index.html'));
   const env: Record<string, string> = {
     MMWX_BASE_URL: `http://127.0.0.1:${upstreamPort}`, MMWX_PROBE_TOKEN: syntheticToken,
     BRIDGE_ACCESS: 'local', BRIDGE_TITLE: 'LeoBridge Synthetic Worker Fixture',

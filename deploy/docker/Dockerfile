@@ -8,7 +8,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build
-COPY tsconfig.json LICENSE THIRD_PARTY_NOTICES.md ./
+COPY tsconfig.json LICENSE ./
 COPY scripts/ ./scripts/
 COPY src/ ./src/
 COPY web/ ./web/
@@ -21,7 +21,7 @@ FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/package.json /app/LICENSE /app/THIRD_PARTY_NOTICES.md ./
+COPY --from=build --chown=node:node /app/package.json /app/LICENSE ./
 COPY --from=build --chown=node:node /app/dist/node.js ./dist/node.js
 COPY --from=build --chown=node:node /app/dist/bundled ./dist/bundled
 RUN mkdir -p /data/theme-store && chown node:node /data/theme-store && chmod 700 /data/theme-store

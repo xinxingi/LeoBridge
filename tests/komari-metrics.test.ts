@@ -5,15 +5,8 @@ import { pingTaskId } from '../src/protocols/komari/adapter.ts';
 import { KomariService } from '../src/protocols/komari/service.ts';
 import { Upstream } from '../src/upstream/client.ts';
 import { readConfig } from '../src/core/config.ts';
-import { metricPointsWithGaps } from '../web/themes/komari-default/src/utils/metricSeries.ts';
 
 const now=Date.parse('2026-11-03T05:00:00Z');
-test('official chart rendering breaks long gaps without fabricating numeric samples',()=>{
-  const points=[{time:new Date(now-900000).toISOString(),value:0},{time:new Date(now).toISOString(),value:12}];
-  const result=metricPointsWithGaps({metric_key:'cpu.usage',entity_id:'opaque',count:2,interval_seconds:300,points});
-  assert.equal(result.length,3);assert.equal(result[1]?.value,null);
-  assert.deepEqual(result.filter(point=>point.value!==null),points);assert.equal(points.length,2);
-});
 test('official metric series preserve zero, missing capacity, units, timestamps and source gaps',()=>{
   const result=queryMetrics({bucketSeconds:300,points:[{timestamp:now-900000,cpuPercent:0,memoryUsedBytes:1048576},{timestamp:now,cpuPercent:12}],pings:[]},
     'stable',['cpu.usage','memory.used','memory.total','gpu.usage'],{},now-3600000,now);

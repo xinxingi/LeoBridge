@@ -8,12 +8,12 @@ LeoBridge 只读访问妙妙屋X探针 API，转换服务器状态、历史和�
 
 ## 可以做什么
 
-- 使用 CFSM 默认前台或 Komari 官方默认主题 查看首页、详情、系统历史和 Ping 图表。
+- 通过商店按需安装 CFSM 或 Komari 主题，使用桥接协议展示状态与历史；具体展示能力取决于主题兼容性。
 - 在独立后台浏览两个主题商店，安装固定版本、隔离预览、启用和回退，无需重新部署。
 - 默认一个端口：`/` 展示探针，`/admin/` 管理；主题切换后刷新首页生效。需要主题源隔离时可显式选择isolated模式。
 - 优先接收上游原生 WebSocket；故障时明确显示过期或通过真实 HTTP 读取回退。
 
-兼容结论只覆盖经过适配的两个内置包。商店安装成功不等于实测兼容。缺失指标显示未知，历史空缺不补点；服务器身份必须通过显式绑定校验。[兼容范围与限制](docs/research/compatibility.md)
+项目默认不内置第三方主题，首次启动显示安装引导。既有验收结论只覆盖历史适配包，不能转移到商店原版。商店安装成功不等于实测兼容。缺失指标显示未知，历史空缺不补点；服务器身份必须通过显式绑定校验。[兼容范围与限制](docs/research/compatibility.md)
 
 ## 部署
 
@@ -43,7 +43,7 @@ pnpm dev
 
 ```text
 src/        中立模型、上游、协议、主题、管理、应用组合与运行时
-web/        独立管理界面及两套固定版本主题源码
+web/        LeoBridge 自有管理界面（不含第三方主题）
 deploy/    容器、反向代理及服务管理配置示例
 scripts/    构建、配置、架构检查与只读验收工具
 tests/      核心、协议、管理及运行时测试
@@ -62,7 +62,7 @@ docs/       用户指南、架构、协议契约与第三方参考资料
 | 排查历史、身份或实时问题 | [排障](docs/troubleshooting.md) |
 | 开发、测试或贡献代码 | [贡献指南](CONTRIBUTING.md) · [架构](docs/development/architecture.md) |
 | 了解兼容范围与数据限制 | [兼容说明](docs/research/compatibility.md) |
-| 了解源码来源与许可 | [第三方声明](THIRD_PARTY_NOTICES.md) |
+| 了解源码来源与许可 | [第三方声明](docs/references/retired-themes/README.md) |
 | 使用项目 Logo 与横幅 | [品牌素材](docs/assets/README.md) |
 
 ## 致谢
@@ -72,14 +72,12 @@ docs/       用户指南、架构、协议契约与第三方参考资料
 - [CF-Server-Monitor（CFSM）](https://github.com/huilang-me/CF-Server-Monitor)：提供默认前台、主题规范与主题生态。
 - [Komari](https://github.com/komari-monitor/komari)：提供公开展示协议、主题机制与主题生态。
 
-同时感谢 [Adhesive Note](https://github.com/stqfdyr/komari-theme-adhesive-note) 的作者与贡献者，为早期 Komari 适配提供主题基础。相关来源、版本与许可证见 [第三方声明](THIRD_PARTY_NOTICES.md)。
+同时感谢 [Adhesive Note](https://github.com/stqfdyr/komari-theme-adhesive-note) 的作者与贡献者，为早期 Komari 适配提供主题基础。相关来源、版本与许可证见 [第三方声明](docs/references/retired-themes/README.md)。
 
 ## 许可与反馈
 
-LeoBridge 原创代码采用 [MIT](LICENSE)。第三方主题、依赖、字体及图形保留各自来源与条款，本项目 MIT 不覆盖这些内容。商店收录、安装成功和兼容性验证均不代表获得授权；LeoBridge 展示可获得的许可信息，不判断某次使用是否符合上游条款。详见 [第三方声明](THIRD_PARTY_NOTICES.md)。
+LeoBridge 原创代码采用 [MIT](LICENSE)。第三方主题、依赖、字体及图形保留各自来源与条款，本项目 MIT 不覆盖这些内容。商店收录、安装成功和兼容性验证均不代表获得授权；LeoBridge 展示可获得的许可信息，不判断某次使用是否符合上游条款。详见 [第三方声明](docs/references/retired-themes/README.md)。
 
-已确定的调整方案是默认不随项目交付第三方主题，由用户从商店按需安装。安装前展示来源、固定版本和可用许可文件；未找到时提示“未发现明确许可文件”，由用户主动勾选确认。确认只记录知情后的安装决定，不是授权证明；包安全检查和兼容性验证继续独立执行。
-
-**上述调整尚未实现。** 当前构建仍包含 CFSM 和 Komari 官方前台适配包，旧 Adhesive Note 源码仍保留；官方 Komari 前台的固定版本未发现独立 LICENSE，不能套用 Komari 核心或本项目的 MIT。当前安装器仍会拒绝缺失或无法识别的许可证。迁移安排及确认文案见 [主题管理](docs/themes.md#主题获取与许可信息调整方案待实现)。
+项目默认不随产品交付第三方主题，由管理员通过商店按需安装。安装前展示来源、固定版本和可用许可文件；未找到时提示“未发现明确许可文件”，用户主动勾选后才能安装。确认只记录知情后的安装决定，不是授权证明；包安全检查和兼容性验证独立执行。[安装流程与迁移说明](docs/themes.md#主题获取与许可信息)
 
 普通问题请附版本、运行方式和脱敏后的复现步骤。安全问题与敏感信息的处理见 [安全说明](SECURITY.md)。不要在 issue 中粘贴主控地址、Token、管理密码、身份绑定或原始响应。

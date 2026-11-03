@@ -2,7 +2,7 @@
 
 当前内置前台来自 [komari-monitor/komari-web](https://github.com/komari-monitor/komari-web/tree/bed58b589da63232a17681b1dbaed9eab2423078)，固定提交 `bed58b589da63232a17681b1dbaed9eab2423078`（radix）。保留官方首页卡片/表格、详情和 Radix/Recharts 图表，应用副本为 `web/themes/komari-default/`，构建入口 `scripts/build-komari-default.mjs`。它替代内置便签纸包；旧便签纸源码与协议保留以支持已有安装。
 
-此版本没有独立 LICENSE，README 明确给出二次开发和主题打包步骤。本项目按所有者指定完成本地接入，标记 `NOASSERTION`，保留原始 README、来源摘要和补丁，未宣称其采用 MIT；再分发范围仍需向上游明确，见[第三方声明](../../THIRD_PARTY_NOTICES.md)。
+此版本没有独立 LICENSE，README 明确给出二次开发和主题打包步骤。本项目按所有者指定完成本地接入，标记 `NOASSERTION`，保留原始 README、来源摘要和补丁，未宣称其采用 MIT；再分发范围仍需向上游明确，见[第三方声明](../references/retired-themes/README.md)。
 
 ## 当前消费者契约
 

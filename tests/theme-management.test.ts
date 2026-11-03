@@ -418,3 +418,91 @@ test('concurrent rotations have exactly one winner and stale login commits are r
   assert.equal((await rawLogin(admin,`Concurrent-fixture-${winner}-2026!`)).response.status,200);
   assert.equal((await rawLogin(admin,`Concurrent-fixture-${1-winner}-2026!`)).response.status,401);
 });
+
+test('empty instances show setup only at root, preserve access control and have no websocket protocol',async()=>{
+  for(const mgmt of [management(),managementConfig({})]){
+    const config=readConfig({MMWX_BASE_URL:'https://source.invalid',MMWX_PROBE_TOKEN:'synthetic',BRIDGE_BINDINGS:'[]',BRIDGE_ACCESS:'public'});
+    const store=new MemoryStore(),site=new Site(config,mgmt,store,ui);
+    const root=new Request(mgmt.displayOrigin+'/');
+    const response=await site.fetch(root);assert.equal(response.status,200);assert.match(await response.text(),/默认不内置第三方主题/);
+    assert.equal(response.headers.get('cache-control'),'no-store');
+    assert.equal((await site.fetch(new Request(mgmt.displayOrigin+'/api/servers'))).status,404);
+    assert.equal(await site.websocket(new Request(mgmt.displayOrigin+'/api/ws')),null);
+    assert.equal((await site.fetch(new Request(mgmt.displayOrigin+'/',{method:'HEAD'}))).body,null);
+    assert.equal((await store.state()).active,null);
+    const privateSite=new Site({...config,access:'private',username:'viewer',password:'synthetic-password'},mgmt,store,ui);
+    assert.equal((await privateSite.fetch(root)).status,401);
+  }
+});
+
+test('install requires a session-bound review and explicit confirmation, durable across restart; unknown license stays unknown',async()=>{
+  const {zipSync}=await import('fflate');
+  const {INSTALL_NOTICE_VERSION}=await import('../src/themes/store.ts');
+  const archive=zipSync({'komari-theme.json':encoder.encode(JSON.stringify({short:'Synthetic',version:'1'})),'dist/index.html':encoder.encode('<p>Synthetic</p>'),LICENSE:encoder.encode('Custom terms <script>not executed</script>')});
+  const digest=await sha256(archive),revision='f'.repeat(40);
+  const realFetch=globalThis.fetch;let downloads=0;
+  globalThis.fetch=async(input)=>{
+    const url=String(input);
+    if(url.endsWith('/v1.json'))return Response.json({schema:1,themes:[{short:'Synthetic',name:'Synthetic',version:'1',url:'https://github.com/example/theme',download:'https://github.com/example/theme/releases/download/1/theme.zip',sha256:digest}]});
+    downloads++;return new Response(new Uint8Array(archive));
+  };
+  const directory=await mkdtemp(join(tmpdir(),'leobridge-review-'));
+  try{
+    const store=new FileThemeStore(directory),admin=new Admin(management(),store,ui),session=await login(admin);
+    const post=(app:Admin,path:string,body:unknown,auth=session)=>app.handle(request('/manage/api/'+path,{method:'POST',...auth,body}));
+    assert.equal(await code(await post(admin,'install',{ecosystem:'komari',id:'Synthetic',catalogRevision:revision})),'INSTALL_CONFIRMATION_REQUIRED');
+    assert.equal(downloads,0);
+    const prepared=await post(admin,'prepare-install',{ecosystem:'komari',id:'Synthetic',catalogRevision:revision});
+    assert.equal(prepared.status,200);const review=await prepared.json();
+    assert.equal(review.license.status,'found');assert.equal(review.license.spdx,'NOASSERTION');assert.match(review.license.documents[0].text,/<script>/);
+    assert.equal(Object.keys((await store.state()).installations).length,0);
+    assert.equal(JSON.stringify(publicThemeStateForTest(await store.state())).includes(review.reviewId),false);
+    const body={reviewId:review.reviewId,noticeVersion:INSTALL_NOTICE_VERSION,acknowledge:true};
+    assert.equal(await code(await post(admin,'install',{...body,acknowledge:'true'})),'INSTALL_CONFIRMATION_REQUIRED');
+    assert.equal(await code(await post(admin,'install',{...body,noticeVersion:'old'})),'INSTALL_CONFIRMATION_REQUIRED');
+    const other=await login(admin);
+    assert.equal(await code(await post(admin,'install',body,other)),'INSTALL_REVIEW_EXPIRED');
+    const restarted=new Admin(management(),new FileThemeStore(directory),ui);
+    const installed=await post(restarted,'install',body);assert.equal(installed.status,200);
+    const {id}=await installed.json(),state=await restarted.store.state(),item=state.installations[id];
+    assert.equal(state.active,null);assert.equal(item.compatibility,'unverified');assert.equal(item.bundled,false);
+    assert.equal(item.confirmation?.digest,review.digest);assert.equal(item.confirmation?.noticeVersion,INSTALL_NOTICE_VERSION);assert.equal(item.confirmation?.source,review.source);assert.ok(item.confirmation?.at);
+    assert.equal(item.license.spdx,'NOASSERTION');assert.equal(downloads,2);
+    assert.equal(await code(await post(restarted,'install',body)),'INSTALL_REVIEW_EXPIRED');
+    const next=await (await post(restarted,'prepare-install',{ecosystem:'komari',id:'Synthetic',catalogRevision:revision})).json();
+    const sessionId=await sha256(session.cookie.split('=')[1]);
+    const pending=(await restarted.store.state()).sessions[sessionId].review!;
+    await restarted.store.command({type:'review',sessionId,review:{...pending,expires:0}});
+    assert.equal(await code(await post(restarted,'install',{...body,reviewId:next.reviewId})),'INSTALL_REVIEW_EXPIRED');
+  }finally{globalThis.fetch=realFetch;await rm(directory,{recursive:true,force:true});}
+});
+function publicThemeStateForTest(state:Awaited<ReturnType<ThemeStore['state']>>){const {sessions,adminCredential,...rest}=state;return rest;}
+
+test('confirmed missing-license package still rejects changed bytes, and final commit rejects revoked reviews',async()=>{
+  const {zipSync}=await import('fflate');
+  const {INSTALL_NOTICE_VERSION}=await import('../src/themes/store.ts');
+  const archive=zipSync({'komari-theme.json':encoder.encode(JSON.stringify({short:'Synthetic',version:'1'})),'dist/index.html':encoder.encode('<p>Synthetic</p>')});
+  let changed=false;const realFetch=globalThis.fetch;
+  globalThis.fetch=async(input)=>String(input).endsWith('/v1.json')?Response.json({schema:1,themes:[{short:'Synthetic',version:'1',download:'https://github.com/example/theme/releases/download/1/theme.zip',sha256:await sha256(archive)}]}):new Response(changed?encoder.encode('changed'):new Uint8Array(archive));
+  try{
+    const store=new MemoryStore(),admin=new Admin(management(),store,ui),auth=await login(admin);
+    const post=(path:string,body:unknown)=>admin.handle(request('/manage/api/'+path,{method:'POST',...auth,body}));
+    const review=await(await post('prepare-install',{ecosystem:'komari',id:'Synthetic',catalogRevision:'a'.repeat(40)})).json();assert.equal(review.license.status,'missing');
+    const body={reviewId:review.reviewId,noticeVersion:INSTALL_NOTICE_VERSION,acknowledge:true};
+    changed=true;assert.equal(await code(await post('install',body)),'PACKAGE_SHA256');assert.equal(store.value.generation,0);
+    changed=false;const result=await post('install',body);assert.equal(result.status,200);
+    const id=(await result.json()).id;assert.equal(store.value.installations[id].confirmation?.licenseStatus,'missing');
+    assert.equal(store.value.installations[id].license.text,'');assert.equal(store.value.installations[id].files.LICENSE,undefined);
+    const item=installation(1,{packageDigest:review.digest});
+    await assert.rejects(commitInstallation(store,item,files(),false,{sessionId:'revoked',id:review.reviewId}),{code:'INSTALL_REVIEW_EXPIRED'});
+    assert.equal(store.value.installations[item.id],undefined);
+  }finally{globalThis.fetch=realFetch;}
+});
+
+test('empty distribution manifest seeds nothing and leaves existing installations and pointers intact',async()=>{
+  const {seedBundled}=await import('../src/themes/bundled.ts');
+  const store=new MemoryStore();const load=async(path:string)=>{assert.equal(path,'index.json');return encoder.encode('[]');};
+  await seedBundled(store,load);assert.deepEqual(await store.state(),emptyThemeState());
+  await seed(store);await store.command({type:'activate',id:ids[1],expectedGeneration:store.value.generation});
+  const before=await store.state();await seedBundled(store,load);assert.deepEqual(await store.state(),before);
+});

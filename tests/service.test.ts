@@ -4,7 +4,6 @@ import { readConfig, authorize } from '../src/core/config.ts';
 import { Bridge } from '../src/protocols/cfsm/service.ts';
 import { Upstream } from '../src/upstream/client.ts';
 import { applyPing } from '../src/protocols/cfsm/ping.ts';
-import { selectTheme } from '../src/themes/registry.ts';
 const env={MMWX_BASE_URL:'https://source.invalid',MMWX_PROBE_TOKEN:'SENSITIVE-TOKEN',BRIDGE_BINDINGS:JSON.stringify([{id:'stable',match:{name:'synthetic'}}])};
 const raw={enabled:true,show_name:false,history_days:7,servers:[{name:'synthetic',online:false,last_seen:new Date().toISOString(),cpu_pct:0,mem_used:0,mem_total:1048576,download_speed:0,upload_speed:0,private_key:'PRIVATE'}]};
 function bridge(payload:unknown=raw){const config=readConfig(env);return new Bridge(config,new Upstream(config,async()=>Response.json(payload)));}
@@ -50,7 +49,4 @@ test('Ping mapping uses exact configured target keys; no-data/timeout/zero and d
   applyPing(out,[{key:'a',current_ms:-1,loss_pct:100}],targets);assert.equal(out.ping_ct,null);assert.equal(out.loss_ct,100);
   applyPing(out,[{key:'a',current_ms:Infinity}],targets);assert.equal(out.ping_ct,false);
   applyPing(out,[{key:'a',current_ms:8},{key:'a',current_ms:9}],targets);assert.equal(out.ping_ct,false);
-});
-test('theme ecosystem is explicit and unimplemented themes never select the CFSM protocol silently',()=>{
-  const theme=selectTheme();assert.equal(theme.ecosystem,'cfsm');assert.equal(theme.installed,true);assert.equal(theme.license,'MIT');assert.throws(()=>selectTheme('komari-default'));
 });

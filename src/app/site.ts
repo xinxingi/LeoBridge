@@ -39,11 +39,11 @@ export class Site {
       if(!isRoot&&!selected)return new Response('Not found',{status:404});
       const denied=authorize(request,this.config);if(denied)return denied;
       if(isRoot&&!single){
-        const state=await this.store.state();if(!state.active)return new Response('尚未启用展示主题。',{status:503});
+        const state=await this.store.state();if(!state.active)return this.setupResponse(request);
         const target=new URL(installationUrl(this.management,state.active));target.pathname=url.pathname;target.search=url.search;
         return new Response(null,{status:307,headers:{Location:target.href,'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});
       }
-      if(!selected)return new Response('尚未启用展示主题。',{status:503});
+      if(!selected)return this.setupResponse(request);
       const {item}=selected;const protocol=this.protocols[item.protocolProfile];
       if(!protocol)throw new BridgeError('PROTOCOL_UNSUPPORTED',409,'此主题协议尚未实现。');
       if(url.pathname.startsWith('/manage')||url.pathname.startsWith('/admin'))return new Response('主题不能访问管理后台。',{status:404});
@@ -57,6 +57,14 @@ export class Site {
       if(!asset)return new Response('Theme asset not found',{status:404});
       return this.assetResponse(request,item,asset);
     }catch(error){return errorResponse(error);}
+  }
+  private setupResponse(request:Request){
+    if(new URL(request.url).pathname!=='/')return new Response('尚未启用展示主题。',{status:404});
+    if(!['GET','HEAD'].includes(request.method))return new Response('Method not allowed',{status:405});
+    const adminUrl=this.management.routing==='single'?'/admin/':this.management.adminOrigin;
+    const href=adminUrl.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
+    const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LeoBridge · 安装主题</title><body><main><h1>LeoBridge</h1><p>尚未启用展示主题。请管理员登录后台，从 CFSM 或 Komari 商店按需安装主题，完成预览后启用。</p><p>本项目默认不内置第三方主题。</p><a href="${href}">进入管理后台</a></main></body></html>`;
+    return new Response(request.method==='HEAD'?null:html,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'; base-uri 'none'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
   }
   private assetResponse(request:Request,item:Installation,asset:{bytes:Uint8Array;contentType:string}){
     const url=new URL(request.url),wsOrigin=url.origin.replace(/^http/,'ws');

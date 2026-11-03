@@ -145,3 +145,5 @@ h1{font-size:27px}
 .card:hover { border-color: var(--input-border); }
 .login input:autofill { color: var(--text); }
 ::selection { background: var(--accent); color: var(--on-accent); }
+
+.install-review{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);overflow-wrap:anywhere}.install-review pre{max-height:18rem;overflow:auto;white-space:pre-wrap}.license-status{font-weight:600}

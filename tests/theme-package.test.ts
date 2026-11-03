@@ -41,13 +41,14 @@ test('valid static ZIP produces content-derived immutable identity, normalized r
   assert.notEqual((await buildKomariPackage(await entry(changed), changed)).id, a.id);
 });
 
-test('hash, manifest identity, license and configuration are mandatory independent gates', async () => {
+test('hash, manifest identity and configuration remain mandatory; missing license is information', async () => {
   const zip = zipSync(source()); const e = await entry(zip);
   await assert.rejects(buildKomariPackage({ ...e, sha256: '0'.repeat(64) }, zip), { code: 'PACKAGE_SHA256' });
   const mismatch = zipSync(source({ 'komari-theme.json': JSON.stringify({ short:'Other',version:'1.0' }) }));
   await assert.rejects(buildKomariPackage(await entry(mismatch), mismatch), { code: 'MANIFEST_IDENTITY' });
   const noLicense = source(); delete noLicense.LICENSE;
-  const absent = zipSync(noLicense); await assert.rejects(buildKomariPackage(await entry(absent), absent), { code: 'LICENSE_REQUIRED' });
+  const absent = zipSync(noLicense), missing=await buildKomariPackage(await entry(absent), absent); assert.equal(missing.license.status,'missing'); assert.equal(missing.files.some(f=>f.path==='LICENSE'),false);
+  const custom=zipSync(source({LICENSE:'Custom terms: contact the author.'})); const found=await buildKomariPackage(await entry(custom),custom); assert.equal(found.license.status,'found');assert.equal(found.license.spdx,'NOASSERTION');assert.equal(found.license.text,'Custom terms: contact the author.');
   const raw = zipSync(source({ 'komari-theme.json': JSON.stringify({ short:'Synthetic',version:'1.0',configuration:{type:'raw',html:'<script>bad</script>'} }) }));
   await assert.rejects(buildKomariPackage(await entry(raw), raw), { code: 'MANIFEST_CONFIGURATION' });
 });
@@ -118,14 +119,14 @@ test('CFSM pins the build branch, verifies each Git blob, and refuses truncated 
 
 test('audited Emerald license does not silently apply to a different build commit', async () => {
   const commit='b'.repeat(40), bytes=enc.encode('<p>new build</p>'), hash=await gitBlob(bytes);let assetReads=0;
-  await assert.rejects(installCatalogTheme('cfsm','emerald',{fetcher:async(input)=>{
+  const result=await installCatalogTheme('cfsm','emerald',{fetcher:async(input)=>{
     const url=String(input);
     if(url.endsWith('/themes.json'))return Response.json({schema:1,themes:[{id:'emerald',title:'Emerald',url:'https://github.com/Tokinx/cf-server-monitor-theme-emerald',branch:'build'}]});
     if(url.includes('/commits/'))return Response.json({sha:commit});
     if(url.includes('/git/trees/'))return Response.json({truncated:false,tree:[{path:'index.html',type:'blob',mode:'100644',sha:hash,size:bytes.length}]});
     assetReads++;return new Response(bytes);
-  }}),{code:'LICENSE_REQUIRED'});
-  assert.equal(assetReads,0);
+  }});
+  assert.equal(assetReads,1);assert.equal(result.license.status,'missing');assert.equal(result.license.text,'');
 });
 
 test('ZIP comment signatures cannot substitute a second unaudited central directory', () => {
@@ -171,4 +172,17 @@ test('installation re-reads the UI-observed catalog commit and never drifts to m
   assert.equal(urls.filter(url=>url.includes('/commits/main')).length,1);
   assert.equal(urls.filter(url=>url.includes(`/${shownRevision}/v1.json`)).length,2);
   assert.equal(urls.some(url=>url.includes(nextRevision)),false);
+});
+
+test('CFSM installation pins the reviewed commit even when its build branch moves',async()=>{
+  const fixed='a'.repeat(40),bytes=enc.encode('<p>fixed</p>'),hash=await gitBlob(bytes),seen:string[]=[];
+  const pkg=await installCatalogTheme('cfsm','synthetic',{expectedBuildRevision:fixed,fetcher:async input=>{
+    const url=String(input);seen.push(url);
+    if(url.endsWith('/themes.json'))return Response.json({schema:1,themes:[{id:'synthetic',url:'https://github.com/example/theme',branch:'build'}]});
+    if(url.includes('/commits/'))throw new Error('Must not resolve moving branch after review');
+    assert.ok(url.includes(fixed));
+    if(url.includes('/git/trees/'))return Response.json({truncated:false,tree:[{path:'index.html',type:'blob',mode:'100644',sha:hash,size:bytes.length}]});
+    return new Response(bytes);
+  }});
+  assert.equal(pkg.pinnedVersion,fixed);assert.equal(pkg.license.status,'missing');assert.equal(seen.length,3);
 });

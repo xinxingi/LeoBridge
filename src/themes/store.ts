@@ -1,15 +1,22 @@
 import { BridgeError } from '../core/errors.ts';
+import type { LicenseRecord } from './package.ts';
+export const INSTALL_NOTICE_VERSION='2026-11-03.1';
+export const INSTALL_NOTICE_TEXT='我已查看上游来源及可用的许可说明，了解 LeoBridge 不提供授权判断，并决定安装此主题。';
+export interface InstallReview {id:string;expires:number;ecosystem:ThemeEcosystem;themeId:string;catalogRevision:string;pinnedVersion:string;digest:string;noticeVersion:string;}
+export interface InstallConfirmation {at:string;noticeVersion:string;noticeText:string;source:string;pinnedVersion:string;digest:string;licenseStatus:'found'|'missing';}
+
 
 export type ThemeEcosystem='cfsm'|'komari';
 export type Compatibility='unverified'|'verified'|'incompatible';
 export interface Installation {
   id:string; title:string; ecosystem:ThemeEcosystem; source:string; pinnedVersion:string;
-  protocolProfile:string; license:{spdx:string;text:string;source:string;sha256:string};
+  protocolProfile:string; license:LicenseRecord;
+  packageDigest?:string; confirmation?:InstallConfirmation;
   entry:string; installedAt:string; compatibility:Compatibility; evidence?:string;
   catalogRevision?:string;
   files:Record<string,{contentType:string;size:number;offset?:number}>; bundled:boolean;
 }
-export interface AdminSession {expires:number;csrf:string;credentialVersion?:number;}
+export interface AdminSession {expires:number;csrf:string;credentialVersion?:number;review?:InstallReview;}
 export interface AdminCredential {version:number;algorithm:'PBKDF2-SHA256';salt:string;iterations:number;hash:string;}
 export interface ThemeState {
   schema:1; generation:number; active:string|null; previous:string|null;
@@ -18,7 +25,8 @@ export interface ThemeState {
   events:{at:string;action:string;installationId:string;generation:number}[];
 }
 export type ThemeCommand=
-  |{type:'install';installation:Installation;activateIfEmpty?:boolean}
+  |{type:'install';installation:Installation;activateIfEmpty?:boolean;review?:{sessionId:string;id:string}}
+  |{type:'review';sessionId:string;review:InstallReview}
   |{type:'activate';id:string;expectedGeneration:number;acknowledgeUnverified?:boolean}
   |{type:'rollback';expectedGeneration:number}
   |{type:'bundled-evidence';id:string;compatibility:Compatibility;evidence:string}
@@ -43,6 +51,11 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
     if(Object.keys(next.sessions).length>=100)throw new BridgeError('SESSION_LIMIT',429,'管理会话数量已达上限。');
     next.sessions[command.id]=command.session;return next;
   }
+  if(command.type==='review'){
+    const session=next.sessions[command.sessionId];
+    if(!session)throw new BridgeError('LOGIN_REQUIRED',401,'请重新登录。');
+    session.review=command.review;return next;
+  }
   if(command.type==='logout'){delete next.sessions[command.id];return next;}
   if(command.type==='password'){
     const session=next.sessions[command.sessionId],version=next.adminCredential?.version??0;
@@ -54,9 +67,15 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
     item.compatibility=command.compatibility;item.evidence=command.evidence;return next;
   }
   if(command.type==='install'){
-    const item=command.installation;
+    const item=structuredClone(command.installation);
+    if(command.review){
+      const session=next.sessions[command.review.sessionId],review=session?.review;
+      if(!review||review.id!==command.review.id||review.expires<=now||review.noticeVersion!==INSTALL_NOTICE_VERSION||review.digest!==item.packageDigest||review.pinnedVersion!==item.pinnedVersion||review.catalogRevision!==item.catalogRevision||review.ecosystem!==item.ecosystem)throw new BridgeError('INSTALL_REVIEW_EXPIRED',409,'安装确认已失效，请重新查看来源与许可信息。');
+      item.confirmation={at:new Date(now).toISOString(),noticeVersion:INSTALL_NOTICE_VERSION,noticeText:INSTALL_NOTICE_TEXT,source:item.source,pinnedVersion:item.pinnedVersion,digest:review.digest,licenseStatus:item.license.status??(item.license.text?'found':'missing')};
+      delete session.review;
+    }
     if(!validInstallationId(item.id)||!validAssetPath(item.entry)||!item.files[item.entry])throw new BridgeError('INVALID_PACKAGE',400,'主题包入口无效。');
-    if(next.installations[item.id])return next;
+    if(next.installations[item.id]){if(item.confirmation)next.installations[item.id]!.confirmation=item.confirmation;return next;}
     next.installations[item.id]=item;
     if(command.activateIfEmpty&&!next.active){next.active=item.id;}
   }else{
@@ -76,10 +95,10 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
 export function publicThemeState(state:ThemeState){const {sessions,adminCredential,...publicState}=state;return publicState;}
 
 /** Complete immutable files before publishing metadata; failures leave active untouched. */
-export async function commitInstallation(store:ThemeStore,item:Installation,files:{path:string;bytes:Uint8Array;contentType:string}[],activateIfEmpty=false){
+export async function commitInstallation(store:ThemeStore,item:Installation,files:{path:string;bytes:Uint8Array;contentType:string}[],activateIfEmpty=false,review?:{sessionId:string;id:string}){
   const paths=files.map(file=>file.path),declared=Object.keys(item.files);
   if(!validInstallationId(item.id)||!validAssetPath(item.entry)||!declared.includes(item.entry)||new Set(paths).size!==paths.length||paths.length!==declared.length||files.some(file=>!validAssetPath(file.path)||!Object.hasOwn(item.files,file.path)||item.files[file.path].size!==file.bytes.length||item.files[file.path].contentType!==file.contentType)||declared.some(path=>!paths.includes(path)))throw new BridgeError('INVALID_PACKAGE',400,'主题资源清单不完整或与内容不符。');
-  if((await store.state()).installations[item.id])return;
+  if((await store.state()).installations[item.id]){if(review)await store.command({type:'install',installation:item,review});return;}
   let offset=0;
   for(const file of files){
     if(!validAssetPath(file.path))throw new BridgeError('INVALID_PATH',400,'主题资源路径无效。');
@@ -87,7 +106,7 @@ export async function commitInstallation(store:ThemeStore,item:Installation,file
   }
   if(store.putAssets)await store.putAssets(item.id,files);
   else for(const file of files)await store.putAsset(item.id,file.path,file.bytes,file.contentType);
-  await store.command({type:'install',installation:item,activateIfEmpty});
+  await store.command({type:'install',installation:item,activateIfEmpty,review});
 }
 
 export async function sha256(value:string|Uint8Array){

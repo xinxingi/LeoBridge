@@ -23,7 +23,7 @@ Worker使用R2保存主题资源、Durable Object保存主题元数据与管理�
 - [ ] 为`p-<ID>.<BRIDGE_PREVIEW_ORIGIN主机名>`配置通配DNS/路由/TLS，预览与展示及管理源独立。
 - [ ] 将Wrangler中的本地HTTP源替换为目标HTTPS源；当前默认`workers_dev=false`，需明确决定是否启用，不能用单个workers.dev地址代替整套版本主机路由。
 - [ ] 经授权创建/绑定`THEME_ASSETS` R2桶，核对`bucket_name`所属环境；R2不公开，也不存上游Token供主题读取。
-- [ ] 配置单站`THEME_COORDINATOR` Durable Object及`theme-coordinator-v1`迁移，保留`ASSETS`用于内置包和管理UI。DO仅存安装元数据、指针、会话；无需D1或历史数据库。
+- [ ] 配置单站`THEME_COORDINATOR` Durable Object及`theme-coordinator-v1`迁移，保留`ASSETS`用于管理UI。DO仅存安装元数据、指针、会话；无需D1或历史数据库。
 - [ ] 使用Worker Secrets保存上游URL/Token、绑定、Ping选择、管理员密码及private展示凭据；不把值放命令参数、日志、前台或Git。普通标题和源配置可置于vars。
 - [ ] 备份元数据及资源维护方案已明确：R2每包一个不可变拼接对象，DO记录每资源偏移和大小。不能只备份active指针而丢失包；无卸载/孤立包自动清理UI，清理须保留active/previous和旧版本访问需要的对象。
 
@@ -31,12 +31,12 @@ Worker使用R2保存主题资源、Durable Object保存主题元数据与管理�
 
 ## 云端验收（必须部署后执行）
 
-- [ ] 初次初始化两套内置包完成，R2完整写入后才公布元数据；资源MIME、缺资源404、SPA详情路由及HTML缓存行为正确。
+- [ ] 空实例显示安装引导；商店确认安装后，R2完整写入后才公布元数据；资源MIME、缺资源404、SPA详情路由及HTML缓存行为正确。
 - [ ] 管理登录、过期、退出、错误密码限速；HTTPS cookie具有`__Host-`、Secure、HttpOnly、SameSite=Strict且无Domain。
 - [ ] 展示和预览不能读取管理接口或复用管理cookie；写管理操作拒绝错误Origin/CSRF，跨源WS拒绝。
 - [ ] 两个商店可读取/刷新，目录固定SHA可追溯；安装携带所见revision，CFSM固定commit、Komari校验ZIP SHA，许可证和静态资源校验生效。
 - [ ] 未验证包不自动标为兼容；预览后需明确确认启用。失败安装保留当前状态，并发启用/回退冲突不覆盖新状态。
-- [ ] 两套内置前台首页、详情、静态资源、实际公开节点数量/隐藏设置正确；与上游公开列表一致。
+- [ ] 实际选定的两生态主题首页、详情、静态资源、实际公开节点数量/隐藏设置正确；与上游公开列表一致。
 - [ ] 1h/7d系统、Ping和丢包历史的点数、单位、零/缺失、时间轴正确，不补造历史。
 - [ ] CFSM和Komari各自实际实时通道持续更新；HTTPS/WSS、源header鉴权、断线重连、过期及HTTP回退语义正确，关闭页面释放资源。
 - [ ] 切换两种生态及回退后根入口指向正确版本；旧版本页面和WS继续原协议，不混用JSON格式或资源。
@@ -46,4 +46,4 @@ Worker使用R2保存主题资源、Durable Object保存主题元数据与管理�
 
 ## 当前兼容范围
 
-内置经过补丁的CFSM默认前台与Komari Adhesive Note是实际浏览器验收对象。商店原包默认未验证，不能据内置包的兼容状态推断所有CFSM/Komari主题兼容。主题配置UI尚未实现，raw/redirect配置拒绝，managed配置使用当前默认行为；外链资源、iframe及Service Worker受CSP阻断。服务器管理、采集、终端、远控和告警继续不在LeoBridge范围内。
+旧CFSM与Komari适配包的历史验收记录保留；当前构建不内置第三方主题。商店原包默认未验证，不能据历史适配包推断兼容性。主题配置UI尚未实现，raw/redirect配置拒绝，managed配置使用当前默认行为；外链资源、iframe及Service Worker受CSP阻断。服务器管理、采集、终端、远控和告警继续不在LeoBridge范围内。

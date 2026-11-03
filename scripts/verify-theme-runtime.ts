@@ -138,11 +138,11 @@ try {
   record('admin-cookie-isolation',/HttpOnly/i.test(String(firstCookie))&&/SameSite=Strict/i.test(String(firstCookie))&&!/Domain=/i.test(String(firstCookie)));
   let current=await state('initial-state');
   record('state-hides-sessions',!Object.hasOwn(current,'sessions'));
-  const definitions=JSON.parse(await readFile('dist/bundled/index.json','utf8')) as {id:string;ecosystem:string}[];
+  const definitions=Object.values(current.installations as Record<string,{id:string;ecosystem:string}>);
   const installations=current.installations as Record<string,unknown>;
   cfsmId=definitions.find(item=>item.ecosystem==='cfsm'&&installations[item.id])?.id??'';
   komariId=definitions.find(item=>item.ecosystem==='komari'&&installations[item.id])?.id??'';
-  requireCheck('both-local-bundles-installed',!!cfsmId&&!!komariId,{installed_count:Object.keys(installations).length});
+  requireCheck('both-test-themes-installed-install-fixtures-first',!!cfsmId&&!!komariId,{installed_count:Object.keys(installations).length});
   displayOrigin=String(current.displayOrigin);localUrl(displayOrigin);
   const cfsmOrigin=link(current,cfsmId),komariOrigin=link(current,komariId),previewOrigin=link(current,komariId,true);
   const baseline=await capture('cfsm-fixture-baseline',new URL('/api/servers',cfsmOrigin));

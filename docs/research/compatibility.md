@@ -1,25 +1,27 @@
 # 兼容范围与限制
 
-LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议。兼容范围限于以下两个内置适配包：
+LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议。既有浏览器验收仅覆盖以下历史适配包（已不随项目交付）：
 
 | 主题 | 固定上游版本 | 展示能力 |
 | --- | --- | --- |
 | CFSM默认前台 | `609cc0b0998793510453be8eadced2064b28ad7d` | 首页、详情、系统与Ping历史、实时更新 |
 | Komari 官方默认前台 | `bed58b589da63232a17681b1dbaed9eab2423078` | 首页、详情、系统与Ping/丢包历史、实时更新 |
 
-两个内置适配包已通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见第三方来源声明。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect配置拒绝，managed使用默认值。
+两个历史适配包曾通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见第三方来源声明。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect配置拒绝，managed使用默认值。
 
 LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服务器管理、终端、远程控制与告警功能。第三方主题不能访问管理会话或上游Token。
 
-## 已确定的后续调整（待实现）
+## 当前主题获取方式
 
-默认移除随产品交付的第三方主题，改由用户从商店按需安装；安装前展示来源、固定版本和可用许可信息，由用户主动确认知情安装决定。许可信息、用户确认与实际兼容性分别记录，不作“许可通过”等授权判断。当前代码和以上内置包验收范围尚未改变；商店原版需要重新进行实际前台验证，详见[调整方案](../themes.md#主题获取与许可信息调整方案待实现)。
+默认不内置第三方主题，由管理员从商店按需安装。先展示实际固定版本、来源和许可文件，再主动勾选确认；安装时重新校验同一版本及摘要。记录知情决定，不作授权判断。许可信息缺失不代替包安全与兼容性检查；所有新商店安装仍标为未验证，详见[主题管理](../themes.md#主题获取与许可信息)。历史适配包兼容结论不覆盖商店原版。
+
+本轮实际检查了商店原版Emerald及Adhesive Note：两者首页/详情可读取真实数据，但发现未知字段被原主题显示为零、免费或无限；Emerald七天图表还要求原CFSM管理登录。它们继续保持未验证，不宣称完整兼容，见[按需安装验收记录](theme-store-transition.md)。
 
 ## 协议与来源
 
 - CFSM：`/api/config`、`/api/servers`、`/api/server`、`/api/history/all`和`/api/ws`；见[消费者契约](frontend-contract.md)。
 - Komari：`/api/rpc2`的HTTP与WebSocket JSON-RPC，以及有限REST兼容接口；见[协议说明](komari-protocol.md)和[主题前台](komari-frontend.md)。
-- 上游字段与历史格式见[输入契约](upstream-contract.md)，第三方来源与许可见[声明](../../THIRD_PARTY_NOTICES.md)。
+- 上游字段与历史格式见[输入契约](upstream-contract.md)，第三方来源与许可见[声明](../references/retired-themes/README.md)。
 
 ## 数据转换
 

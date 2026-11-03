@@ -26,16 +26,15 @@ flowchart LR
 | `src/upstream` | 妙妙屋HTTP读取、缓存/超时、中立历史序列 | core、upstream |
 | `src/protocols/cfsm` | CFSM服务、序列化、Ping、历史和订阅 | core、upstream、cfsm本层 |
 | `src/protocols/komari` | Komari RPC/REST、序列化及实时 | core、upstream、komari本层 |
-| `src/themes` | 商店、静态包校验、安装状态契约、内置包 | core、themes |
+| `src/themes` | 商店、静态包校验、安装确认及状态契约 | core、themes |
 | `src/management` | 独立认证、管理API与源配置 | core、themes、management |
 | `src/app` | 组合协议应用与站点路由 | 上述中立/功能层、app |
 | `src/runtime` | Node/Worker入口、文件/R2/DO存储、代理 | 上述层、runtime |
 | `web/admin` | 可信管理界面 | 仅管理HTTP API |
-| `web/themes/*` | 固定版本主题副本 | 仅所在安装主机的展示API |
 | `deploy` | 容器、反向代理及服务管理配置示例 | 不承载业务逻辑 |
 | `scripts` / `tests` | 构建、初始化、架构检查和验证 | 可以组合被测模块，不被产品代码导入 |
 
-不新增空层或无用途的`index.ts`。目前具体入口文件就是公开契约，例如`core/socket.ts`、`themes/store.ts`；新增可复用包后再考虑package exports。旧的静态主题选择辅助仅用于兼容历史调用，活动主题选择由管理状态决定，不据它推断只支持CFSM。
+不新增空层或无用途的`index.ts`。目前具体入口文件就是公开契约，例如`core/socket.ts`、`themes/store.ts`；新增可复用包后再考虑package exports。活动主题由持久化管理状态决定，不默认选择CFSM。产品构建只包含管理资源；历史主题来源档案不参与构建。
 
 `pnpm check:architecture`用TypeScript AST读取import、export、import type和字面量动态import，拒绝跨层/跨生态依赖、缺失模块、依赖环和无法检查的动态模块加载。Node内置模块及Node专用传输依赖仅允许在runtime；Worker入口会递归检查可达依赖，避免误带Node能力。它是项目内约束检查，不代替类型、行为测试或供应链审查。
 

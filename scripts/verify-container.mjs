@@ -153,7 +153,7 @@ try {
   let current = await state();
   const cfsm = Object.values(current.installations).find(item => item.ecosystem === 'cfsm');
   const komari = Object.values(current.installations).find(item => item.ecosystem === 'komari');
-  assert.ok(cfsm && komari); const cfsmHost = new URL(current.links[cfsm.id].display).hostname, komariHost = new URL(current.links[komari.id].display).hostname;
+  assert.ok(cfsm && komari, 'This historical two-theme acceptance script requires explicit synthetic fixture installations; the product no longer bundles themes. Use pnpm test:runtime for the self-contained runtime checks.'); const cfsmHost = new URL(current.links[cfsm.id].display).hostname, komariHost = new URL(current.links[komari.id].display).hostname;
   check('initial-root-pinned', (await request(display, '/')).headers.location === `https://${cfsmHost}/`);
   for (const [item, host] of [[cfsm, cfsmHost], [komari, komariHost]]) {
     const html = await request(host, '/');
