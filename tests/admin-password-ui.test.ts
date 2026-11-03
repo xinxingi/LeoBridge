@@ -13,10 +13,10 @@ class Element {
   append(...children:Element[]){this.children.push(...children);}
   reset(){this.values={};}
 }
-async function fixture(required=true){
+async function fixture(required=true,initiallyLoggedIn=true,infoFails=false){
   const elements=new Map<string,Element>();
   const get=(id:string)=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id)!;};
-  let loggedIn=true,mustChangePassword=required;
+  let loggedIn=initiallyLoggedIn,mustChangePassword=required;
   const calls:{path:string;body?:any}[]=[];
   runInNewContext(source,{
     location:{pathname:'/admin/'},
@@ -25,7 +25,8 @@ async function fixture(required=true){
     fetch:async(url:string,options:any)=>{
       const path=url.replace('/admin/api/',''),body=options.body?JSON.parse(options.body):undefined;calls.push({path,body});
       let data:any={};let status=200;
-      if(path==='login'){loggedIn=true;data={csrf:'new-csrf'};}
+      if(path==='login-info'){status=infoFails?503:200;data={showInitialPasswordHint:mustChangePassword};}
+      else if(path==='login'){loggedIn=true;data={csrf:'new-csrf'};}
       else if(!loggedIn){status=401;data={message:'请登录LeoBridge管理站。'};}
       else if(path==='session')data={csrf:'csrf',mustChangePassword};
       else if(path==='password'){
@@ -54,6 +55,7 @@ test('resumed bootstrap session shows mandatory form without loading management 
   const strong='First-fixture-2026!';
   await f.submit('password-form',{currentPassword:'admin',newPassword:strong,confirmPassword:strong});
   assert.equal(f.get('login').hidden,false);assert.equal(f.get('password-change').hidden,true);
+  assert.equal(f.get('initial-password-hint').hidden,true);
   assert.deepEqual(f.get('password-form').values,{});assert.match(f.get('notice').textContent,/密码已更改/);
   await f.submit('login-form',{username:'admin',password:strong});
   assert.equal(f.get('workspace').hidden,false);assert.equal(f.get('change-password').hidden,false);
@@ -69,5 +71,19 @@ test('optional password change can return to the workspace and logout clears the
   f.get('change-password').listeners.click({});f.get('password-form').values={currentPassword:'synthetic'};
   f.get('password-logout').listeners.click({});await f.settle();
   assert.equal(f.get('login').hidden,false);assert.equal(f.get('password-change').hidden,true);
+  assert.equal(f.get('initial-password-hint').hidden,true);
   assert.deepEqual(f.get('password-form').values,{});
+});
+
+
+test('initial password guidance follows server initialization on a fresh login page',async()=>{
+  const initial=await fixture(true,false);
+  assert.equal(initial.get('login').hidden,false);
+  assert.equal(initial.get('initial-password-hint').hidden,false);
+  const configured=await fixture(false,false);
+  assert.equal(configured.get('login').hidden,false);
+  assert.equal(configured.get('initial-password-hint').hidden,true);
+  const unavailable=await fixture(true,false,true);
+  assert.equal(unavailable.get('login').hidden,false);
+  assert.equal(unavailable.get('initial-password-hint').hidden,true);
 });

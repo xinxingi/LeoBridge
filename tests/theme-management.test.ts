@@ -82,6 +82,20 @@ test('unconfigured management uses the default password and requires rotation', 
   assert.equal(response.status,200);assert.equal((await response.json()).mustChangePassword,true);
 });
 
+test('login guidance exposes only initialization status on both management routes',async()=>{
+  for(const config of [management(),managementConfig({})]){
+    const admin=new Admin(config,new MemoryStore(),ui);
+    const path=config.routing==='single'?'/admin/api/login-info':'/manage/api/login-info';
+    const response=await admin.handle(request(path,{base:config.adminOrigin}));
+    assert.equal(response.status,200);
+    assert.deepEqual(await response.json(),{showInitialPasswordHint:true});
+    assert.equal(response.headers.get('cache-control'),'no-store');
+    assert.equal(response.headers.get('set-cookie'),null);
+    assert.equal((await admin.handle(request(path,{base:'https://unrelated.example.test'}))).status,404);
+    assert.equal((await admin.handle(request(path,{base:config.adminOrigin,origin:config.adminOrigin,method:'POST',body:{}}))).status,401);
+  }
+});
+
 test('appearance bootstrap is available before login only on the management origin', async () => {
   const loaded: string[] = [];
   const admin = new Admin(management(), new MemoryStore(), async path => {
@@ -372,6 +386,7 @@ test('password rotation is durable, stores only a salted hash and revokes every 
   try{
     const store=new FileThemeStore(root),config={...management(),password:'admin'},admin=new Admin(config,store,ui);
     await seed(store);
+    assert.deepEqual(await (await admin.handle(request('/manage/api/login-info'))).json(),{showInitialPasswordHint:true});
     const first=await rawLogin(admin),second=await rawLogin(admin),before=await store.state(),body=replacement('admin');
     const changed=await admin.handle(request('/manage/api/password',{...first,method:'POST',body}));
     assert.equal(changed.status,200);assert.match(changed.headers.get('set-cookie')!,/Max-Age=0/);
@@ -381,6 +396,7 @@ test('password rotation is durable, stores only a salted hash and revokes every 
     assert.match(saved.adminCredential!.salt,/^[a-f0-9]{32}$/);assert.match(saved.adminCredential!.hash,/^[a-f0-9]{64}$/);
     assert.ok(!JSON.stringify(saved).includes(body.newPassword));assert.ok(!JSON.stringify(saved).includes('"admin"'));
     const restarted=new Admin({...config,password:'Other-bootstrap-password-2026'},new FileThemeStore(root),ui);
+    assert.deepEqual(await (await restarted.handle(request('/manage/api/login-info'))).json(),{showInitialPasswordHint:false});
     for(const session of [first,second])assert.equal((await restarted.handle(request('/manage/api/session',session))).status,401);
     for(const old of ['admin','Other-bootstrap-password-2026'])assert.equal((await rawLogin(restarted,old)).response.status,401);
     const current=await rawLogin(restarted,body.newPassword);assert.equal(current.response.status,200);assert.equal(current.data.mustChangePassword,false);

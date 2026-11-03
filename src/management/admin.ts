@@ -40,6 +40,7 @@ export class Admin {
         const text=await request.text();if(text.length>8192)throw new BridgeError('REQUEST_TOO_LARGE',413,'请求过大。');
         try{body=JSON.parse(text);if(!body||typeof body!=='object'||Array.isArray(body))throw new Error();}catch{throw new BridgeError('BAD_REQUEST',400,'请求JSON无效。');}
       }
+      if(url.pathname==='/manage/api/login-info'&&request.method==='GET')return this.secure(json({showInitialPasswordHint:!(await this.store.state()).adminCredential}));
       if(url.pathname==='/manage/api/login'&&request.method==='POST'){
         const client=request.headers.get('cf-connecting-ip')||'local';const now=Date.now();
         if(this.attempts.size>1000)this.attempts.clear();
