@@ -64,7 +64,7 @@ test('store proxy API enforces login, password, Origin and CSRF; catalog uses sc
     const requests:string[]=[],settings:boolean[]=[];
     const network=new StoreNetwork(f.store,async(setting,run)=>{settings.push(setting.enabled);return run(async input=>{
       const url=String(input);requests.push(url);
-      if(url==='https://api.github.com/repos/example/theme')return Response.json({stargazers_count:42});
+      if(url==='https://github.com/example/theme')return new Response('<span id="repo-stars-counter-star" title="42">42</span>');
       return Response.json(url.includes('/commits/')?{sha:'a'.repeat(40)}:{schema:1,themes:[{id:'example',short:'example',url:'https://github.com/example/theme',branch:'build'}]});
     })});
     const config=managementConfig({});const admin=new Admin(config,f.store,async()=>new Response('ui'),undefined,network);

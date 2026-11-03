@@ -91,7 +91,7 @@ export class Admin {
       }
       if(url.pathname==='/manage/api/catalog'&&request.method==='GET'){
         const ecosystem=url.searchParams.get('ecosystem');if(ecosystem!=='cfsm'&&ecosystem!=='komari')throw new BridgeError('ECOSYSTEM',400,'请选择CFSM或Komari商店。');
-        return this.secure(json(await this.network.run(async fetcher=>this.stars.enrich(await fetchCatalog(ecosystem,fetcher,{latest:true,refresh:url.searchParams.get('refresh')==='1'}),fetcher))));
+        return this.secure(json(await this.network.run(async fetcher=>this.stars.enrich(await fetchCatalog(ecosystem,fetcher,{latest:true,refresh:url.searchParams.get('refresh')==='1'}),fetcher,url.searchParams.get('refresh')==='1'))));
       }
       if(url.pathname==='/manage/api/prepare-install'&&request.method==='POST'){
         const ecosystem=body.ecosystem;

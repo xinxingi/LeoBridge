@@ -53,7 +53,7 @@ function catalogCard(entry,ecosystem){
   const title=displayText(entry.title||entry.name)||entry.id;
   card.append(top,element('h3',title),element('p',displayText(entry.description)||'来自生态官方目录。'),element('p',entry.version||entry.branch||'查看时固定版本','version'),element('small',(entry.blockReasons||[]).join('；')||'先校验资源并查看来源与许可信息，再确认安装'));
   const stars=element('p',Number.isSafeInteger(entry.stars)&&entry.stars>=0?`★ ${entry.stars.toLocaleString('zh-CN')} Stars`:'☆ - Stars','theme-stars');
-  stars.title=entry.starsFetchedAt?`GitHub 仓库 Star 数 · 获取时间 ${new Date(entry.starsFetchedAt).toLocaleString('zh-CN')}`:'未获取到 GitHub 仓库 Star 数';
+  stars.title=entry.starsFetchedAt?`GitHub 仓库 Star 数 · 获取时间 ${new Date(entry.starsFetchedAt).toLocaleString('zh-CN')}${entry.starsStale?'（缓存，刷新未成功）':''}`:'未获取到 GitHub 仓库 Star 数';
   card.append(stars);
   if(entry.repositoryUrl)card.append(link('上游项目 ↗',entry.repositoryUrl));
   const buttons=element('div',undefined,'buttons');
