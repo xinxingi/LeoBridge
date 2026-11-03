@@ -50,7 +50,7 @@ CFSM实时订阅和Komari RPC实时请求各自管理协议生命周期；关闭
 
 Node最多50个访客实时连接；Workers无跨isolate共享限流，DO当前仅用于管理状态事务。适用于小规模监控，公开高流量站需先评估连接、请求、CPU和费用。
 
-本机直连曾15秒未完成TCP，用户授权的7897代理使同一1h请求约0.96秒成功，Node真实HTTP/原生WS有成功证据；本轮仍观察到源WS握手503，CFSM两个90秒窗口仅有HTTP回退，未把这些窗口记作原生通过。未改全局代理。见[代理观察](research/proxy-observations.md)。Wrangler显示CLI代理提示不代表workerd出站经过代理，本次真实源仍曾30秒504。依赖本机代理时使用Node；不要把127.0.0.1代理写入生产Worker。
+`BRIDGE_DEV_PROXY`用于Node开发环境的HTTP与WebSocket代理。Wrangler CLI使用代理不代表workerd出站使用同一代理；需要本机代理时使用Node。生产环境应配置目标机器可访问的网络，不要沿用开发机的127.0.0.1代理地址。
 
 
 ## Node VPS运行参数

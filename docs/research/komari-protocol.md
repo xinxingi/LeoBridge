@@ -1,6 +1,6 @@
 # Komari 展示协议实现与证据
 
-日期：2026-11-02。实现 profile：`komari-adhesive-8ac4fd2`。本文记录代码和自动化验证，不代替主代理的真实浏览器、真实主控及 Workers 验收记录。
+日期：2026-11-02。实现 profile：`komari-adhesive-8ac4fd2`。本文说明协议接口、数据转换和实现限制。
 
 ## 固定消费者和上游核对
 
@@ -48,21 +48,3 @@ JSON-RPC2 支持受限批量请求及标准无 ID notification。未实现方法
 `komari-realtime.ts` 为每个展示连接保留一条只读主控 WS，接收真实快照并填充共享 Upstream 缓存；RPC 请求读取同一缓存，缓存过期时进行真实 HTTP 回退并标注 `bridge.transport=poll`，源 WS 新帧标 `websocket`。主控45秒无帧重连，退避1至30秒；访客10分钟连接续期。访客关闭后清理定时器、上游连接及迟到响应，迟到握手即关闭；每连接最多8个在途 RPC。
 
 展示站访问控制仍由服务端 `authorize` 执行，包括 RPC POST、静态页与 WS 握手；POST 有 Origin 检查，WS Origin 由运行环境检查。展示权限不授予管理权限，Token仅放在配置主控的服务端请求头中。
-
-## 验证状态
-
-- 合成自动化已覆盖中立单位、Komari真实形状、0/缺失/离线/过期、名称隐藏、任务身份、Ping聚合、4小时真实档位查询、RPC权限/notification/batch/错误、历史、不支持指标、连接/HTTP回退/恢复/迟到清理及身份拒绝。
-- 中立历史抽取后，既有 CFSM 历史和服务回归继续通过。
-- 真实主控、真实主题浏览器及本地 Workers 验证由主代理统一整合执行；没有因此文把未执行检查标为通过。
-
-### 真实主控经本机 Komari RPC2 的只读复验
-
-2026-11-02，`scripts/verify-komari.ts` 对运行中的本机独立 Komari 预览源完成只读检查；不读取主控配置或 Token，通过本机端口及 Host 路由访问桥接器。所有原始响应仅保存忽略的 `work/private/komari-acceptance/2026-11-02T13-41-03-147Z/`。
-
-- nodes/settings/latest/recent 均返回合法 JSON-RPC2：11台节点、11台在线，明确7天能力；recent为桥接实际观察到的样本。
-- 1小时系统历史12点，Ping历史96点、8个显式任务，时间跨度均约0.917小时。
-- 7天查询系统历史54点、跨度106小时，Ping历史424点、跨度104小时。查询支持7天不代表当前源端已经存满7天；没有补点或补齐跨度。
-- WebSocket握手101，16.19秒内4个合法 `common:getNodesLatestStatus` 响应、0个RPC错误：2个不同原生上游WS观察、2个HTTP回退，测量字段内容实际变化。比较排除了时间、uptime等随时间推导字段。
-- 该首次完整运行由验收脚本主动 `terminate` 清理，故原始摘要 close_code 为1006；不是源端异常证据。脚本随后改为1000优雅关闭，单独复核记录另存，保留原记录不覆盖。
-- 优雅关闭复验 `work/private/komari-acceptance/2026-11-02T13-42-53-845Z/`：10.006秒内3个合法响应，3个不同原生WS观察、0个HTTP回退、0个RPC错误，实际测量内容变化，关闭码1000，无强制清理。
-- 前两次尝试恰逢主代理重启本机服务，记录为 `ECONNREFUSED`，不是主控或协议失败。浏览器及 Workers 验收仍分别以主代理实际记录为准。

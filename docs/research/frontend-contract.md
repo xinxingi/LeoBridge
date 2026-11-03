@@ -29,9 +29,3 @@
 只供应固定默认展示前台。管理员入口、可选地图、财务汇率、Mikus资源不开放；不请求外部字体和汇率。默认卡片、列表、环形卡片和详情仍来自上游，未重写成自造示例界面。没有地图地理信息或资产权利的扩展承诺。
 
 根工程通过固定依赖和锁文件构建；前台依赖Vue、Vue Router、Chart.js及Vite/plugin-vue。桥接核心TypeScript与上游JavaScript/Vue展示代码分离。
-
-## 本阶段已执行
-
-- `node scripts/build-frontend.mjs`：成功，67个模块，输出dist/public；这是构建证据。
-- `node --test frontend/tests/bridge-state.test.js`：4项通过，覆盖显式离线、未知状态、过期、故障与恢复；使用合成对象，不是真实主控证据。此处保留当时命令，目录迁移后的路径为`web/themes/cfsm/tests/bridge-state.test.js`。
-- 主代理统一浏览器验收通过：真实首页11台、卡片/列表、详情与实时数值更新；1H CPU、6H聚合CPU、7D连接/Ping/丢包曲线实际渲染，初始缺测留空。授权代理接入后的最终IAB应用error日志为空。合成离线/缺省/零值和Workers资源另外验证；证据边界见[验收记录](acceptance.md)。

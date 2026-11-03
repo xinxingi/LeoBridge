@@ -1,6 +1,6 @@
 # 架构与目录约定
 
-LeoBridge保持一个TypeScript项目、一个pnpm锁文件。部署主线是VPS上的单实例Node服务；Worker入口保留，但其部署优先级后置。目录整理参考[固定版本开源项目研究](../research/project-structure.md)及用户分享讨论，按现有职责分层，不引入Monorepo框架、依赖注入容器或新数据库。
+LeoBridge保持一个TypeScript项目、一个pnpm锁文件。推荐在VPS上部署单实例Node服务；Worker入口为实验性实现。按现有职责分层，不引入Monorepo框架、依赖注入容器或新数据库。
 
 ## 数据流与组合
 

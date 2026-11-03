@@ -104,4 +104,4 @@ docker compose up -d
 
 nginx502先查应用健康、网络和构建文件；`Bad host`/来源错误核对HTTPS origin、Host和可信代理IP；cookie不生效核对TLS、主机隔离和转发协议，不关闭安全校验。历史请求可耗时接近110秒，模板读超时120秒；不能通过无限延长超时掩盖源端失败。查看`docker compose logs --tail=100 app nginx`前注意日志可能包含请求上下文，仅分享脱敏摘要。身份/历史/主题包故障见[排障](../troubleshooting.md)。
 
-本机已实际构建arm64及amd64镜像，主代理独立重跑42项容器/nginx检查通过，涵盖HTTPS/WSS、鉴权、历史、应用换IP、持久化及600文件完整恢复，见[容器验收](../research/container-acceptance.md)。脚本使用合成源与临时测试CA，未冒充真实主控或公共证书。systemd、跨应用版本升级回退仍未执行。测试VPS的真实结果见[开发进度](../progress.md)，不由本机通过推定。
+容器集成验证需先在仓库根目录执行 `docker build -f deploy/docker/Dockerfile -t leobridge:acceptance .`，再运行 `node scripts/verify-container.mjs`（需要本机 Docker）。该脚本使用合成源与临时测试证书；部署后仍需按上述清单检查实际域名、证书、上游和前台。

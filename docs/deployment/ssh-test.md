@@ -45,7 +45,7 @@ ssh -N -o ExitOnForwardFailure=yes \
 
 浏览器打开管理入口`http://vps-admin.localhost:18886`、展示入口`http://vps-monitor.localhost:18887`，预览从管理界面打开。浏览器需支持`*.localhost`；版本URL仍按主机名隔离。关闭SSH连接后本机隧道失效，服务器端应用可继续运行。
 
-需要本机SOCKS代理时，将`ProxyCommand nc -X 5 -x 127.0.0.1:7897 %h %p`放入该测试目标专用SSH配置，并让`ssh`与`scp`都用同一配置；按实际已确认的代理地址调整。不要只给最初登录添加代理、后续传输却回退直连。保留主机密钥校验，不以关闭校验解决网络超时。当前测试的实际结果见[VPS私有测试记录](../research/vps-private-acceptance.md)。
+需要本机SOCKS代理时，将`ProxyCommand nc -X 5 -x 127.0.0.1:7897 %h %p`放入该测试目标专用SSH配置，并让`ssh`与`scp`都用同一配置；按实际已确认的代理地址调整。不要只给最初登录添加代理、后续传输却回退直连。保留主机密钥校验，不以关闭校验解决网络超时。
 
 此测试配置为`BRIDGE_ACCESS=local`：浏览器侧只接受localhost源，远程访问由SSH认证和两端回环监听限制；不是生产`private` Basic Auth策略。HTTP仅存在于回环接口及加密SSH隧道两端，不经过公网明文传输。本机其他用户/进程可能访问已建立的隧道，因此仅在受信任的测试电脑使用。独立管理登录依然生效，不复用服务器root密码。
 
@@ -53,4 +53,4 @@ ssh -N -o ExitOnForwardFailure=yes \
 
 区分合成容器测试和授权主控真实数据；记录首页、详情、系统/Ping历史、原生WS/HTTP回退、主题切换、重启持久化、备份恢复及应用回退。恢复/回退使用独立卷并保留原卷；不要让两实例共写状态。
 
-未来迁移正式域名时，保留状态备份并停止本测试实例，审查生产public/private策略、DNS、证书和可信代理配置，再使用正式Compose/nginx模板。仅有SSH隧道通过时，状态写为“VPS私有测试通过，公网DNS/TLS待验收”，不能声称已公开上线。
+迁移正式域名时，备份状态并停止测试实例，配置生产public/private策略、DNS、证书和可信代理，再使用正式Compose/nginx模板。SSH隧道不验证公网DNS与TLS，需在正式域名下检查实际页面及WSS连接。

@@ -8,7 +8,7 @@
 
 | range | bucket_sec | 预期桶数 | 证据 |
 | --- | ---: | ---: | --- |
-| 1h | 300 | 12 | system与Ping本轮实测；主控前台 |
+| 1h | 300 | 12 | system与Ping实测；主控前台 |
 | 6h | 600 | 36 | system与Ping实测；主控前台 |
 | 24h | 1800 | 48 | system与Ping实测；主控前台 |
 | 7d | 7200 | 84 | system与Ping实测成功 |

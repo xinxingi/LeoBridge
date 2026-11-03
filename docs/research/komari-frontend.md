@@ -6,7 +6,7 @@
 
 ## 原始包与本地适配分开
 
-官方商店原包short=`AdhesiveNote`、version=`1.0.0`，目录SHA-256为`94f69c657413e7b3204cfea0bce94f1ee5deb1f897364664b27367b592d49c80`。其他调查代理已实际下载校验原ZIP，主代理仍需统一整合验证。该摘要**不代表本地修改后构建**。
+官方商店原包short=`AdhesiveNote`、version=`1.0.0`，目录SHA-256为`94f69c657413e7b3204cfea0bce94f1ee5deb1f897364664b27367b592d49c80`。该摘要**不代表本地修改后构建**。
 
 应用副本 `web/themes/komari/` 保存原始文件哈希 `UPSTREAM.json` 和 `PATCHES.md`。构建 `node scripts/build-komari.mjs` 输出 `dist/komari-public/`，生成清楚区分的manifest short=`LeoBridgeAdhesiveNote`、version=`1.0.0-leobridge.1`，保留原作者/来源。运行依赖由根锁文件统一固定，无需执行参考目录的打包/字体生成脚本。
 
@@ -32,14 +32,6 @@ HTTP是 `POST /api/rpc2`；WS是同路径GET升级，发送 `{jsonrpc:'2.0',id,m
 
 ## 路由与资源
 
-首页 `/`，详情 `/instance/:uuid`。按主代理确定的不可变安装hostname隔离方案，保留主题原有绝对`/api`和`/assets`，避免正则重写压缩JS。内置素材包括纸张WebP、图钉PNG、两款自托管WOFF2和Twemoji国旗，无运行时字体CDN依赖。未知详情/资源路径必须由运行层区别处理，不能把HTML伪装成缺失JS。
+首页 `/`，详情 `/instance/:uuid`。按不可变安装hostname隔离方案，保留主题原有绝对`/api`和`/assets`，避免正则重写压缩JS。内置素材包括纸张WebP、图钉PNG、两款自托管WOFF2和Twemoji国旗，无运行时字体CDN依赖。未知详情/资源路径必须由运行层区别处理，不能把HTML伪装成缺失JS。
 
 管理入口替换为只读说明；不包含Komari管理后台、采集、终端或远程控制。身份、可公开范围和Token仍由服务端统一层约束；主题不接触主控秘密。
-
-## 实际本地检查
-
-- 独立TypeScript检查：`node node_modules/typescript/bin/tsc --noEmit -p komari-frontend/tsconfig.app.json` 通过。此节命令保留当时路径，目录迁移后`komari-frontend/`统一改为`web/themes/komari/`。
-- `node --test komari-frontend/tests/*.test.mjs`：4项通过，覆盖缺失与真0、字节/网速单位、观察时间及删除节点、旧WS不能取消新连接请求。都是合成验证。
-- `node scripts/build-komari.mjs`：生产构建通过，162模块，实际主题及本地静态资源输出至dist/komari-public。
-- 真浏览器首页/详情/系统历史/Ping与丢包/实时：主代理统一执行，本文不提前标记通过。
-- Workers实际安装、独立hostname、R2动态包分发：待统一部署验收，不宣称已上线。

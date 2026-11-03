@@ -6,7 +6,7 @@
 
 LeoBridge 只读访问妙妙屋X探针 API，转换服务器状态、历史和实时协议，并提供独立的主题管理站。采集、服务器管理和历史保存仍由妙妙屋X负责，无需安装新的 Agent。
 
-**当前优先支持 Linux VPS 部署。** 两个内置主题已完成本地真实数据与浏览器验收；本机 Docker/nginx 合成验收，以及 VPS 私有实例的真实接口、实时更新、重启和备份恢复检查已通过；该 VPS 的浏览器验收与公网 DNS/TLS 仍待完成。Cloudflare Workers 保留为后续方向，本轮不部署。
+支持在 Linux VPS 上通过 Docker Compose 部署，提供 nginx 反向代理、持久化存储及备份恢复配置。
 
 ## 可以做什么
 
@@ -63,7 +63,7 @@ web/        独立管理界面及两套固定版本主题源码
 deploy/    Docker/nginx 与 systemd 部署工件
 scripts/    构建、配置、架构检查与只读验收工具
 tests/      核心、协议、管理及运行时测试
-docs/       用户指南、开发说明、决策与研究证据
+docs/       用户指南、架构、协议契约与第三方参考资料
 ```
 
 目录和依赖规则见 [架构说明](docs/development/architecture.md)。项目保持一个依赖锁文件；中立模块不能导入具体协议，两种协议不能互相导入，Node 专用能力放在运行时层。`pnpm check`自动检查这些边界、循环依赖、类型、测试和构建。
@@ -77,7 +77,7 @@ docs/       用户指南、开发说明、决策与研究证据
 | 安装、预览与切换主题 | [主题管理](docs/themes.md) |
 | 排查历史、身份或实时问题 | [排障](docs/troubleshooting.md) |
 | 开发、测试或贡献代码 | [贡献指南](CONTRIBUTING.md) · [架构](docs/development/architecture.md) |
-| 查看实际通过与未验证项 | [开发进度](docs/progress.md) · [容器验收](docs/research/container-acceptance.md) · [双生态验收](docs/research/dual-store-acceptance.md) |
+| 了解兼容范围与数据限制 | [兼容说明](docs/research/compatibility.md) |
 | 了解源码来源与许可 | [第三方声明](THIRD_PARTY_NOTICES.md) |
 | 使用项目 Logo 与横幅 | [品牌素材](docs/assets/README.md) |
 

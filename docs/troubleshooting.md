@@ -10,7 +10,7 @@
 | 版本地址无法解析 | 浏览器需支持`*.localhost`回环解析；保留管理站生成的`t-<ID>.display.localhost`或`p-<ID>.preview.localhost`主机名，改成IP会改变路由 |
 | 根入口307 | 正常跳转到当前安装版本，API脚本须选择实际版本源；旧页面继续使用旧协议，刷新根入口才跟随新主题 |
 | 改PORT后404 / Bad host | `PORT`仅影响默认展示源；核对管理、展示、预览origin的scheme/host/port与监听器一致。Worker默认三类主机共用8787 |
-| Node配置https源后404 | 当前Node本地监听使用HTTP且按HTTP构造请求；勿直接当作生产TLS反代方案，远程部署使用Worker HTTPS源 |
+| Node配置https源后404 | Node的local模式使用HTTP；HTTPS反代部署应配置proxy模式、HTTPS源和可信代理，见[VPS部署](deployment/vps.md) |
 | ADMIN_NOT_CONFIGURED / 503 | 运行`pnpm configure:admin`，从本机私有`.dev.vars`读取独立管理凭据；不输出密码，不重复生成 |
 | LOGIN_FAILED / LOGIN_THROTTLED | 使用管理凭据而非探针Token或展示密码；连续失败会限速，等待后核对本机私有配置 |
 | LOGIN_REQUIRED / 401 | 会话过期或已退出，回管理源重新登录；展示/预览不会携带管理cookie |
@@ -48,7 +48,7 @@ Node状态在`work/theme-store`，包括安装资源和管理会话；不要提�
 | UPSTREAM_HTTP / 502 | 上游HTTP失败；保护开启而Token缺失可能404。核对服务端密钥，不关闭保护排障 |
 | UPSTREAM_TIMEOUT / 504 | 握手或读取超时，检查授权网络与源站并只读重试；不能认定服务器离线 |
 | curl代理成功但Node/WS仍失败 | Node需显式配置`BRIDGE_DEV_PROXY`接入HTTP和WS Agent并重启；不能据curl成功认定后端已使用代理 |
-| Wrangler有代理提示但workerd超时 | CLI代理不代表workerd出站；本次环境变量方式实测仍504。使用Node已验证代理路径，本地模拟与云端真实链路分开验收 |
+| Wrangler有代理提示但workerd超时 | CLI代理不代表workerd出站；需要本机代理时使用Node并配置BRIDGE_DEV_PROXY，分别检查本地与云端网络 |
 | UPSTREAM_UNAVAILABLE / 502 | DNS/TLS/连接中断；不改主控配置或把Token/源地址放进浏览器查询参数 |
 | PROBE_DISABLED / 503 | 源端未开放探针，清除旧展示；不能用空列表冒充成功 |
 | HISTORY_RANGE / UPSTREAM_HISTORY | 范围不支持、success=false或历史契约变化；七天需`history_days>=7`及实际协议支持，不补0或造曲线 |

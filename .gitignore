@@ -14,3 +14,18 @@ coverage/
 playwright-report/
 test-results/
 .pnpm-store/
+
+# Local development plans and session records
+/AGENTS.md
+/docs/spec.md
+/docs/progress.md
+/docs/research/acceptance.md
+/docs/research/container-acceptance.md
+/docs/research/dual-store-acceptance.md
+/docs/research/theme-runtime-acceptance.md
+/docs/research/vps-preparation.md
+/docs/research/vps-private-acceptance.md
+/docs/research/live-observations.md
+/docs/research/proxy-observations.md
+/docs/research/integration-inputs.md
+/docs/research/project-structure.md
