@@ -8,7 +8,7 @@
 | --- | --- |
 | 不知道下载哪个文件 | [Release](https://github.com/xinxingi/LeoBridge/releases)中的Linux x64包对应x86_64，arm64包对应aarch64/arm64；一起下载同名.sha256。Source code是源码，不是运行包 |
 | Release页面或附件404 | 核对仓库地址、标签及访问权限；私有仓库须用有权限的GitHub账号登录。不能仅凭404认定尚未发布；不要把登录令牌写到公开命令或工单 |
-| Docker拉取latest失败 | 当前不发布latest，使用`staractive/leobridge:0.2.0`等明确存在的固定版本；镜像标签不带v |
+| Docker拉取latest失败 | 确认新版正式发布流程已成功生成latest；旧v0.2.0流程只生成版本标签，过渡期间可在Compose中指定`staractive/leobridge:0.2.0`。镜像版本标签不带v |
 | no matching manifest / Exec format error | 核对目标系统与CPU架构；当前发行只提供Linux x64/amd64和arm64，Linux运行包不能在macOS/Windows直接运行 |
 | 校验文件不匹配 | 停止解压或升级，确认运行包及.sha256来自同一个Release并重新下载；不能跳过摘要校验 |
 

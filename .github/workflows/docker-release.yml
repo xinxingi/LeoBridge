@@ -162,6 +162,18 @@ jobs:
           node scripts/verify-release.mjs image "$IMAGE@$DIGEST"
           echo "Published: \`$IMAGE@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Update latest after image verification
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          IMAGE: staractive/leobridge:${{ needs.version.outputs.version }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_VERSION" == *-* ]]; then exit 0; fi
+          docker buildx imagetools create --tag staractive/leobridge:latest "$IMAGE@$DIGEST"
+          docker buildx imagetools inspect staractive/leobridge:latest
+          echo "Updated: \`staractive/leobridge:latest\` from \`$IMAGE@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+
   release:
     needs: [version, packages, docker]
     runs-on: ubuntu-24.04
