@@ -7,11 +7,17 @@ import { errorResponse,json } from '../core/http.ts';
 import { BridgeError } from '../core/errors.ts';
 export class Site {
   readonly admin:Admin;
+  onActiveThemeChange:()=>void=()=>{};
   readonly protocols:Record<string,ProtocolApplication>;
   constructor(readonly config:Config,readonly management:ManagementConfig,readonly store:ThemeStore,loadUi:(path:string)=>Promise<Response>){
     this.admin=new Admin(management,store,loadUi);this.protocols=protocolApplications(config);
   }
-  private async version(url:URL){const selected=installationFromUrl(this.management,url);if(!selected)return null;const item=(await this.store.state()).installations[selected.id];return item?{item,...selected}:null;}
+  private async version(url:URL){
+    if(this.management.routing==='single'&&url.origin===this.management.displayOrigin){
+      const state=await this.store.state(),item=state.active?state.installations[state.active]:undefined;
+      return item?{item,id:item.id,preview:false}:null;
+    }
+    const selected=installationFromUrl(this.management,url);if(!selected)return null;const item=(await this.store.state()).installations[selected.id];return item?{item,...selected}:null;}
   async websocket(request:Request):Promise<ProtocolApplication|null>{
     const url=new URL(request.url);
     if(authorize(request,this.config))return null;
@@ -21,18 +27,24 @@ export class Site {
   }
   async fetch(request:Request):Promise<Response>{
     const url=new URL(request.url);
-    if(url.origin===this.management.adminOrigin)return this.admin.handle(request);
+    const single=this.management.routing==='single';
+    if(url.origin===this.management.adminOrigin&&(!single||url.pathname==='/admin'||url.pathname.startsWith('/admin/'))){
+      const response=await this.admin.handle(request);
+      if(single&&request.method==='POST'&&response.ok&&['/admin/api/activate','/admin/api/rollback'].includes(url.pathname))this.onActiveThemeChange();
+      return response;
+    }
     try{
       const isRoot=url.origin===this.management.displayOrigin;
-      const selected=isRoot?null:await this.version(url);
+      const selected=isRoot&&!single?null:await this.version(url);
       if(!isRoot&&!selected)return new Response('Not found',{status:404});
       const denied=authorize(request,this.config);if(denied)return denied;
-      if(isRoot){
+      if(isRoot&&!single){
         const state=await this.store.state();if(!state.active)return new Response('尚未启用展示主题。',{status:503});
         const target=new URL(installationUrl(this.management,state.active));target.pathname=url.pathname;target.search=url.search;
         return new Response(null,{status:307,headers:{Location:target.href,'Cache-Control':'no-store','Referrer-Policy':'no-referrer'}});
       }
-      const {item}=selected!;const protocol=this.protocols[item.protocolProfile];
+      if(!selected)return new Response('尚未启用展示主题。',{status:503});
+      const {item}=selected;const protocol=this.protocols[item.protocolProfile];
       if(!protocol)throw new BridgeError('PROTOCOL_UNSUPPORTED',409,'此主题协议尚未实现。');
       if(url.pathname.startsWith('/manage')||url.pathname.startsWith('/admin'))return new Response('主题不能访问管理后台。',{status:404});
       if(url.pathname==='/__bridge/version')return json({id:item.id,ecosystem:item.ecosystem,protocolProfile:item.protocolProfile,preview:selected!.preview});
@@ -48,7 +60,7 @@ export class Site {
   }
   private assetResponse(request:Request,item:Installation,asset:{bytes:Uint8Array;contentType:string}){
     const url=new URL(request.url),wsOrigin=url.origin.replace(/^http/,'ws');
-    const response=new Response(request.method==='HEAD'?null:asset.bytes as BodyInit,{headers:{'Content-Type':asset.contentType,'Cache-Control':asset.contentType.startsWith('text/html')?'no-store':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':'same-origin','X-Frame-Options':'DENY'}});
+    const response=new Response(request.method==='HEAD'?null:asset.bytes as BodyInit,{headers:{'Content-Type':asset.contentType,'Cache-Control':(this.management.routing==='single'&&url.origin===this.management.displayOrigin)||asset.contentType.startsWith('text/html')?'no-store':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':'same-origin','X-Frame-Options':'DENY'}});
     response.headers.set('Content-Security-Policy',`default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${wsOrigin}; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`);
     return response;
   }

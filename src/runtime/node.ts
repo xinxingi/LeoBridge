@@ -19,7 +19,7 @@ process.umask(0o077);
 let env,config,management,runtime;
 try{
   env=await loadRuntimeEnv(process.env);config=readConfig(env);management=managementConfig(env);runtime=readNodeRuntimeConfig(env);
-  if(runtime.mode==='proxy'&&(config.access==='local'||!management.password))throw new Error('Production requires explicit display access and independent admin credentials.');
+  if(runtime.mode!=='local'&&(config.access==='local'||!management.password))throw new Error('Production requires explicit display access and independent admin credentials.');
 }catch{console.error('LeoBridge configuration is invalid. See docs/configuration.md and docs/deployment/vps.md.');process.exit(1);}
 const transport=createDevTransport(env.BRIDGE_DEV_PROXY,config.timeoutMs);setGlobalDispatcher(transport.http);
 if(transport.proxied)console.log('Local development proxy enabled for HTTP and WebSocket.');
@@ -30,6 +30,8 @@ catch{console.error('Theme initialization failed. Build the application and chec
 const site=new Site(config,management,store,async path=>new Response(new Uint8Array(await readFile(resolve(assets,'_management',path))),{headers:{'Content-Type':path.endsWith('.html')?'text/html; charset=utf-8':path.endsWith('.css')?'text/css; charset=utf-8':path.endsWith('.svg')?'image/svg+xml':'text/javascript; charset=utf-8'}}));
 function socket(ws:WebSocket):Socket{return {send:data=>ws.send(data),close:(code,reason)=>ws.close(code,reason),onMessage:fn=>ws.on('message',data=>fn(data.toString())),onClose:fn=>ws.on('close',fn),onError:fn=>ws.on('error',fn)};}
 const wss=new WebSocketServer({noServer:true,maxPayload:65536});
+const rootSessions=new Set<{close:()=>void}>();
+site.onActiveThemeChange=()=>{for(const session of rootSessions)session.close();};
 const sessions=new Set<{close:()=>void}>(),sources=new Set<WebSocket>();
 let shuttingDown=false;
 const connect=()=>new Promise<Socket>((accept,reject)=>{
@@ -45,7 +47,7 @@ async function body(req:IncomingMessage){
   for await(const chunk of req){length+=chunk.length;if(length>131072)throw new BridgeError('REQUEST_TOO_LARGE',413,'请求过大。');chunks.push(chunk);}
   return chunks.length?Buffer.concat(chunks):undefined;
 }
-const ports=runtime.mode==='proxy'?[runtime.port]:[...new Set([management.displayOrigin,management.adminOrigin,management.previewOrigin].map(origin=>Number(new URL(origin).port||80)))];
+const ports=runtime.mode!=='local'||management.routing==='single'?[runtime.port]:[...new Set([management.displayOrigin,management.adminOrigin,management.previewOrigin].map(origin=>Number(new URL(origin).port||80)))];
 const servers=ports.map(port=>{
   const server=createServer(async(req,res)=>{
     let response:Response;
@@ -66,13 +68,13 @@ const servers=ports.map(port=>{
       if(shuttingDown||sessions.size>=50){connection.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');return;}
       const request=nodeRequest(req,runtime,management,undefined,port),url=new URL(request.url),protocol=await site.websocket(request);
       if(!protocol||shuttingDown||sessions.size>=50){connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');return;}
-      wss.handleUpgrade(req,connection,head,ws=>{const session=protocol.openRealtime(socket(ws),connect,url.pathname);sessions.add(session);ws.on('close',()=>sessions.delete(session));});
+      wss.handleUpgrade(req,connection,head,ws=>{const session=protocol.openRealtime(socket(ws),connect,url.pathname);sessions.add(session);if(management.routing==='single'&&url.origin===management.displayOrigin)rootSessions.add(session);ws.on('close',()=>{sessions.delete(session);rootSessions.delete(session);});});
     }catch{connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');}
   });
   server.once('error',()=>{console.error('LeoBridge listener failed; check address and port availability.');process.exitCode=1;shutdown();});
   server.listen(port,runtime.host,()=>console.log(`LeoBridge ${runtime.mode} listener: ${runtime.host}:${port}`));return server;
 });
-console.log(`Display: ${management.displayOrigin}; administration: ${management.adminOrigin}`);
+console.log(`Display: ${management.displayOrigin}; administration: ${management.adminOrigin}${management.routing==='single'?'/admin/':'/'}`);
 function shutdown(){
   if(shuttingDown)return;shuttingDown=true;
   for(const session of sessions)session.close();

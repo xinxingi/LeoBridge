@@ -77,8 +77,8 @@ test('unconfigured management uses the default password and requires rotation', 
   const admin = new Admin(managementConfig({}), new MemoryStore(), ui);
   assert.equal(admin.config.password,'admin');
   const options={method:'POST',base:admin.config.adminOrigin,origin:admin.config.adminOrigin};
-  assert.equal((await admin.handle(request('/manage/api/login',{...options,body:{username:'admin',password:''}}))).status,401);
-  const response=await admin.handle(request('/manage/api/login',{...options,body:{username:'admin',password:'admin'}}));
+  assert.equal((await admin.handle(request('/admin/api/login',{...options,body:{username:'admin',password:''}}))).status,401);
+  const response=await admin.handle(request('/admin/api/login',{...options,body:{username:'admin',password:'admin'}}));
   assert.equal(response.status,200);assert.equal((await response.json()).mustChangePassword,true);
 });
 
@@ -276,6 +276,54 @@ test('management rejects same-host isolation and non-local cleartext configurati
   assert.throws(() => managementConfig({BRIDGE_ADMIN_ORIGIN: 'http://localhost:8786', BRIDGE_DISPLAY_ORIGIN: 'http://localhost:8787'}), {code: 'ORIGIN_ISOLATION'});
   assert.throws(() => managementConfig({BRIDGE_ADMIN_ORIGIN: 'http://admin.example.test'}), {code: 'MANAGEMENT_CONFIGURATION'});
   assert.throws(() => managementConfig({BRIDGE_ADMIN_ORIGIN: 'https://admin.preview.localhost'}), {code: 'ORIGIN_ISOLATION'});
+});
+
+test('single origin defaults to root theme and /admin, with namespaced resources and path-scoped login', async () => {
+  const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test',BRIDGE_ADMIN_PASSWORD:password});
+  assert.equal(config.routing,'single'); assert.equal(config.adminOrigin,config.displayOrigin);
+  const store=new MemoryStore();await seed(store);
+  const loaded:string[]=[];
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'public'}),config,store,async path=>{loaded.push(path);return ui();});
+  site.protocols['cfsm-609cc0b']=fakeProtocol('cfsm');
+  site.protocols['komari-adhesive-v1']=fakeProtocol('komari');
+  const call=(path:string,options:Parameters<typeof request>[1]={})=>site.fetch(request(path,{base:config.displayOrigin,origin:config.displayOrigin,...options}));
+  assert.equal(await (await call('/')).text(),'<html>synthetic theme</html>');
+  assert.equal((await call('/')).headers.get('location'),null);
+  assert.equal((await call('/')).headers.get('cache-control'),'no-store');
+  assert.deepEqual(await (await call('/api/protocol')).json(),{protocol:'cfsm'});
+  assert.equal((await call('/admin')).headers.get('location'),'/admin/');
+  assert.equal((await call('/admin/')).status,200);
+  assert.equal((await call('/admin/appearance.js')).status,200);
+  assert.deepEqual(loaded,['index.html','appearance.js']);
+  assert.equal((await call('/admin/missing.js')).status,404);
+  assert.equal((await call('/manage/api/state')).status,404);
+  assert.equal((await call('/admin/api/state')).status,401);
+  const response=await call('/admin/api/login',{method:'POST',body:{username:'admin',password}});
+  assert.equal(response.status,200);
+  const setCookie=response.headers.get('set-cookie')!;
+  assert.match(setCookie,/^__Secure-leobridge_admin_path=/);assert.match(setCookie,/Path=\/admin;/);assert.match(setCookie,/HttpOnly/);assert.match(setCookie,/Secure/);
+  let cookie=setCookie.split(';')[0],{csrf}=await response.json() as {csrf:string};
+  assert.equal((await call('/admin/api/state',{cookie})).status,403);
+  assert.equal((await call('/admin/api/password',{method:'POST',cookie,csrf,body:replacement(password,newPassword)})).status,200);
+  const relogin=await call('/admin/api/login',{method:'POST',body:{username:'admin',password:newPassword}});
+  assert.equal(relogin.status,200);cookie=relogin.headers.get('set-cookie')!.split(';')[0];csrf=(await relogin.json()).csrf;
+  const state=await (await call('/admin/api/state',{cookie})).json() as any;
+  assert.equal(state.links[state.active].display,config.displayOrigin);
+  let changes=0;site.onActiveThemeChange=()=>changes++;
+  const body={id:ids[1],generation:state.generation};
+  assert.equal((await call('/admin/api/activate',{method:'POST',cookie,body})).status,403);
+  assert.equal((await call('/admin/api/activate',{method:'POST',cookie,csrf,body,origin:'https://other.invalid'})).status,403);
+  assert.equal(changes,0);
+  assert.equal((await call('/admin/api/activate',{method:'POST',cookie,csrf,body})).status,200);
+  assert.equal(changes,1);
+  assert.deepEqual(await (await call('/api/protocol')).json(),{protocol:'komari'});
+  const rootWs=new Request(config.displayOrigin+'/api/rpc2',{headers:{origin:config.displayOrigin}});
+  assert.equal(await site.websocket(rootWs),site.protocols['komari-adhesive-v1']);
+  assert.equal(await site.websocket(new Request(rootWs.url,{headers:{origin:'https://other.invalid'}})),null);
+  const preview=installationUrl(config,ids[0],true);
+  assert.equal((await site.fetch(new Request(preview+'/admin/api/state',{headers:{cookie}}))).status,404);
+  assert.equal((await call('/admin/api/logout',{method:'POST',cookie,csrf,body:{}})).status,200);
+  assert.equal((await call('/admin/api/state',{cookie})).status,401);
 });
 
 async function rawLogin(admin:Admin,password=admin.config.password){

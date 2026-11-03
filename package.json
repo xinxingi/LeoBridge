@@ -21,7 +21,7 @@
     "configure:admin": "node --import tsx scripts/configure-admin.ts",
     "check:architecture": "node scripts/check-architecture.mjs",
     "build:worker": "esbuild src/runtime/worker.ts --bundle --platform=browser --format=esm --outfile=dist/worker.js",
-    "test:runtime": "node --import tsx --test tests/runtime-node.test.ts"
+    "test:runtime": "node --import tsx --test tests/runtime-node.test.ts tests/runtime-single-port.test.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "5.101.4",

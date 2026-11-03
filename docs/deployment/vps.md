@@ -1,5 +1,13 @@
 # VPS 部署
 
+## 默认单端口入口
+
+新配置默认使用`BRIDGE_ROUTING=single`，同一个站点的`/`显示当前探针主题，`/admin/`提供管理页面，管理API位于`/admin/api/`。Node只监听`BRIDGE_LISTEN_PORT`；反向代理将两条路径送至同一个上游，并保留Host、Origin、Cookie、Set-Cookie和WebSocket升级头。
+
+正式HTTPS部署使用`BRIDGE_NODE_MODE=proxy`及`BRIDGE_ORIGIN=https://monitor.example.com`，按下文配置可信代理。可选版本/预览主机同样使用此应用端口，但需要相应DNS和反代；配置独立HTTPS预览源。需要第三方主题与后台源隔离时继续使用下文的`isolated`多源方案，或保留原显式多源配置。
+
+已授权的公网IP临时HTTP测试可显式设置`BRIDGE_ROUTING=single`、`BRIDGE_NODE_MODE=direct`、`BRIDGE_ORIGIN=http://实际IP`、`BRIDGE_ACCESS=public`及独立的`BRIDGE_ADMIN_PASSWORD`。direct不信任转发身份头，不自动将默认口令暴露到公网。应用可只监听回环，由公网80端口反代统一提供首页与管理；无需另开管理端口。正式环境应使用HTTPS。同源路径不是主题与后台的安全边界，single只应启用可信主题。
+
 LeoBridge以单个Node进程运行，主题包及管理状态保存在持久目录或卷中。可以直接运行Node，也可以使用Docker；镜像需从源码构建。
 
 ## HTTPS与反向代理

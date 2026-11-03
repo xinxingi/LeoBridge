@@ -8,7 +8,11 @@ BRIDGE_TITLE=LeoBridge
 # pnpm configure:admin optionally writes these initial credentials locally.
 # BRIDGE_ADMIN_USERNAME=admin
 # BRIDGE_ADMIN_PASSWORD=use-a-separate-random-password-at-least-20-characters
-# Node local origins. Hostnames must differ; ports alone do not isolate cookies.
+# Default: one listener, / for probes and /admin/ for management.
+# BRIDGE_ROUTING=single
+# BRIDGE_ORIGIN=http://127.0.0.1:8787
+# Optional legacy isolated mode: use different hostnames for cookie isolation.
+# BRIDGE_ROUTING=isolated
 # BRIDGE_ADMIN_ORIGIN=http://admin.localhost:8786
 # BRIDGE_DISPLAY_ORIGIN=http://127.0.0.1:8787
 # BRIDGE_DISPLAY_DOMAIN=display.localhost

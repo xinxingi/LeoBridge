@@ -16,7 +16,7 @@ flowchart LR
   Site --> Runtime[runtime: Node / Worker]
 ```
 
-这是数据/请求组合图，具体代码允许的导入方向以下表为准。共享模型和历史事实不含CFSM响应结构，两个协议各自转换；`app/protocols.ts`注入同一上游快照客户端，保持缓存与身份事实一致。每个安装ID的主机名绑定资源及协议版本，根入口只决定新访问跳转位置。
+这是数据/请求组合图，具体代码允许的导入方向以下表为准。共享模型和历史事实不含CFSM响应结构，两个协议各自转换；`app/protocols.ts`注入同一上游快照客户端，保持缓存与身份事实一致。默认single路由的根入口直接绑定当前活动主题，`/admin/`提供管理，切换活动主题关闭根入口旧实时连接。版本/预览主机仍绑定固定资源与协议；isolated路由保留根入口跳转。
 
 ## 目录和依赖边界
 
@@ -43,7 +43,7 @@ flowchart LR
 
 反向代理由部署环境选择。应用约定HTTPS来源、Host及可信客户端IP的传递方式，不依赖nginx或Caddy的产品接口；仓库部署模板是该约定的一种配置示例。
 
-Node分两种显式模式：local保留回环多端口开发；proxy用单监听端口服务多个HTTPS源。只有允许的代理IP/CIDR可以提供单值`X-Forwarded-Proto=https`和`X-Real-IP`。Host必须匹配配置源或有效版本域；HTTP与WS使用同一验证函数。来自客户的Forwarded/X-Forwarded-Host/CF-Connecting-IP不能改变路由或绕过管理节流。
+Node默认single路由只开一个监听端口，local使用回环HTTP，direct用于显式配置的临时HTTP测试，proxy用于HTTPS反代。旧local+isolated配置保留多端口行为。只有允许的代理IP/CIDR可以提供单值`X-Forwarded-Proto=https`和`X-Real-IP`。Host必须匹配配置源或有效版本域；HTTP与WS使用同一验证函数。来自客户的Forwarded/X-Forwarded-Host/CF-Connecting-IP不能改变路由或绕过管理节流。
 
 生产模式默认不读取`.dev.vars`。配置来自环境变量或显式`BRIDGE_ENV_FILE`；环境覆盖文件，日志不输出内容。文件存储在独立持久卷，按单站单副本运行。请求/WS有大小和数量界限，退出停止新请求、关闭上下游连接、终止出站连接池并限定排空时间。健康检查只检查进程，不访问真实源。
 

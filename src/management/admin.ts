@@ -11,8 +11,8 @@ export class Admin {
   private attempts=new Map<string,{count:number;until:number}>();
   private installing=false;
   constructor(readonly config:ManagementConfig,readonly store:ThemeStore,private loadUi:(path:string)=>Promise<Response>){ }
-  private cookieName(){return this.config.adminOrigin.startsWith('https:')?'__Host-leobridge_admin':'leobridge_admin_local';}
-  private cookie(value:string,maxAge=14400){return `${this.cookieName()}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${this.config.adminOrigin.startsWith('https:')?'; Secure':''}`;}
+  private cookieName(){return this.config.routing==='single'?(this.config.adminOrigin.startsWith('https:')?'__Secure-leobridge_admin_path':'leobridge_admin_path'):(this.config.adminOrigin.startsWith('https:')?'__Host-leobridge_admin':'leobridge_admin_local');}
+  private cookie(value:string,maxAge=14400){return `${this.cookieName()}=${value}; Path=${this.config.routing==='single'?'/admin':'/'}; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${this.config.adminOrigin.startsWith('https:')?'; Secure':''}`;}
   private async session(request:Request){
     const raw=request.headers.get('cookie')?.split(';').map(s=>s.trim()).find(s=>s.startsWith(`${this.cookieName()}=`))?.split('=')[1]||'';
     if(!/^[a-f0-9]{64}$/.test(raw))return null;
@@ -23,6 +23,11 @@ export class Admin {
     const url=new URL(request.url);
     try{
       if(url.origin!==this.config.adminOrigin)return new Response('Not found',{status:404});
+      if(this.config.routing==='single'){
+        if(url.pathname==='/admin')return this.secure(new Response(null,{status:308,headers:{Location:'/admin/'}}));
+        if(!url.pathname.startsWith('/admin/'))return new Response('Not found',{status:404});
+        url.pathname=url.pathname.startsWith('/admin/api/')?url.pathname.replace('/admin/api/','/manage/api/'):url.pathname.slice('/admin'.length);
+      }
       if(!url.pathname.startsWith('/manage/api/')){
         if(request.method!=='GET')throw new BridgeError('METHOD_NOT_ALLOWED',405,'请求方法不支持。');
         if(!['/','/app.js','/appearance.js','/styles.css','/logo.svg'].includes(url.pathname))return new Response('Not found',{status:404});
@@ -67,7 +72,7 @@ export class Admin {
       if(session.mustChangePassword)throw new BridgeError('PASSWORD_CHANGE_REQUIRED',403,'首次登录必须先设置高强度密码。');
       if(url.pathname==='/manage/api/state'&&request.method==='GET'){
         const state=publicThemeState(await this.store.state());
-        return this.secure(json({...state,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));
+        return this.secure(json({...state,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:this.config.routing==='single'&&id===state.active?this.config.displayOrigin:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));
       }
       if(url.pathname==='/manage/api/catalog'&&request.method==='GET'){
         const ecosystem=url.searchParams.get('ecosystem');if(ecosystem!=='cfsm'&&ecosystem!=='komari')throw new BridgeError('ECOSYSTEM',400,'请选择CFSM或Komari商店。');

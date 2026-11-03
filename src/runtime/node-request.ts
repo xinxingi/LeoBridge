@@ -5,7 +5,7 @@ import { BridgeError } from '../core/errors.ts';
 import { managementConfig, installationFromUrl, type ManagementConfig } from '../management/config.ts';
 
 export interface NodeRuntimeConfig {
-  mode: 'local' | 'proxy';
+  mode: 'local' | 'direct' | 'proxy';
   host: string;
   port: number;
   trustedProxies: BlockList;
@@ -34,8 +34,8 @@ function proxyOrigins(config: ManagementConfig) {
 export function readNodeRuntimeConfig(env: Env): NodeRuntimeConfig {
   const mode = env.BRIDGE_NODE_MODE ?? 'local';
   const host = env.BRIDGE_LISTEN_HOST ?? '127.0.0.1';
-  const portText = env.BRIDGE_LISTEN_PORT ?? '8787';
-  if ((mode !== 'local' && mode !== 'proxy') || (host !== 'localhost' && !isIP(host))
+  const portText = env.BRIDGE_LISTEN_PORT ?? env.PORT ?? (managementConfig(env).routing === 'single' ? new URL(managementConfig(env).displayOrigin).port || '80' : '8787');
+  if ((mode !== 'local' && mode !== 'proxy' && mode !== 'direct') || (host !== 'localhost' && !isIP(host))
     || (mode === 'local' && host !== 'localhost' && !isLoopback(host))
     || !/^\d{1,5}$/.test(portText) || Number(portText) < 1 || Number(portText) > 65535) throw configuration();
   const trustedProxies = new BlockList();
@@ -48,6 +48,7 @@ export function readNodeRuntimeConfig(env: Env): NodeRuntimeConfig {
       else trustedProxies.addSubnet(address!, Number(prefix), family === 4 ? 'ipv4' : 'ipv6');
     } catch { throw configuration(); }
   }
+  if (mode === 'direct' && (managementConfig(env).routing !== 'single' || env.BRIDGE_ACCESS === 'local' || !['public','private'].includes(env.BRIDGE_ACCESS || '') || !env.BRIDGE_ADMIN_PASSWORD)) throw configuration();
   if (mode === 'proxy') {
     if (env.BRIDGE_DEV_PROXY) throw configuration();
     proxyOrigins(managementConfig(env));
@@ -96,7 +97,7 @@ export function nodeRequest(req: IncomingMessage, runtime: NodeRuntimeConfig, ma
   }
   let url: URL;
   try { url = new URL(`${protocol}//${host}${target}`); } catch { throw badRequest(); }
-  if (runtime.mode === 'proxy') {
+  if (runtime.mode === 'proxy' || runtime.mode === 'direct' || management.routing === 'single') {
     const origins = [management.adminOrigin, management.displayOrigin, management.previewOrigin];
     if (!origins.includes(url.origin) && !installationFromUrl(management, url)) throw new BridgeError('UNKNOWN_HOST', 421, '请求主机不在配置的站点范围内。');
   } else {

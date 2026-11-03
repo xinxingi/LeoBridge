@@ -18,7 +18,7 @@ const env = {
 const management = managementConfig(env);
 const runtime = readNodeRuntimeConfig(env);
 const local = readNodeRuntimeConfig({});
-const localManagement = managementConfig({});
+const localManagement = managementConfig({BRIDGE_ROUTING:'isolated'});
 function input(options: { host?: string; peer?: string; url?: string; method?: string; headers?: [string, string][] } = {}): IncomingMessage {
   const entries: [string, string][] = [['Host', options.host ?? 'admin.example.test'], ...(options.headers ?? [])];
   const headers: Record<string, string> = {};
@@ -156,4 +156,19 @@ test('spoofing CF-Connecting-IP cannot reset admin login throttling through the 
     const response = await admin.handle(request);
     assert.equal(response.status, index < 10 ? 401 : 429);
   }
+});
+
+test('single listener accepts only configured origins; direct HTTP requires explicit access and admin credentials',()=>{
+  const config=managementConfig({});
+  assert.equal(config.routing,'single');assert.equal(config.displayOrigin,'http://127.0.0.1:8787');
+  assert.equal(new URL(config.previewOrigin).port,'8787');
+  assert.equal(nodeRequest(input({host:'127.0.0.1:8787',url:'/admin/'}),local,config).url,'http://127.0.0.1:8787/admin/');
+  rejects(()=>nodeRequest(input({host:'admin.localhost:8786'}),local,config),421);
+  const values={BRIDGE_ROUTING:'single',BRIDGE_NODE_MODE:'direct',BRIDGE_ORIGIN:'http://192.0.2.42:8080',BRIDGE_LISTEN_PORT:'8080',BRIDGE_LISTEN_HOST:'0.0.0.0',BRIDGE_ACCESS:'public',BRIDGE_ADMIN_PASSWORD:'synthetic-admin-password'};
+  const direct=readNodeRuntimeConfig(values),site=managementConfig(values);
+  assert.equal(direct.port,8080);
+  const req=nodeRequest(input({host:'192.0.2.42:8080',peer:'198.51.100.7',url:'/admin/api/session',headers:[['X-Real-IP','192.0.2.1'],['X-Forwarded-Proto','https']]}),direct,site);
+  assert.equal(req.headers.get('cf-connecting-ip'),'198.51.100.7');assert.equal(new URL(req.url).protocol,'http:');
+  rejects(()=>nodeRequest(input({host:'other.invalid:8080'}),direct,site),421);
+  for(const overrides of [{BRIDGE_ACCESS:'local'},{BRIDGE_ADMIN_PASSWORD:''},{BRIDGE_ROUTING:'isolated'}])rejects(()=>readNodeRuntimeConfig({...values,...overrides}),503);
 });

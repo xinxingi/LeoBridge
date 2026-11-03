@@ -19,11 +19,11 @@ async function fixture(required=true){
   let loggedIn=true,mustChangePassword=required;
   const calls:{path:string;body?:any}[]=[];
   runInNewContext(source,{
-    location:{pathname:'/'},
+    location:{pathname:'/admin/'},
     document:{getElementById:get,createElement:()=>new Element(),querySelectorAll:()=>[],createTextNode:()=>new Element()},
     FormData:class {constructor(private form:Element){}get(name:string){return this.form.values[name];}},
     fetch:async(url:string,options:any)=>{
-      const path=url.replace('/manage/api/',''),body=options.body?JSON.parse(options.body):undefined;calls.push({path,body});
+      const path=url.replace('/admin/api/',''),body=options.body?JSON.parse(options.body):undefined;calls.push({path,body});
       let data:any={};let status=200;
       if(path==='login'){loggedIn=true;data={csrf:'new-csrf'};}
       else if(!loggedIn){status=401;data={message:'请登录LeoBridge管理站。'};}

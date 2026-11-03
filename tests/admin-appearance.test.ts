@@ -17,7 +17,15 @@ function page(options: { stored?: string; systemDark?: boolean; blockRead?: bool
     },
   };
   const media = Object.assign(new EventTarget(), { matches: options.systemDark ?? false });
-  const control = Object.assign(new EventTarget(), { value: 'dark' });
+  const buttons = ['system', 'light', 'dark'].map(appearance => {
+    const attributes = new Map<string, string>();
+    return Object.assign(new EventTarget(), {
+      dataset: { appearance },
+      setAttribute: (name: string, value: string) => attributes.set(name, value),
+      getAttribute: (name: string) => attributes.get(name),
+    });
+  });
+  const control = { querySelectorAll: () => buttons };
   let parsed = false;
   const document = Object.assign(new EventTarget(), {
     documentElement: { dataset: {} as Record<string, string> },
@@ -33,9 +41,13 @@ function page(options: { stored?: string; systemDark?: boolean; blockRead?: bool
   return {
     theme: () => document.documentElement.dataset.theme,
     stored: () => values.get(key),
-    control,
+    selected() {
+      const pressed = buttons.filter(button => button.getAttribute('aria-pressed') === 'true');
+      assert.equal(pressed.length, 1, 'exactly one appearance button is selected');
+      return pressed[0]!.dataset.appearance;
+    },
     ready() { parsed = true; document.readyState = 'interactive'; document.dispatchEvent(new Event('DOMContentLoaded')); },
-    select(value: string) { control.value = value; control.dispatchEvent(new Event('change')); },
+    select(value: string) { buttons.find(button => button.dataset.appearance === value)!.dispatchEvent(new Event('click')); },
     system(dark: boolean) { media.matches = dark; media.dispatchEvent(new Event('change')); },
     otherTab(value: string | null, name: string | null = key, area: unknown = storage) {
       window.dispatchEvent(Object.assign(new Event('storage'), { key: name, newValue: value, storageArea: area }));
@@ -47,11 +59,11 @@ test('first visit stays dark even on a light system; saved light applies before 
   const first = page();
   assert.equal(first.theme(), 'dark');
   first.ready();
-  assert.equal(first.control.value, 'dark');
+  assert.equal(first.selected(), 'dark');
   const saved = page({ stored: 'light', systemDark: true });
   assert.equal(saved.theme(), 'light');
   saved.ready();
-  assert.equal(saved.control.value, 'light');
+  assert.equal(saved.selected(), 'light');
   assert.equal(page({ stored: 'unknown' }).theme(), 'dark');
 });
 
@@ -75,7 +87,7 @@ test('system mode persists as a preference and follows live changes in both dire
   assert.equal(tab.theme(), 'dark');
   tab.system(false);
   assert.equal(tab.theme(), 'light');
-  assert.equal(tab.control.value, 'system');
+  assert.equal(tab.selected(), 'system');
   assert.equal(page({ stored: tab.stored(), systemDark: true }).theme(), 'dark');
 });
 
@@ -98,11 +110,11 @@ test('other tabs synchronize preferences; unrelated storage and session storage 
   assert.equal(tab.theme(), 'dark');
   tab.otherTab('light');
   assert.equal(tab.theme(), 'light');
-  assert.equal(tab.control.value, 'light');
+  assert.equal(tab.selected(), 'light');
   tab.otherTab('system'); tab.system(true);
   assert.equal(tab.theme(), 'dark');
-  assert.equal(tab.control.value, 'system');
+  assert.equal(tab.selected(), 'system');
   tab.otherTab(null, null); tab.system(false);
   assert.equal(tab.theme(), 'dark');
-  assert.equal(tab.control.value, 'dark');
+  assert.equal(tab.selected(), 'dark');
 });
