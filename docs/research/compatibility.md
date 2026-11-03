@@ -5,9 +5,9 @@ LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议
 | 主题 | 固定上游版本 | 展示能力 |
 | --- | --- | --- |
 | CFSM默认前台 | `609cc0b0998793510453be8eadced2064b28ad7d` | 首页、详情、系统与Ping历史、实时更新 |
-| Komari Adhesive Note v1.0.0 | `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914` | 首页、详情、系统与Ping/丢包历史、实时更新 |
+| Komari 官方默认前台 | `bed58b589da63232a17681b1dbaed9eab2423078` | 首页、详情、系统与Ping/丢包历史、实时更新 |
 
-两个内置适配包已通过本地真实数据与浏览器验证。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect配置拒绝，managed使用默认值。
+两个内置适配包已通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见第三方来源声明。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect配置拒绝，managed使用默认值。
 
 LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服务器管理、终端、远程控制与告警功能。第三方主题不能访问管理会话或上游Token。
 

@@ -1,18 +1,24 @@
 # Komari 展示协议实现与证据
 
-日期：2026-11-02。实现 profile：`komari-adhesive-8ac4fd2`。本文说明协议接口、数据转换和实现限制。
+日期：2026-11-03。协议版本：`komari-rpc2-bed58b5`，支持官方默认前台及旧便签纸消费者。本文说明协议接口、数据转换和实现限制。
 
 ## 固定消费者和上游核对
 
-- 实际验收主题：Adhesive Note v1.0.0，`stqfdyr/komari-theme-adhesive-note`，固定提交 `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914`，MIT。应用副本和许可由前台任务保存在 `web/themes/komari/`。
+- 旧版验收主题：Adhesive Note v1.0.0，`stqfdyr/komari-theme-adhesive-note`，固定提交 `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914`，MIT。应用副本和许可由前台任务保存在 `web/themes/komari/`。
 - 实际消费证据：该提交 `src/api/queries.ts`、`src/api/types.ts`、`src/lib/rpc2.ts`。该主题优先复用 `/api/rpc2` WebSocket，按请求 ID 收取 JSON-RPC 2.0 响应；无法连接时用同路径 HTTP POST。心跳是无 ID 的 `rpc.ping` notification。
 - Komari 核心参考：`komari-monitor/komari@96cf0f79d8cfdf6cc8be54fd1976bbc026d58f7f` 的 `web/rpc/jsonrpc/public.go`、`common.go`、`web/api/ws.go`、`protocol/v2/jsonrpc.go`、`database/models/models.go`、`web/router/router.go`。仅作只读协议参考，桥接器不运行 Komari 后端或 Agent。
-- 未复制无许可证的 `komari-monitor/komari-web` 为应用，不能用核心 MIT 代替前端仓库授权。
+- 当前官方前台固定 `komari-monitor/komari-web@bed58b589da63232a17681b1dbaed9eab2423078`，应用位于 `web/themes/komari-default/`。无独立 LICENSE，保留 README 的二次开发说明并标为 NOASSERTION，不能用核心 MIT 代替前端许可。
+- 官方消费者及限制见[前台契约](komari-frontend.md)，浏览器结果见[验收](komari-default-acceptance.md)。
 
 ## 已实现的独立输出协议
 
 | 方法 | 返回形状与关键语义 |
 | --- | --- |
+| `common:getNodes` | `{uuid: node}`；仅当前公开绑定节点，不含管理字段 |
+| `common:getVersion` | 与公开版本接口相同，标明 LeoBridge |
+| `public:listMetricDefinitions` | 支持的指标、单位与真实历史保留范围 |
+| `public:queryMetrics` | 以 `entity_id/metric_keys/hours` 查询原始系统/Ping/丢包率源桶；不补点或重采样 |
+| `public:getPingMetricStats` | 空统计及能力限制，不伪造发包数或分位数 |
 | `public:getNodesInformation` | 节点数组；`uuid` 为显式绑定 ID；容量为 bytes，地区为旗帜 Emoji；隐藏名称不透出 |
 | `common:getNodesLatestStatus` | 默认 `{uuid: flatStatus}`；指定 `uuid` 返回单个 flatStatus，指定 `uuids` 返回筛选 map；CPU 真 0 保留，不复制核心中旧 WS 把 0 改成 0.01 的行为 |
 | `public:getPublicSettings` | 站点标题、真实历史保留范围及 `bridge` 能力；不暴露上游地址、Token或上游任意 HTML |

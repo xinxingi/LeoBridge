@@ -29,7 +29,7 @@ CFSM 原始文件按固定提交下载并保持内容不变。源码目录只有
 - [妙妙屋X外置探针](https://miaomiaowux.com/docs/install-external-probe)：本次未审阅，鉴权与外置部署实现前补读。
 - [CFSM固定源码树](https://github.com/huilang-me/CF-Server-Monitor/tree/609cc0b0998793510453be8eadced2064b28ad7d)
 - [CFSM主题市场](https://github.com/huilang-me/CFSM-Theme-Store)：主题规范指向此项目，本次未选取第三方主题。
-- [Komari](https://github.com/komari-monitor/komari)：已审计公开RPC2/WS及主题契约，固定版本、真实Adhesive Note来源与许可见[双生态调查](../research/theme-ecosystems.md)及[Komari前台](../research/komari-frontend.md)。
+- [Komari](https://github.com/komari-monitor/komari)：已审计公开RPC2/WS及主题契约，固定版本、当前官方默认前台及旧Adhesive Note来源、许可边界见[双生态调查](../research/theme-ecosystems.md)及[Komari前台](../research/komari-frontend.md)。
 
 ## 维护方式
 

@@ -24,6 +24,7 @@ export function protocolApplications(config:Config):Record<string,ProtocolApplic
   return {
     'cfsm-609cc0b':{fetch:r=>cfsm.api(r),websocketPaths:['/api/ws'],openRealtime:(client,connect)=>realtime(cfsm,client,connect)},
     'komari-adhesive-v1':{fetch:r=>komari.handle(r),websocketPaths:KOMARI_WS_PATHS,openRealtime:(client,connect,path)=>komariRealtime(komari,client,connect,path)},
+    'komari-default-bed58b5':{fetch:r=>komari.handle(r),websocketPaths:KOMARI_WS_PATHS,openRealtime:(client,connect,path)=>komariRealtime(komari,client,connect,path)},
   };
 }
 export function createApplication(env:Env):DisplayApplication {

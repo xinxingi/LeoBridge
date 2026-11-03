@@ -1,4 +1,23 @@
-# 真实 Komari 前台实现与契约
+# Komari 官方默认前台
+
+当前内置前台来自 [komari-monitor/komari-web](https://github.com/komari-monitor/komari-web/tree/bed58b589da63232a17681b1dbaed9eab2423078)，固定提交 `bed58b589da63232a17681b1dbaed9eab2423078`（radix）。保留官方首页卡片/表格、详情和 Radix/Recharts 图表，应用副本为 `web/themes/komari-default/`，构建入口 `scripts/build-komari-default.mjs`。它替代内置便签纸包；旧便签纸源码与协议保留以支持已有安装。
+
+此版本没有独立 LICENSE，README 明确给出二次开发和主题打包步骤。本项目按所有者指定完成本地接入，标记 `NOASSERTION`，保留原始 README、来源摘要和补丁，未宣称其采用 MIT；再分发范围仍需向上游明确，见[第三方声明](../../THIRD_PARTY_NOTICES.md)。
+
+## 当前消费者契约
+
+官方首页使用 `common:getNodes`（uuid 键控节点对象）、`common:getNodesLatestStatus`；详情使用 `/api/recent/:uuid`、`public:listMetricDefinitions`、`public:queryMetrics`、`public:getPublicPingTasks` 和 `public:getPingMetricStats`。公共设置仍从 `/api/public` 获取，版本使用 `common:getVersion`。主通道是 `/api/rpc2` HTTP/WebSocket；每五秒查询实时状态，隐藏或卸载页面关闭连接。
+
+`public:queryMetrics` 接收 `entity_id`、`metric_keys`、`hours`，返回带 `metric_key/entity_id/unit/interval_seconds/points` 的序列；CPU 百分比、内存/磁盘 bytes、网速 B/s，Ping ms、丢包率百分比。保留源桶真实时间、零值和 null；图表只插入空断点，不生成数值样本，不使用 EWMA、插值或当前容量回填历史。新请求清除旧范围图，错误明确显示。
+
+支持相对历史范围，拒绝任意起止日期及非源桶聚合请求。源端不提供逐包计数与分位数，所以 `public:getPingMetricStats` 返回空统计及明确限制，丢包率由独立源桶曲线呈现。管理、终端、安装恢复页面、临时密钥 cookie 入口与 PWA 注册未纳入公共应用。
+
+固定安装 profile 为 `komari-default-bed58b5`，适配包为 `LeoBridgeKomariDefault / bed58b5-leobridge.1`。验收见[官方前台验收](komari-default-acceptance.md)。升级安装会新增不可变版本；在后台启用新包，旧安装保留供回退。
+
+## 旧便签纸适配记录
+
+以下保留旧版本的来源、契约与历史说明，不代表当前默认前台。
+
 
 2026-11-02。选用官方Komari商店目录中的 **Adhesive Note v1.0.0**，仓库 [stqfdyr/komari-theme-adhesive-note](https://github.com/stqfdyr/komari-theme-adhesive-note/tree/8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914)，固定提交 `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914`。不是自造占位界面。
 

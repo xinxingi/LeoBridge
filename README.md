@@ -8,7 +8,7 @@ LeoBridge 只读访问妙妙屋X探针 API，转换服务器状态、历史和�
 
 ## 可以做什么
 
-- 使用 CFSM 默认前台或 Komari Adhesive Note 查看首页、详情、系统历史和 Ping 图表。
+- 使用 CFSM 默认前台或 Komari 官方默认主题 查看首页、详情、系统历史和 Ping 图表。
 - 在独立后台浏览两个主题商店，安装固定版本、隔离预览、启用和回退，无需重新部署。
 - 默认一个端口：`/` 展示探针，`/admin/` 管理；主题切换后刷新首页生效。需要主题源隔离时可显式选择isolated模式。
 - 优先接收上游原生 WebSocket；故障时明确显示过期或通过真实 HTTP 读取回退。
@@ -65,8 +65,17 @@ docs/       用户指南、架构、协议契约与第三方参考资料
 | 了解源码来源与许可 | [第三方声明](THIRD_PARTY_NOTICES.md) |
 | 使用项目 Logo 与横幅 | [品牌素材](docs/assets/README.md) |
 
+## 致谢
+
+感谢以下开源项目及其作者、贡献者，为 LeoBridge 的双生态主题适配提供基础：
+
+- [CF-Server-Monitor（CFSM）](https://github.com/huilang-me/CF-Server-Monitor)：提供默认前台、主题规范与主题生态。
+- [Komari](https://github.com/komari-monitor/komari)：提供公开展示协议、主题机制与主题生态。
+
+同时感谢 [Adhesive Note](https://github.com/stqfdyr/komari-theme-adhesive-note) 的作者与贡献者，为早期 Komari 适配提供主题基础。相关来源、版本与许可证见 [第三方声明](THIRD_PARTY_NOTICES.md)。
+
 ## 许可与反馈
 
-LeoBridge 原创代码采用 [MIT](LICENSE)。CFSM、Adhesive Note 及其字体/图形保留各自许可证、固定来源与补丁记录，不以项目许可证覆盖第三方条款。
+LeoBridge 原创代码采用 [MIT](LICENSE)。CFSM、Komari 官方前端、Adhesive Note 及其字体/图形保留各自来源与条款。官方 Komari 前端的固定版本尚无独立 LICENSE，不能将本项目 MIT 视为其授权；详见 [第三方声明](THIRD_PARTY_NOTICES.md)。
 
 普通问题请附版本、运行方式和脱敏后的复现步骤。安全问题与敏感信息的处理见 [安全说明](SECURITY.md)。不要在 issue 中粘贴主控地址、Token、管理密码、身份绑定或原始响应。
