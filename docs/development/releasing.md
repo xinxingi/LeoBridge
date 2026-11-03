@@ -1,0 +1,41 @@
+# 版本发布
+
+日常开发进入`develop`，通过PR合入`main`后选择确定提交打版本标签。分支提交和PR只运行`check`，不会上传镜像或创建GitHub Release。只有推送`v*`标签才触发[发布工作流](../../.github/workflows/docker-release.yml)，没有手动触发入口。
+
+## 首次配置
+
+在GitHub仓库Settings → Secrets and variables → Actions添加Repository secrets：
+
+- `DOCKERHUB_USERNAME`：`staractive`。
+- `DOCKERHUB_TOKEN`：拥有镜像推送权限的Docker Hub访问Token。
+
+镜像仓库为`staractive/leobridge`，用户匿名拉取需要仓库为Public。GitHub Release上传使用该任务自动取得的`GITHUB_TOKEN`，仅上传任务授予`contents: write`，无需另存GitHub个人Token。构建使用GitHub托管Linux x64和arm64运行器，需要仓库可使用`ubuntu-24.04`和`ubuntu-24.04-arm`及相应Actions额度。
+
+## 正常发版
+
+1. 在`develop`更新`package.json`中的版本号、使用说明及升级注意事项，通过PR合入`main`。
+2. 确认`main`对应提交的`check`通过。该检查包含架构、类型、全部测试、Node构建、构建产物运行时、Worker打包和实际容器启动/改密/重启验证。Worker打包不是云部署。
+3. 给选定的`main`提交创建带注释的标签并推送。以下以`0.1.0`为例，远端名按自己的`git remote -v`结果填写：
+
+```sh
+git fetch <远端名> main
+git tag -a v0.1.0 <已核对的main提交SHA> -m "LeoBridge v0.1.0"
+git push <远端名> refs/tags/v0.1.0
+```
+
+标签必须与`package.json`完全一致，且目标提交必须已进入远端`main`。例如`v0.1.0-rc.1`要求包版本为`0.1.0-rc.1`，GitHub Release会标记为预发布。不要提前手动创建Release；工作流在全部工件准备完成后自动创建。
+
+4. 在Actions查看`Docker and Release packages`。失败时先读取失败步骤并修复原因，不通过移动已公开标签替换代码；代码需要变化时发布新的版本号。
+
+## 工作流顺序与产物
+
+标签/版本检查 → 复用完整`check` → 两个平台分别打包并验收 → 上传Docker Hub → 创建GitHub Release。
+
+- Linux x64、arm64运行包：`leobridge-<版本>-linux-<架构>.tar.gz`、各自`.sha256`和合并的`checksums.txt`。包内包含Node、应用、生产依赖、管理资源、许可证及启停脚本，并非单文件可执行程序。两个平台使用同一确定的Node24版本，下载官方分发包并验证SHA-256。
+- 各平台在原生运行器验证实际运行包；启动时PATH不包含系统Node/npm/pnpm，测试默认密码修改、重启后密码持久化及空数据源。两平台还各自构建并验证容器。
+- Docker镜像：`staractive/leobridge:<版本>`，包含`linux/amd64`及`linux/arm64`。发布后校验架构清单，并按镜像摘要拉取验证。当前不维护`latest`标签，部署时选择固定版本或摘要。
+- Release同时附带同版本`compose.yaml`和`docker.env.example`，更新说明包含镜像摘要及GitHub生成的改动列表。
+
+运行包、镜像及Release均来自同一标签提交。全部检查通过后才进入上传步骤；普通PR不会读取Docker Hub发布凭据。Docker Hub和GitHub Release并非跨平台原子事务：如果镜像已上传而Release步骤失败，先排查并重跑失败任务，不删除数据或擅自重打版本标签。
+
+自动检查使用隔离的合成数据，不访问真实主控、不证明第三方主题兼容或实际部署环境验收。首次使用本工作流前的本地验证不能记作已完成公开发布；实际发布以Actions结果、Release附件及Docker Hub摘要为准。

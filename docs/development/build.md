@@ -68,6 +68,6 @@ pnpm check
 BRIDGE_TEST_BUILT_NODE=1 pnpm test:runtime
 ```
 
-本地打包不上传GitHub Release、不推送Docker Hub。自动发布工作流、公开运行包和公开镜像尚未交付，不把本地生成的压缩包当作已发布版本。后续发布应由同一版本源码生成运行包、校验文件及对应镜像标签。
+本地打包不上传GitHub Release、不推送Docker Hub。标签发布工作流统一生成运行包、校验文件及对应镜像标签，步骤和凭据配置见[版本发布](releasing.md)。普通提交/PR只运行检查，只有推送版本标签才发布；公开产物是否已就绪以实际Actions、GitHub Release和Docker Hub结果为准。
 
 历史`scripts/verify-container.mjs`依赖预先安装的双主题、对应资源和已完成改密的管理状态，当前空主题构建不能直接复现，适配仍待完成。Node测试不替代实际容器、域名/TLS、真实源和浏览器验收。

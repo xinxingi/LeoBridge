@@ -14,6 +14,8 @@
 
 运行包制作及自行构建Docker镜像统一见[开发构建指南](docs/development/build.md)。部署文档面向使用预编译包和Docker Hub镜像的普通用户。
 
+开发使用`develop`，发布代码通过PR进入`main`。普通提交和PR只运行检查，推送版本标签才自动上传Docker Hub与GitHub Release，详见[版本发布](docs/development/releasing.md)。
+
 ## 测试材料
 
 `docs/fixtures/`及脚本中Synthetic数据仅验证实现。`work/`是忽略的本地运行状态与私有证据，不能作为发行内容。真实联调必须得到源拥有者授权，只读执行；不要为制造离线、排序或隐藏场景修改真实主控。
