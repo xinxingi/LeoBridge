@@ -24,6 +24,10 @@ CFSM 原始文件按固定提交下载并保持内容不变。原文中的相对
 
 妙妙屋X公开仓库 `iluobei/miaomiaowuX` 的参考提交是 `dda3d699a4669e281cf98575057146169dc0e72d`。检查其递归目录后，只发现 README、安装脚本、规则和配置等；没有发现探针服务端接口实现。该提交**不能代表文档网站或用户主控的版本**。后续实现依赖文档和真实主控联调，不能虚构源码依据。
 
+## 新增原生前台参考
+
+2026-11-03补充[mmwx-group/mmwx-probe](https://github.com/mmwx-group/mmwx-probe/tree/723427b18ea23a59a923a89155ebe1f3fa3fa824)固定提交`723427b18ea23a59a923a89155ebe1f3fa3fa824`。这是原生独立前台及只读Worker代理源码，不是主控后端。选定参考文件和摘要见[独立清单](mmwx-probe-manifest.json)，MSAL-1.0原文见[LICENSE](upstream/mmwx-probe-source/LICENSE)，实现边界见[原生主题](../research/native-theme.md)。不更新或混用原CFSM manifest的固定日期。
+
 ## 在线入口
 
 - [妙妙屋X探针 API](https://miaomiaowux.com/docs/probe-api/)

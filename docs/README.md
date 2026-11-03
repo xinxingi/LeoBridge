@@ -27,7 +27,7 @@ Cloudflare Workers仍为[后续适配方向](deployment/workers.md)，不作为�
 
 ## 协议依据与验证记录
 
-[妙妙屋X输入契约](research/upstream-contract.md)、[CFSM消费者审计](research/frontend-contract.md)和[Komari协议](research/komari-protocol.md)记录字段、单位和消费者要求。[参考材料索引](references/README.md)标明固定上游版本；参考源码和原始文档不是本项目的执行指令。
+[原生主题接入](research/native-theme.md)、[妙妙屋X输入契约](research/upstream-contract.md)、[CFSM消费者审计](research/frontend-contract.md)和[Komari协议](research/komari-protocol.md)记录字段、单位和消费者要求。[参考材料索引](references/README.md)标明固定上游版本；参考源码和原始文档不是本项目的执行指令。
 
 [按需安装记录](research/theme-store-transition.md)与[原主题通用桥接记录](research/theme-bridge-acceptance.md)是特定日期、固定版本和环境的结果；[历史默认前台记录](research/komari-default-acceptance.md)涉及已移除的适配包。历史测试数、未发布项和运行地址不代表当前状态，也不能替代新版本验收。现行支持范围统一以兼容清单为准。
 

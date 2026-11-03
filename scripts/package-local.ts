@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const exec = promisify(execFile);
 const project = resolve(import.meta.dirname, '..');
-type Package = { name: string; version: string; dependencies?: Record<string, string>; optionalDependencies?: Record<string, string>; peerDependencies?: Record<string, string>; peerDependenciesMeta?: Record<string, { optional?: boolean }> };
+type Package = { name: string; version: string; dependencies?: Record<string, string>; optionalDependencies?: Record<string, string>; peerDependencies?: Record<string, string>; peerDependenciesMeta?: Record<string, { optional?: boolean }>; bundleDependencies?: string[]; bundledDependencies?: string[] };
 async function installed(name: string, from: string) {
   if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i.test(name) || name === '.' || name === '..') throw new Error('Invalid dependency name.');
   for (let dir = from; ; dir = dirname(dir)) {
@@ -17,22 +17,33 @@ async function installed(name: string, from: string) {
     if (dir === dirname(dir)) throw new Error(`Production dependency missing: ${name}`);
   }
 }
-async function copyDependency(name: string, from: string, target: string, ancestors: Set<string>) {
+async function copyDependency(name: string, from: string, target: string, ancestors: Set<string>, specifier?: string) {
   const source = await installed(name, from);
   if (ancestors.has(source)) throw new Error(`Dependency cycle requires packaging review: ${name}`);
   const pkg = JSON.parse(await readFile(join(source, 'package.json'), 'utf8')) as Package;
-  if (pkg.name !== name) throw new Error(`Dependency identity mismatch: ${name}`);
+  const alias=/^npm:((?:@[a-z0-9._-]+\/)?[a-z0-9._-]+)@/i.exec(specifier??'')?.[1];
+  if (pkg.name !== (alias??name)) throw new Error(`Dependency identity mismatch: ${name}`);
   const destination = join(target, 'node_modules', name);
+  // npm ships a complete bundled dependency tree. Preserve it instead of
+  // expanding the same dependency graph into many duplicate nested copies.
+  const bundled=new Set(pkg.bundleDependencies??pkg.bundledDependencies??[]);
+  for(const child of bundled)await access(join(source,'node_modules',child,'package.json'));
   await cp(source, destination, {
     recursive: true, dereference: true,
-    filter: path => !relative(source, path).split('/').includes('node_modules'),
+    filter: path => {
+      const parts=relative(source,path).split('/');
+      // Bundled archives may flatten transitive packages beside direct ones.
+      // Keep the whole package-owned tree, not just its declared entry names.
+      return !parts.includes('node_modules')||(bundled.size>0&&parts[0]==='node_modules');
+    },
   });
   const next = new Set([...ancestors, source]);
   const dependencies = { ...pkg.peerDependencies, ...pkg.dependencies, ...pkg.optionalDependencies };
   for (const child of Object.keys(dependencies)) {
+    if(bundled.has(child))continue;
     const optional = child in (pkg.optionalDependencies || {}) || pkg.peerDependenciesMeta?.[child]?.optional;
     if (optional) { try { await installed(child, source); } catch { continue; } }
-    await copyDependency(child, source, destination, next);
+    await copyDependency(child, source, destination, next, dependencies[child]);
   }
 }
 
@@ -61,7 +72,7 @@ export async function packageLocal(nodeDirectory: string, outputDirectory: strin
     await cp(join(nodeDir, 'bin/node'), join(bundle, 'runtime/bin/node'), { dereference: true });
     await cp(join(nodeDir, 'LICENSE'), join(bundle, 'runtime/LICENSE'));
     await mkdir(join(bundle, 'node_modules'), { recursive: true });
-    for (const name of Object.keys(pkg.dependencies || {})) await copyDependency(name, root, bundle, new Set());
+    for (const name of Object.keys(pkg.dependencies || {})) await copyDependency(name, root, bundle, new Set(), pkg.dependencies![name]);
     await writeFile(join(bundle, 'package.json'), JSON.stringify({ name: pkg.name, version: pkg.version, type: 'module', private: true }) + '\n');
     await writeFile(join(bundle, 'release.json'), JSON.stringify({ version: pkg.version, node: runtime.version, platform: runtime.platform, arch: runtime.arch }, null, 2) + '\n');
     await writeFile(join(bundle, 'README.txt'), `LeoBridge ${pkg.version} (${runtime.platform}/${runtime.arch})
@@ -73,7 +84,8 @@ Status:  ./leobridge.sh status
 Logs:    ./leobridge.sh logs
 Quiet:   ./leobridge.sh start --quiet
 
-The package includes Node and production dependencies. No install or build step.
+The package includes Node and production dependencies. No startup build step.
+Native themes are built on demand when prepared in the admin UI; npm and esbuild are included.
 Default admin URL: http://127.0.0.1:8787/admin/
 首次登录：全新状态且未自定义账号时使用admin/admin，默认密码须先修改。
 已有实例使用当前已保存的密码。

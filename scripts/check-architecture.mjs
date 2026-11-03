@@ -7,13 +7,14 @@ import { builtinModules } from 'node:module';
 const layers={
   core:['core'],upstream:['core','upstream'],
   'protocols/cfsm':['core','upstream','protocols/cfsm'],
+  'protocols/native':['core','upstream','protocols/native'],
   'protocols/komari':['core','upstream','protocols/komari'],
   themes:['core','themes'],management:['core','themes','management'],
-  app:['core','upstream','protocols/cfsm','protocols/komari','themes','management','app'],
-  runtime:['core','upstream','protocols/cfsm','protocols/komari','themes','management','app','runtime'],
+  app:['core','upstream','protocols/native','protocols/cfsm','protocols/komari','themes','management','app'],
+  runtime:['core','upstream','protocols/native','protocols/cfsm','protocols/komari','themes','management','app','runtime'],
 };
 const layer=file=>file.startsWith('src/protocols/')?file.split('/').slice(1,3).join('/'):file.split('/')[1];
-const nodeModules=new Set([...builtinModules,...builtinModules.map(name=>`node:${name}`),'ws','undici','https-proxy-agent']);
+const nodeModules=new Set([...builtinModules,...builtinModules.map(name=>`node:${name}`),'esbuild','npm','ws','undici','https-proxy-agent']);
 /** Check actual TypeScript import/export/import-type/dynamic-import edges, including type-only edges. */
 export function architectureErrors(files){
   const errors=[],graph=new Map(),externals=new Map();

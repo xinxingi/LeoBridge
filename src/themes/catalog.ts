@@ -1,10 +1,11 @@
 /** Public theme discovery only. This module never receives probe credentials. */
-export type Ecosystem = 'cfsm' | 'komari';
+export type Ecosystem = 'cfsm' | 'komari' | 'native';
 export type PublicFetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export class ThemePackageError extends Error {
   constructor(readonly code: string, message: string, readonly status = 400) { super(message); this.name = 'ThemePackageError'; }
 }
 export const CATALOG_SOURCES = Object.freeze({
+  native: { repository: 'mmwx-group/mmwx-probe', file: 'package.json', branch: 'main', id: 'mmwx-native', revision: '723427b18ea23a59a923a89155ebe1f3fa3fa824', url: 'https://github.com/mmwx-group/mmwx-probe/tree/723427b18ea23a59a923a89155ebe1f3fa3fa824', license: 'MSAL-1.0; original LICENSE is shown before installation' },
   cfsm: { repository: 'huilang-me/CFSM-Theme-Store', file: 'themes.json', branch: 'main', id: 'cfsm-official', revision: '6377a65414a2527bbab1e323348bf715dc51f116', url: 'https://raw.githubusercontent.com/huilang-me/CFSM-Theme-Store/6377a65414a2527bbab1e323348bf715dc51f116/themes.json', license: 'MIT (catalog repository only)' },
   komari: { repository: 'komari-monitor/theme-market', file: 'v1.json', branch: 'main', id: 'komari-official', revision: '3f889543f6b839cb2452464e04306253f77791bd', url: 'https://raw.githubusercontent.com/komari-monitor/theme-market/3f889543f6b839cb2452464e04306253f77791bd/v1.json', license: 'No catalog LICENSE found at audited revision; theme licenses checked independently' },
 });
@@ -166,6 +167,11 @@ function validateRevision(value: unknown): string {
 async function catalogAtRevision(ecosystem: Ecosystem, revision: string, fetcher: PublicFetcher): Promise<Catalog> {
   const source = CATALOG_SOURCES[ecosystem];
   const url = `https://raw.githubusercontent.com/${source.repository}/${revision}/${source.file}`;
+  if(ecosystem==='native'){
+    if(revision!==source.revision)throw new ThemePackageError('NATIVE_REVISION','原生主题尚未核对该源码版本。');
+    const entry={...baseEntry('native','mmwx-probe','妙妙屋 X 原生主题','沿用主控的 Pixel、Flat、Anime 或 Premium 外观；首次准备需下载并构建固定源码。'),repositoryUrl:'https://github.com/mmwx-group/mmwx-probe',version:revision};
+    return {ecosystem,source:source.url,sourceId:source.id,pinnedVersion:revision,catalogRevision:revision,catalogLicense:source.license,catalogLicenseRevision:revision,fetchedAt:new Date().toISOString(),fromCache:false,entries:[entry]};
+  }
   const raw = await fetchPublicJson(url, { fetcher, maxBytes: 2_000_000 });
   const entries = (ecosystem === 'cfsm' ? parseCfsmCatalog(raw) : parseKomariCatalog(raw)).map(entry => ({ ...entry, catalogRevision: revision, catalogSource: url }));
   return { ecosystem, source: url, sourceId: source.id, pinnedVersion: revision, catalogRevision: revision,
@@ -174,13 +180,14 @@ async function catalogAtRevision(ecosystem: Ecosystem, revision: string, fetcher
 }
 /** Two-argument callers retain the audited baseline. Management opts into latest. */
 export async function fetchCatalog(ecosystem: Ecosystem, fetcher: PublicFetcher = fetch, options: CatalogReadOptions = {}): Promise<Catalog> {
-  if (ecosystem !== 'cfsm' && ecosystem !== 'komari') throw new ThemePackageError('ECOSYSTEM', '未知主题生态。');
+  if (ecosystem !== 'cfsm' && ecosystem !== 'komari' && ecosystem !== 'native') throw new ThemePackageError('ECOSYSTEM', '未知主题生态。');
   if (!options || (options.latest !== undefined && typeof options.latest !== 'boolean') || (options.refresh !== undefined && typeof options.refresh !== 'boolean')) throw new ThemePackageError('CATALOG_OPTIONS', '目录读取选项无效。');
   if (options.revision !== undefined) {
     if (options.latest || options.refresh) throw new ThemePackageError('CATALOG_OPTIONS', '固定目录版本不能同时请求最新版本。');
     return catalogAtRevision(ecosystem, validateRevision(options.revision), fetcher);
   }
   const source = CATALOG_SOURCES[ecosystem];
+  if (ecosystem==='native')return catalogAtRevision(ecosystem,source.revision,fetcher);
   if (!options.latest && !options.refresh) return catalogAtRevision(ecosystem, source.revision, fetcher);
   let scoped = latestCatalogs.get(fetcher);
   if (!scoped) { scoped = new Map(); latestCatalogs.set(fetcher, scoped); }

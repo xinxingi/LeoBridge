@@ -227,7 +227,7 @@ export function validateStaticReferences(files: ThemeFile[],knownPaths:string[]=
   }
   return [...new Set(notices)].slice(0, 200);
 }
-async function finish(entry: CatalogEntry, files: ThemeFile[], license: LicenseRecord, source: string, pinnedVersion: string, configuration?: Record<string, unknown>, remoteFiles?: Record<string, RemoteThemeFile>): Promise<ThemePackage> {
+export async function finish(entry: CatalogEntry, files: ThemeFile[], license: LicenseRecord, source: string, pinnedVersion: string, configuration?: Record<string, unknown>, remoteFiles?: Record<string, RemoteThemeFile>): Promise<ThemePackage> {
   if (files.length > PACKAGE_LIMITS.files || files.reduce((n, f) => n + f.bytes.length, 0) > PACKAGE_LIMITS.total) fail('PACKAGE_SIZE', '主题资产总量超过限制。');
   if (new Set(files.map(f => f.path.toLowerCase())).size !== files.length) fail('PACKAGE_DUPLICATE', '展示根目录含重复资产路径。');
   files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
@@ -319,6 +319,7 @@ export async function installCatalogTheme(ecosystem: Ecosystem, themeId: string,
   const catalog = await fetchCatalog(ecosystem, options.fetcher, { revision: options.expectedCatalogRevision }), entry = catalog.entries.find(item => item.id === themeId);
   if (!entry) fail('THEME_NOT_FOUND', '主题不在已固定的官方目录中。');
   if (!entry.canAttemptInstall) fail('THEME_UNSUPPORTED', '该目录条目的来源或分发格式暂不受支持。');
+  if (ecosystem === 'native')fail('NATIVE_BUILD_UNAVAILABLE','当前运行环境不支持原生主题源码构建。');
   if (ecosystem === 'komari') {
     const archive = await fetchPublicBytes(entry.downloadUrl!, { fetcher: options.fetcher, maxBytes: PACKAGE_LIMITS.archive, timeoutMs: 60_000 });
     return buildKomariPackage(entry, archive, options);

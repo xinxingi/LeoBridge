@@ -3,7 +3,6 @@ import { errorResponse,json } from '../core/http.ts';
 import { commitInstallation,publicThemeState,sha256,INSTALL_NOTICE_VERSION,INSTALL_NOTICE_TEXT,type ThemeStore,type Installation,type InstallReview } from '../themes/store.ts';
 import { installationUrl,type ManagementConfig } from './config.ts';
 import { fetchCatalog,ThemePackageError } from '../themes/catalog.ts';
-import { installCatalogTheme } from '../themes/package.ts';
 import { StoreNetwork } from './store-network.ts';
 import { CatalogStars } from '../themes/stars.ts';
 import type { SourceManagement } from './source.ts';
@@ -90,17 +89,17 @@ export class Admin {
         return this.secure(json({...state,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:this.config.routing==='single'&&id===state.active?this.config.displayOrigin:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));
       }
       if(url.pathname==='/manage/api/catalog'&&request.method==='GET'){
-        const ecosystem=url.searchParams.get('ecosystem');if(ecosystem!=='cfsm'&&ecosystem!=='komari')throw new BridgeError('ECOSYSTEM',400,'请选择CFSM或Komari商店。');
+        const ecosystem=url.searchParams.get('ecosystem');if(ecosystem!=='cfsm'&&ecosystem!=='komari'&&ecosystem!=='native')throw new BridgeError('ECOSYSTEM',400,'请选择原生、CFSM或Komari主题。');
         return this.secure(json(await this.network.run(async fetcher=>this.stars.enrich(await fetchCatalog(ecosystem,fetcher,{latest:true,refresh:url.searchParams.get('refresh')==='1'}),fetcher,url.searchParams.get('refresh')==='1'))));
       }
       if(url.pathname==='/manage/api/prepare-install'&&request.method==='POST'){
         const ecosystem=body.ecosystem;
-        if((ecosystem!=='cfsm'&&ecosystem!=='komari')||typeof body.id!=='string')throw new BridgeError('BAD_REQUEST',400,'主题选择无效。');
+        if((ecosystem!=='cfsm'&&ecosystem!=='komari'&&ecosystem!=='native')||typeof body.id!=='string')throw new BridgeError('BAD_REQUEST',400,'主题选择无效。');
         if(typeof body.catalogRevision!=='string'||!/^[a-f0-9]{40}$/.test(body.catalogRevision))throw new BridgeError('CATALOG_REVISION',400,'请刷新商店目录后选择固定版本。');
         if(this.installing)throw new BridgeError('INSTALL_BUSY',409,'当前有下载任务，请稍后重试。');
         this.installing=true;
         try{
-          const pkg=await this.network.run(fetcher=>installCatalogTheme(ecosystem,body.id as string,{fetcher,expectedCatalogRevision:body.catalogRevision as string}));
+          const pkg=await this.network.install(ecosystem,body.id as string,{expectedCatalogRevision:body.catalogRevision as string});
           const review:InstallReview={id:token(),expires:Date.now()+15*60_000,ecosystem,themeId:body.id,catalogRevision:body.catalogRevision,pinnedVersion:pkg.pinnedVersion,digest:pkg.digest,noticeVersion:INSTALL_NOTICE_VERSION};
           await this.store.command({type:'review',sessionId:session.id,review});
           return this.secure(json({reviewId:review.id,expires:review.expires,name:pkg.name,source:pkg.source,catalogSource:pkg.catalogSource,pinnedVersion:pkg.pinnedVersion,license:pkg.license,digest:pkg.digest,noticeVersion:INSTALL_NOTICE_VERSION,noticeText:INSTALL_NOTICE_TEXT,resourceNotices:pkg.audit.notices}));
@@ -114,9 +113,9 @@ export class Admin {
         this.installing=true;
         try{
           const ecosystem=review.ecosystem;
-          const pkg=await this.network.run(fetcher=>installCatalogTheme(ecosystem,review.themeId,{fetcher,expectedCatalogRevision:review.catalogRevision,...(ecosystem==='cfsm'?{expectedBuildRevision:review.pinnedVersion}:{})}));
+          const pkg=await this.network.install(ecosystem,review.themeId,{expectedCatalogRevision:review.catalogRevision,...(ecosystem==='cfsm'?{expectedBuildRevision:review.pinnedVersion}:{})});
           if(pkg.digest!==review.digest)throw new BridgeError('INSTALL_PACKAGE_CHANGED',409,'主题内容与确认时不一致，请重新查看。');
-          const protocolProfile=ecosystem==='cfsm'?'cfsm-609cc0b':'komari-adhesive-v1';
+          const protocolProfile=ecosystem==='native'?'mmwx-native-v1':ecosystem==='cfsm'?'cfsm-609cc0b':'komari-adhesive-v1';
           const id=(await sha256(`${ecosystem}:${protocolProfile}:${pkg.id}`)).slice(0,32);
           const item:Installation={id,title:pkg.name,ecosystem,source:pkg.source,pinnedVersion:pkg.pinnedVersion,catalogRevision:review.catalogRevision,themeId:pkg.themeId,manifest:pkg.manifest,configuration:pkg.configuration,resourceNotices:pkg.audit.notices,remoteFiles:pkg.remoteFiles,dependencySources:pkg.dependencySources,protocolProfile,license:pkg.license,packageDigest:pkg.digest,entry:pkg.entry,installedAt:new Date().toISOString(),compatibility:'unverified',files:Object.fromEntries(pkg.files.map(f=>[f.path,{contentType:f.contentType,size:f.bytes.byteLength}])),bundled:false};
           await commitInstallation(this.store,item,pkg.files,false,{sessionId:session.id,id:review.id});return this.secure(json({ok:true,id}));

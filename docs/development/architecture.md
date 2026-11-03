@@ -7,6 +7,8 @@ LeoBridge保持一个TypeScript项目、一个pnpm锁文件。用户交付采用
 ```mermaid
 flowchart LR
   Source[妙妙屋X HTTP / WS] --> Upstream[upstream: 快照与历史]
+  Upstream --> Native[protocols/native: 原生公开接口]
+  Native --> Site
   Upstream --> CFSM[protocols/cfsm]
   Upstream --> Komari[protocols/komari]
   CFSM --> Site[app: 版本路由]
@@ -24,6 +26,7 @@ flowchart LR
 | --- | --- | --- |
 | `src/core` | 统一模型、身份、配置、错误、HTTP封装及Socket接口 | core |
 | `src/upstream` | 妙妙屋HTTP读取、缓存/超时、中立历史序列 | core、upstream |
+| `src/protocols/native` | 原生公开字段、身份槽位、原生历史及实时访问 | core、upstream、native本层 |
 | `src/protocols/cfsm` | CFSM服务、序列化、Ping、历史和订阅 | core、upstream、cfsm本层 |
 | `src/protocols/komari` | Komari RPC/REST、序列化及实时 | core、upstream、komari本层 |
 | `src/themes` | 商店、静态包校验、固定资源来源/按需缓存、安装确认及状态契约 | core、themes |
@@ -68,3 +71,8 @@ Node默认single路由只开一个监听端口，local使用回环HTTP，direct�
 ## 原主题资源与展示上下文
 
 `themes/resources.ts`通过注入的商店传输按固定版本读取静态资源，不接触源端凭据；本地/主题自己的资源优先，已识别公共库及生态官方公共图像补缺。来源清单仅包含URL与摘要，不交付第三方资源字节。`core/presentation.ts`承载当前安装的主题标识及默认设置，`app/site.ts`在HTTP和WS请求入口绑定，协议层不读取主题仓库或其他生态的响应。展示HTML不再注入数据说明；预览仍保留请求及历史导航适配，原包文件及摘要不变。主题HTTPS外链由浏览器读取，管理UI不执行主题配置代码。
+
+
+## 原生源码准备
+
+`themes/native-source.ts`保存固定源码/公共资源的Git blob索引；`runtime/native-build.ts`仅在Node按需下载、安装锁定依赖并用自有esbuild配置构建原生前台。npm生命周期脚本禁用，不执行上游Worker/构建配置。管理层经`StoreNetwork`注入构建能力，Worker不能导入npm/esbuild或Node构建器。原生协议在`protocols/native`独立访问上游；展示槽位映射显式绑定，历史前后仍核对源身份顺序。

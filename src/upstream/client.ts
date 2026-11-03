@@ -7,7 +7,7 @@ export class Upstream {
   private inflight?: Promise<Snapshot>;
   private revision=0;
   constructor(readonly config: Config, private fetcher: Fetcher = (input,init)=>fetch(input,init), private now = Date.now) {}
-  async json(path: '/api/public/probe-servers' | '/api/public/probe-series', params?: Record<string,string>): Promise<unknown> {
+  async json(path: '/api/public/probe-servers' | '/api/public/probe-series' | '/api/public/probe-forward', params?: Record<string,string>): Promise<unknown> {
     const url = new URL(path, this.config.baseUrl);
     for (const [key,value] of Object.entries(params || {})) url.searchParams.set(key,value);
     const controller = new AbortController();

@@ -43,16 +43,16 @@ export class ThemeResources {
   async get(item:Installation,path:string,defaultOnly=false):Promise<ResourceAsset|null>{
     safePackagePath(path);
     const dependencies=defaultOnly?{}:{...this.dependencies.get(item.id),...item.dependencySources};
-    if(!defaultOnly&&item.ecosystem==='cfsm'){
+    if(!defaultOnly&&(item.ecosystem==='cfsm'||item.ecosystem==='native')){
       const remote=item.remoteFiles&&Object.hasOwn(item.remoteFiles,path)?item.remoteFiles[path]:undefined;
       const repo=repositoryParts(item.source);
       if((remote||!item.remoteFiles)&&repo&&/^[a-f0-9]{40}$/.test(item.pinnedVersion)){
-        const url=`https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${item.pinnedVersion}/${path.split('/').map(encodeURIComponent).join('/')}`;
+        const url=`https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${item.pinnedVersion}/${item.ecosystem==='native'?'public/':''}${path.split('/').map(encodeURIComponent).join('/')}`;
         const own=await this.fetchAsset(url,path,undefined,remote);
         if(own)return own;
       }
     }
-    const defaults=item.ecosystem==='komari'?KOMARI_PUBLIC_SOURCES:CFSM_PUBLIC_SOURCES;
+    const defaults=item.ecosystem==='native'?{}:item.ecosystem==='komari'?KOMARI_PUBLIC_SOURCES:CFSM_PUBLIC_SOURCES;
     const source=Object.hasOwn(dependencies,path)?dependencies[path]:Object.hasOwn(defaults,path)?defaults[path]:undefined;
     return source?this.fetchAsset(source.url,path,source.sha256):null;
   }

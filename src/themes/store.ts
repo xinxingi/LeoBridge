@@ -9,7 +9,7 @@ export interface InstallReview {id:string;expires:number;ecosystem:ThemeEcosyste
 export interface InstallConfirmation {at:string;noticeVersion:string;noticeText:string;source:string;pinnedVersion:string;digest:string;licenseStatus:'found'|'missing';}
 
 
-export type ThemeEcosystem='cfsm'|'komari';
+export type ThemeEcosystem='cfsm'|'komari'|'native';
 export type Compatibility='unverified'|'verified'|'incompatible';
 export interface Installation {
   id:string; title:string; ecosystem:ThemeEcosystem; source:string; pinnedVersion:string;

@@ -20,6 +20,8 @@ LeoBridge 只读访问妙妙屋X探针 API，提供独立的 CFSM / Komari 展�
 
 **状态、历史与实时更新**：转换已有探针数据，缺失指标保持未知，历史空缺不补点；支持 WebSocket 和 HTTP 回退。
 
+源码已补充[妙妙屋 X 原生主题](docs/research/native-theme.md)，通过原生API展示，使用同一安装、预览、切换及回退流程；此功能尚未包含在下方v0.2.0发行产物中。
+
 项目默认不内置第三方主题。商店收录或安装成功不代表兼容，具体能力以[兼容说明](docs/research/compatibility.md)为准。
 
 ## 快速开始
