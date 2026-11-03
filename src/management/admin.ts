@@ -25,7 +25,7 @@ export class Admin {
       if(url.origin!==this.config.adminOrigin)return new Response('Not found',{status:404});
       if(!url.pathname.startsWith('/manage/api/')){
         if(request.method!=='GET')throw new BridgeError('METHOD_NOT_ALLOWED',405,'请求方法不支持。');
-        if(!['/','/app.js','/styles.css'].includes(url.pathname))return new Response('Not found',{status:404});
+        if(!['/','/app.js','/styles.css','/logo.svg'].includes(url.pathname))return new Response('Not found',{status:404});
         return this.secure(await this.loadUi(url.pathname==='/'?'index.html':url.pathname.slice(1)));
       }
       if(!this.config.password)throw new BridgeError('ADMIN_NOT_CONFIGURED',503,'请先运行pnpm configure:admin配置独立管理凭据。');

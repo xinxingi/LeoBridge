@@ -1,3 +1,5 @@
+![LeoBridge — 一份探针数据，两种主题体验。妙妙屋X桥接 CFSM / Komari。](docs/assets/readme-banner.png)
+
 # LeoBridge
 
 让妙妙屋X的数据，使用 CF-Server-Monitor 和 Komari 的主题展示。
@@ -77,6 +79,7 @@ docs/       用户指南、开发说明、决策与研究证据
 | 开发、测试或贡献代码 | [贡献指南](CONTRIBUTING.md) · [架构](docs/development/architecture.md) |
 | 查看实际通过与未验证项 | [开发进度](docs/progress.md) · [容器验收](docs/research/container-acceptance.md) · [双生态验收](docs/research/dual-store-acceptance.md) |
 | 了解源码来源与许可 | [第三方声明](THIRD_PARTY_NOTICES.md) |
+| 使用项目 Logo 与横幅 | [品牌素材](docs/assets/README.md) |
 
 ## 许可与反馈
 

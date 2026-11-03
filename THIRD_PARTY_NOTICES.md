@@ -8,6 +8,7 @@ LeoBridge原创代码使用根目录MIT许可证；下列内容保留独立来�
 | Komari Adhesive Note v1.0.0 | stqfdyr/komari-theme-adhesive-note `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914`，MIT及随包字体/图形许可 | `web/themes/komari/LICENSE`、`THIRD_PARTY.md`、`licenses/`、`UPSTREAM.json`、`PATCHES.md` |
 | 固定研究材料 | CFSM文档/选定源码及妙妙屋说明摘录 | `docs/references/README.md`、`manifest.json`及各原始许可 |
 | npm依赖 | `pnpm-lock.yaml`锁定各版本 | 各依赖包自己的LICENSE及package元数据 |
+| LeoBridge狮头图形 | 项目所有者提供的参考图，未附独立作者或许可声明；不以代码MIT覆盖 | `docs/assets/README.md`记录来源及摘要，矢量/PNG与后台图标保留于项目内 |
 
 内置Adhesive Note适配包标记为`LeoBridgeAdhesiveNote / 1.0.0-leobridge.1`，与商店官方原ZIP区分。字体使用的OFL、图形的CC-BY等条款保留在主题声明中，不由根MIT覆盖。构建产物保留主题许可文件。
 
