@@ -14,11 +14,7 @@ LeoBridge 只读访问妙妙屋X探针 API，提供独立的 CFSM / Komari 展�
 
 **双生态主题商店**：浏览 CFSM 与 Komari 主题，查看来源、固定版本和许可信息后按需安装。
 
-![Komari 主题商店：浏览主题、查看上游项目并准备安装](docs/assets/screenshots/komari-store.jpg)
-
-![CFSM 主题商店：浏览固定目录中的主题](docs/assets/screenshots/cfsm-store.jpg)
-
-截图使用演示配置与固定公开目录快照。
+![双生态主题商店：左侧 Komari，右侧 CFSM](docs/assets/screenshots/theme-stores.jpg)
 
 **预览、切换与回退**：先预览再启用，保留已安装版本，切换主题无需重新部署。
 

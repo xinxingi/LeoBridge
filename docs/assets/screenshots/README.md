@@ -1,9 +1,10 @@
 # 界面截图
 
-这些图片用于 README 的产品展示，来自 2026-11-03 本地运行的 LeoBridge 管理界面。截图保留页面原貌，不修改 DOM 或拼接功能状态。
+这些图片用于 README 的产品展示，来自 2026-11-03 本地运行的 LeoBridge 管理界面。原始截图保留页面原貌，不修改 DOM 或拼接功能状态；商店合图仅将两个完整页面横向并排。
 
 | 图片 | 内容 |
 | --- | --- |
+| [theme-stores.jpg](theme-stores.jpg) | README 使用的商店合图，左侧 Komari、右侧 CFSM；原尺寸并排，中间留 16px 间距 |
 | [komari-store.jpg](komari-store.jpg) | Komari 主题商店，夜间模式 |
 | [source-settings.jpg](source-settings.jpg) | 数据源配置保存后的页面，使用示例地址及三个合成节点 |
 | [cfsm-store.jpg](cfsm-store.jpg) | CFSM 主题商店，夜间模式 |
