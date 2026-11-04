@@ -6,6 +6,7 @@ import { createDevTransport } from './proxy.ts';
 import { createServer,type IncomingMessage } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { checkStorage } from './storage-check.ts';
 import { WebSocket,WebSocketServer } from 'ws';
 import { readConfig } from '../core/config.ts';
 import { managementConfig,PREVIEW_PARAMETER } from '../management/config.ts';
@@ -34,12 +35,19 @@ if(process.argv.includes('--check-config')){
   console.log(JSON.stringify({valid:true,mode:runtime.mode,routing:management.routing,listenHost:runtime.host,listenPort:runtime.port,origin:management.displayOrigin,adminOrigin:management.adminOrigin,previewOrigin:management.previewOrigin}));
   process.exit(0);
 }
+const store=new FileThemeStore(storeDirectory);
+try{
+  await checkStorage(store.root);
+  await store.state();
+}catch(error){
+  console.error(error instanceof BridgeError ? `LeoBridge startup failed [${error.code}]: ${error.message}` : 'LeoBridge storage check failed. Check data directory permissions and disk status.');
+  process.exit(1);
+}
 const transport=createDevTransport(env.BRIDGE_DEV_PROXY,config.timeoutMs);setGlobalDispatcher(transport.http);
 if(transport.proxied)console.log('Local development proxy enabled for HTTP and WebSocket.');
 const assets=resolve(env.BRIDGE_ASSETS_DIR||'dist/bundled');
-const store=new FileThemeStore(storeDirectory);
 try{await seedBundled(store,async path=>new Uint8Array(await readFile(resolve(assets,path))));}
-catch{console.error('Theme initialization failed. Build the application and check theme storage permissions.');await transport.http.close();transport.webSocket?.destroy();process.exit(1);}
+catch(error){console.error(error instanceof BridgeError ? `Theme initialization failed [${error.code}]: ${error.message}` : 'Theme initialization failed. Verify the complete release package/image and storage; source compilation is not required for prebuilt releases.');await transport.http.close();transport.webSocket?.destroy();process.exit(1);}
 const storeTransport=createStoreTransport();
 const nativeBuilder=createNativeBuilder();
 const storeNetwork=new StoreNetwork(store,storeTransport.run,nativeBuilder);

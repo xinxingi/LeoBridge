@@ -105,4 +105,15 @@ chmod 700 data
 
 根文件系统只读，容器/tmp通过`./tmp:/tmp`映射到Compose旁的磁盘目录，用于下载、解压及原生主题临时依赖。不再使用tmpfs或512MiB上限，容量取决于宿主磁盘。应用正常完成任务时清理对应工作目录，停止或重建容器不会自动清空宿主tmp；异常残留可在停止应用后清理tmp内容，保留目录及UID/GID1000、0700权限。tmp无需备份，data须保留。已有部署新增映射前先创建tmp并设置权限，再重建容器。容器不会读取宿主的.dev.vars。
 
-先查看`docker compose logs --tail=100 app`。写入失败检查data是否存在且UID/GID为1000；UNKNOWN_HOST核对站点地址、模式及Host；UNTRUSTED_PROXY核对实际代理来源。完整说明见[排障](../troubleshooting.md)。
+先查看`docker compose logs --tail=100 app`。新版在监听前检查数据目录读写，运行中写入失败也会明确报告权限、只读或磁盘空间问题，不再仅显示“桥接器内部错误”。这些改进需升级到包含修复的镜像；临时目录问题不阻止后台启动。
+
+遇到`STORAGE_PERMISSION`，使用默认挂载时，在Compose目录以root或sudo修复（自定义路径或运行用户按实际调整）：
+
+```sh
+mkdir -p data tmp
+chown -R 1000:1000 data tmp
+chmod 700 data tmp
+docker compose up -d --no-build app
+```
+
+已运行的服务恢复权限后可直接重试登录；启动失败的服务查看日志确认恢复。不要删除data或state.json来处理权限错误。运行包使用实际服务账号，不照抄Docker的UID1000。UNKNOWN_HOST核对站点地址及Host；UNTRUSTED_PROXY核对实际代理来源。完整说明见[排障](../troubleshooting.md)。

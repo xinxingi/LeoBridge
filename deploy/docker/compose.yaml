@@ -1,5 +1,8 @@
 name: leobridge
 
+# 首次启动前创建可写目录（以 root 或 sudo 执行）：
+# mkdir -p data tmp && chown 1000:1000 data tmp && chmod 700 data tmp
+
 services:
   app:
     image: staractive/leobridge:latest
@@ -12,6 +15,7 @@ services:
       - '127.0.0.1:8787:8787'
     environment:
       # 浏览器实际访问地址；HTTPS 由 nginx/Caddy 提供
+      # BRIDGE_ORIGIN: https://[你的域名]
       BRIDGE_ORIGIN: http://127.0.0.1:8787
     # 数据就在 compose.yaml 旁边的 data 目录；不是 Docker 命名卷。
     volumes:
