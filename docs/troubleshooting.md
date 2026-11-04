@@ -37,6 +37,9 @@
 | 现象/错误码 | 检查与行为 |
 | --- | --- |
 | UNKNOWN_HOST / 421 | 请求的协议、主机、端口须与BRIDGE_ORIGIN一致。新版默认HTTP监听按配置的站点协议识别地址；HTTPS反代保留原Host即可。源不含/admin/或末尾/，详见[Docker反代步骤](deployment/docker.md#对接已有反向代理) |
+| STORAGE_PERMISSION / 503 | 数据目录或文件权限不足，日志标明运行UID/GID；Docker默认1000:1000，按[权限修复](deployment/docker.md#升级与排障)调整宿主目录。旧版登录可能只报“桥接器内部错误”，也应先查目录权限 |
+| STORAGE_READ_ONLY / STORAGE_FULL / STORAGE_IO | 分别检查数据目录只读挂载、磁盘空间/inode/配额、磁盘或挂载故障 |
+| STORAGE_PATH / STORAGE_INVALID_STATE | 核对目录与state.json类型；JSON损坏时保留数据并从完整备份恢复，不删除状态重新初始化 |
 | STORAGE_MIGRATION | 默认数据目录已改为./data；发现旧work/theme-store时拒绝静默切换，停机完整迁移或显式设置BRIDGE_THEME_STORE沿用旧目录 |
 | 原生主题提示「请检查数据源 Token」 / UPSTREAM_AUTH / UPSTREAM_NOT_FOUND | 主控401/403表示拒绝访问；404也可能由Token失效、地址变更或独立探针接口关闭导致。管理员在「设置 → 数据源」核对地址、更新Token、检查连接后保存，再点展示页「重新检查」。新提示随桥接器升级生效，已有主题无需重装；不向页面回显Token或上游响应正文 |
 | 旧版提示HTTPS必须proxy | 这是旧版本校验；新版本支持默认HTTP监听加HTTPS公开源。旧镜像继续沿用原有效配置，不能仅替换精简模板，须升级配套镜像 |

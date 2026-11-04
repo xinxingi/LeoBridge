@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+import { once } from 'node:events';
 import { promisify } from 'node:util';
-import { mkdtemp, writeFile, readdir, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, readdir, rm, mkdir, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -40,4 +42,41 @@ test('configuration preflight validates without listening, state writes or leaki
     assert.match((error as {stderr:string}).stderr,/STORAGE_MIGRATION/);return true;
   });
   assert.deepEqual((await readdir(cwd)).sort(),['.dev.vars','work']);
+});
+
+test('startup rejects unwritable data but does not require writable temporary storage', async t=>{
+  if(process.getuid?.()===0||process.platform==='win32')return t.skip('Requires unprivileged POSIX permissions');
+  const cwd=await mkdtemp(join(tmpdir(),'leobridge-storage-startup-'));
+  const data=join(cwd,'data'),temporary=join(cwd,'tmp'),assets=join(cwd,'assets');
+  await mkdir(data);await mkdir(temporary);await mkdir(join(assets,'_management'),{recursive:true});
+  await writeFile(join(assets,'index.json'),'[]');
+  await writeFile(join(assets,'_management/index.html'),'Synthetic management');
+  t.after(async()=>{await chmod(data,0o700);await chmod(temporary,0o700);await rm(cwd,{recursive:true,force:true});});
+  const env={NODE_ENV:'production',BRIDGE_THEME_STORE:data,BRIDGE_ASSETS_DIR:assets,TMPDIR:temporary};
+  await chmod(data,0o500);
+  // Configuration validation remains read-only; real startup checks data writes.
+  await exec(process.execPath,[...args,'--check-config'],{cwd,env,timeout:10_000});
+  await assert.rejects(exec(process.execPath,args,{cwd,env,timeout:10_000}),error=>{
+    const failure=error as {code:number;stdout:string;stderr:string};
+    assert.equal(failure.code,1);assert.equal(failure.stdout,'');
+    assert.match(failure.stderr,/STORAGE_PERMISSION/);
+    assert.match(failure.stderr,/UID\/GID/);
+    return true;
+  });
+  await chmod(data,0o700);await chmod(temporary,0o500);
+  const reservation=createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');
+  const port=(reservation.address() as {port:number}).port;
+  await new Promise<void>(done=>reservation.close(()=>done()));
+  const child=spawn(process.execPath,args,{cwd,env:{...env,BRIDGE_LISTEN_PORT:String(port)},stdio:['ignore','pipe','pipe','ipc']});
+  let logs='';child.stdout!.on('data',chunk=>logs+=chunk);child.stderr!.on('data',chunk=>logs+=chunk);
+  t.after(async()=>{if(child.exitCode===null&&child.signalCode===null){const stopped=once(child,'exit');child.kill('SIGKILL');await stopped;}});
+  await new Promise<void>((accept,reject)=>{
+    const timer=setTimeout(()=>reject(new Error(logs||'startup timeout')),10_000);
+    child.once('error',error=>{clearTimeout(timer);reject(error)});
+    child.once('exit',()=>{clearTimeout(timer);reject(new Error(logs))});
+    child.once('message',message=>{clearTimeout(timer);assert.equal((message as {type:string}).type,'ready');accept()});
+  });
+  assert.equal(await (await fetch(`http://127.0.0.1:${port}/admin/`)).text(),'Synthetic management');
+  const stopped=once(child,'exit');child.kill('SIGTERM');await stopped;
+  assert.equal(child.exitCode,0);
 });

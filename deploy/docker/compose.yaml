@@ -1,5 +1,8 @@
 name: leobridge
 
+# 首次启动前创建可写目录（以 root 或 sudo 执行）：
+# mkdir -p data tmp && chown 1000:1000 data tmp && chmod 700 data tmp
+
 services:
   app:
     image: staractive/leobridge:latest
