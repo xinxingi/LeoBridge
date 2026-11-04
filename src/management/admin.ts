@@ -6,7 +6,7 @@ import { installationUrl,type ManagementConfig } from './config.ts';
 import { fetchCatalog,ThemePackageError } from '../themes/catalog.ts';
 import { StoreNetwork } from './store-network.ts';
 import { CatalogStars } from '../themes/stars.ts';
-import { NativeAppearanceIndex } from '../themes/native-appearances.ts';
+import { NativeAppearanceIndex, type NativeAppearances } from '../themes/native-appearances.ts';
 import type { SourceManagement } from './source.ts';
 
 import { DEFAULT_ADMIN_PASSWORD,constantEqual,hashPassword,validatePassword,verifyPassword } from './password.ts';
@@ -89,7 +89,7 @@ export class Admin {
       }
       if(url.pathname==='/manage/api/state'&&request.method==='GET'){
         const state=publicThemeState(await this.store.state());
-        const nativeAppearances:Record<string,Awaited<ReturnType<NativeAppearanceIndex['read']>>>={};
+        const nativeAppearances: Record<string, NativeAppearances> = {};
         for(const item of Object.values(state.installations))if(item.ecosystem==='native')nativeAppearances[item.id]=await this.nativeAppearances.read(this.store,item);
         return this.secure(json({...state,nativeAppearances,supportsUninstall:this.store.supportsUninstall===true,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:this.config.routing==='single'&&id===state.active?this.config.displayOrigin:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));
       }
@@ -105,14 +105,14 @@ export class Admin {
         if(this.installing)throw new BridgeError('INSTALL_BUSY',409,'当前有下载或删除任务，请稍后重试。');
         this.installing=true;
         try{
-          const catalog=await this.network.run(fetcher=>fetchCatalog(item.ecosystem,fetcher,{latest:true,refresh:true}));
+          const catalog=await this.network.run(fetcher=>fetchCatalog(item.ecosystem,fetcher,{latest:true,refresh:true,...(item.ecosystem==='native'?{nativeThemeId:item.themeId}:{})}));
           const entry=catalog.entries.find(entry=>entry.id===item.themeId);
           if(!entry)throw new BridgeError('UPDATE_NOT_LISTED',404,'官方目录已不再收录此主题，请保留现有版本或查看上游来源。');
           if(!entry.canAttemptInstall)throw new BridgeError('UPDATE_UNAVAILABLE',409,'官方目录中的此主题当前不可安装，请查看商店说明。');
-          if(item.ecosystem==='native'&&item.pinnedVersion===catalog.catalogRevision)return this.secure(json({status:'current',message:'已是上游最新原生主题版本。'}));
-          const pkg=await this.network.install(item.ecosystem,item.themeId,{expectedCatalogRevision:catalog.catalogRevision});
+          if(item.ecosystem==='native'&&item.pinnedVersion===entry.catalogRevision)return this.secure(json({status:'current',message:'已是上游最新原生主题版本。'}));
+          const pkg=await this.network.install(item.ecosystem,item.themeId,{expectedCatalogRevision:entry.catalogRevision});
           if(pkg.digest===item.packageDigest)return this.secure(json({status:'current',message:'当前安装与商店提供的版本及内容一致，无需更新。'}));
-          const review:InstallReview={id:token(),expires:Date.now()+15*60_000,ecosystem:item.ecosystem,themeId:item.themeId,catalogRevision:catalog.catalogRevision,pinnedVersion:pkg.pinnedVersion,digest:pkg.digest,noticeVersion:INSTALL_NOTICE_VERSION,updateOf:item.id};
+          const review:InstallReview={id:token(),expires:Date.now()+15*60_000,ecosystem:item.ecosystem,themeId:item.themeId,catalogRevision:entry.catalogRevision,pinnedVersion:pkg.pinnedVersion,digest:pkg.digest,noticeVersion:INSTALL_NOTICE_VERSION,updateOf:item.id};
           await this.store.command({type:'review',sessionId:session.id,review});
           return this.secure(json({status:'available',reviewId:review.id,expires:review.expires,name:pkg.name,source:pkg.source,catalogSource:pkg.catalogSource,pinnedVersion:pkg.pinnedVersion,previousVersion:item.pinnedVersion,license:pkg.license,digest:pkg.digest,noticeVersion:INSTALL_NOTICE_VERSION,noticeText:INSTALL_NOTICE_TEXT,resourceNotices:pkg.audit.notices}));
         }finally{this.installing=false;}
