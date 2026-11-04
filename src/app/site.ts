@@ -161,6 +161,10 @@ export class Site {
   }
   private assetResponse(request:Request,item:Installation,asset:{bytes:Uint8Array;contentType:string},preview=false){
     const url=new URL(request.url),wsOrigin=url.origin.replace(/^http/,'ws');
+    const jiwo=item.ecosystem==='native'&&item.themeId==='jiwo-probe';
+    // Ran embeds its separate map document in its own dashboard. Keep every
+    // other document (including the Jiwo homepage and admin) non-embeddable.
+    const embeddedMap=jiwo&&asset.contentType.startsWith('text/html')&&['/map','/map.html'].includes(url.pathname)&&Object.hasOwn(item.files,'map.html');
     let body:BodyInit=asset.bytes as BodyInit;
     if(asset.contentType.startsWith('text/html')){
       let html=new TextDecoder().decode(asset.bytes);
@@ -168,8 +172,8 @@ export class Site {
       if(preview)html=previewHtml(html,item.id);
       body=html;
     }
-    const response=new Response(request.method==='HEAD'?null:body,{headers:{'Content-Type':asset.contentType,'Cache-Control':(this.management.routing==='single'&&url.origin===this.management.displayOrigin)||asset.contentType.startsWith('text/html')?'no-store':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Referrer-Policy':preview?'same-origin':'no-referrer','Vary':'Referer','Cross-Origin-Resource-Policy':'same-origin','X-Frame-Options':'DENY'}});
-    response.headers.set('Content-Security-Policy',`default-src 'none'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; media-src 'self' https: data: blob:; connect-src 'self' ${wsOrigin} https:; frame-src https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`);
+    const response=new Response(request.method==='HEAD'?null:body,{headers:{'Content-Type':asset.contentType,'Cache-Control':(this.management.routing==='single'&&url.origin===this.management.displayOrigin)||asset.contentType.startsWith('text/html')?'no-store':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Referrer-Policy':preview?'same-origin':'no-referrer','Vary':'Referer','Cross-Origin-Resource-Policy':'same-origin','X-Frame-Options':embeddedMap?'SAMEORIGIN':'DENY'}});
+    response.headers.set('Content-Security-Policy',`default-src 'none'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; media-src 'self' https: data: blob:; connect-src 'self' ${wsOrigin} https:; frame-src ${jiwo?"'self' ":''}https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors ${embeddedMap?"'self'":"'none'"}`);
     return response;
   }
 }

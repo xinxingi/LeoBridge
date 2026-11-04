@@ -309,3 +309,38 @@ test('native license badges preserve object and array forms while filtering nono
   assert.deepEqual(project([]).license_badge,[]);
   assert.equal(project(null).license_badge,undefined);
 });
+
+test('only Jiwo map HTML permits same-origin embedding while its parent and other themes retain frame protection',async()=>{
+  const store=new NativeTestStore();
+  const jiwo=nativeInstallation('5'.repeat(32),'jiwo');
+  const official=nativeInstallation('6'.repeat(32),'official',{themeId:'mmwx-probe',source:`https://github.com/${officialRepository}`});
+  const otherProtocol=nativeInstallation('7'.repeat(32),'other-protocol',{ecosystem:'cfsm',protocolProfile:'cfsm-609cc0b'});
+  const noMap=nativeInstallation('8'.repeat(32),'no-map');delete noMap.files['map.html'];
+  for(const item of [jiwo,official,otherProtocol,noMap])await commitInstallation(store,item,item===noMap?pageFiles('no-map').filter(file=>file.path==='index.html'):pageFiles(item.title),item===jiwo);
+  const config=readConfig({MMWX_BASE_URL:'https://source.test',MMWX_PROBE_TOKEN:'synthetic',BRIDGE_ACCESS:'public',BRIDGE_BINDINGS:JSON.stringify([{id:'a',match:{name:'A'}}])});
+  const site=new Site(config,managementConfig({BRIDGE_ORIGIN:testOrigin}),store,async()=>new Response('synthetic admin'),new StoreNetwork(store,async(_settings,run)=>run(async()=>new Response('synthetic missing',{status:404}))));
+  for(const profile of ['mmwx-native-v1','cfsm-609cc0b'])site.protocols[profile]={fetch:async()=>null,websocketPaths:[],openRealtime:()=>({close(){}})};
+  const request=(path:string)=>new Request(testOrigin+path,{headers:{accept:'text/html'}});
+  const directive=(response:Response,name:string)=>response.headers.get('content-security-policy')?.split(';').map(part=>part.trim()).find(part=>part.startsWith(name+' '));
+  for(const path of ['/map','/map.html',`/map?__preview=${jiwo.id}`,`/map.html?__preview=${jiwo.id}`]){
+    const response=await site.fetch(request(path));assert.equal(response.status,200);
+    assert.equal(response.headers.get('x-frame-options'),'SAMEORIGIN');
+    assert.equal(directive(response,'frame-ancestors'),"frame-ancestors 'self'");
+    assert.equal(directive(response,'frame-src'),"frame-src 'self' https:");
+  }
+  for(const path of ['/','/index.html','/ordinary-spa-route','/map/',`/?__preview=${jiwo.id}`,`/map?__preview=${noMap.id}`]){
+    const response=await site.fetch(request(path));assert.equal(response.status,200);
+    assert.equal(response.headers.get('x-frame-options'),'DENY');
+    assert.equal(directive(response,'frame-ancestors'),"frame-ancestors 'none'");
+    assert.equal(directive(response,'frame-src'),"frame-src 'self' https:");
+  }
+  for(const item of [official,otherProtocol])for(const page of ['/','/map','/map.html']){
+    const response=await site.fetch(request(`${page}?__preview=${item.id}`));assert.equal(response.status,200);
+    assert.equal(response.headers.get('x-frame-options'),'DENY');
+    assert.equal(directive(response,'frame-ancestors'),"frame-ancestors 'none'");
+    assert.equal(directive(response,'frame-src'),'frame-src https:');
+  }
+  const admin=await site.fetch(request('/admin/'));
+  assert.equal(admin.headers.get('x-frame-options'),'DENY');
+  assert.equal(directive(admin,'frame-ancestors'),"frame-ancestors 'none'");
+});
