@@ -1,6 +1,6 @@
 # 文档导航
 
-当前版本：v0.2.0。用户使用Linux运行包或Docker Hub镜像，开发工具只在修改源码或制作产物时需要。
+下列发行产物入口对应v0.2.0；当前源码另已接入妙妙屋 X 官方原生主题，尚未包含在该版本产物中。用户使用Linux运行包或Docker Hub镜像，开发工具只在修改源码或制作产物时需要。
 
 ## 安装与使用
 
@@ -12,6 +12,7 @@
 | 配置域名、HTTPS及WebSocket反代 | [单域名反代](deployment/reverse-proxy.md) |
 | 修改密码、数据源、代理和运行参数 | [配置参考](configuration.md) |
 | 安装、预览、启用或回退主题 | [主题管理](themes.md) |
+| 使用官方原生主题及选择外观（当前源码） | [原生主题](research/native-theme.md) · [源码运行](development/build.md) |
 | 了解主题能力、未知值与数据限制 | [兼容清单](research/compatibility.md) |
 | 处理下载、登录、资源或实时故障 | [排障](troubleshooting.md) |
 

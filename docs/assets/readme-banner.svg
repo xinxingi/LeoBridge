@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-labelledby="title desc">
-<title id="title">LeoBridge — 一份探针数据，两种主题体验。</title>
-<desc id="desc">炭黑与银白配色。狮头标识，带延伸L收笔的斜体衬线LeoBridge字标，右侧分支连接CFSM与Komari。</desc>
+<title id="title">LeoBridge — 一份探针数据，多种主题体验。</title>
+<desc id="desc">炭黑与银白配色。狮头标识，带延伸L收笔的斜体衬线LeoBridge字标，右侧三条分支连接妙妙屋 X、CFSM与Komari。</desc>
 <defs>
  <linearGradient id="background" x1="0" y1="0" x2="1" y2=".85"><stop stop-color="#303439"/><stop offset="1" stop-color="#171a1e"/></linearGradient>
  <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#dce0e4"/></linearGradient>
@@ -23,17 +23,20 @@
 <path transform="translate(8414 0)" d="M386 309Q377 277 377 248Q377 169 411.0 129.0Q445 89 513 89Q582 89 653.5 128.5Q725 168 799 247H932Q852 129 709.5 49.0Q567 -31 399 -31Q254 -31 160.5 33.0Q67 97 67 232Q67 451 281.0 651.0Q495 851 750 851Q861 851 916.0 810.0Q971 769 971 687Q971 557 810.0 452.5Q649 348 386 309ZM409 414Q531 432 627.0 519.0Q723 606 723 690Q723 721 708.0 736.5Q693 752 663 752Q592 752 524.0 662.0Q456 572 409 414Z"/>
  </g>
 </g>
-<text x="370" y="386" fill="#a8adb4" font-family="'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="28" letter-spacing="2">一份探针数据，两种主题体验。</text>
+<text x="370" y="386" fill="#a8adb4" font-family="'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="28" letter-spacing="2">一份探针数据，多种主题体验。</text>
 <g fill="none" stroke="#9da3ab" stroke-width="2">
- <path d="M1130 282H1190C1255 282 1245 207 1310 207H1360"/>
- <path d="M1190 282C1255 282 1245 357 1310 357H1360"/>
+ <path d="M1130 282H1190C1255 282 1245 182 1310 182H1360"/>
+ <path d="M1190 282H1360"/>
+ <path d="M1190 282C1255 282 1245 382 1310 382H1360"/>
  <circle cx="1123" cy="282" r="7"/>
- <circle cx="1366" cy="207" r="7"/>
- <circle cx="1366" cy="357" r="7"/>
+ <circle cx="1366" cy="182" r="7"/>
+ <circle cx="1366" cy="282" r="7"/>
+ <circle cx="1366" cy="382" r="7"/>
 </g>
-<g fill="#e4e7eb" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="500">
- <text x="1391" y="214">CFSM</text>
- <text x="1391" y="364">Komari</text>
+<g fill="#e4e7eb" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="20" font-weight="500">
+ <text x="1391" y="189">妙妙屋 X</text>
+ <text x="1391" y="289">CFSM</text>
+ <text x="1391" y="389">Komari</text>
 </g>
 <text x="1123" y="323" text-anchor="middle" fill="#9da3ab" font-family="Inter, sans-serif" font-size="11" letter-spacing="2">SOURCE</text>
 </svg>

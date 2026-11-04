@@ -1,16 +1,18 @@
-![LeoBridge — 一份探针数据，两种主题体验。妙妙屋X桥接 CFSM / Komari。](docs/assets/readme-banner.png)
+![LeoBridge — 一份探针数据，多种主题体验。妙妙屋 X / CFSM / Komari。](docs/assets/readme-banner.png)
 
 # LeoBridge
 
-让妙妙屋X的探针数据，使用 CF-Server-Monitor 和 Komari 的主题展示。
+一份妙妙屋X探针数据，自由选择官方原生、CF-Server-Monitor 或 Komari 主题。
 
-LeoBridge 只读访问妙妙屋X探针 API，提供独立的 CFSM / Komari 展示协议和主题管理后台。采集、服务器管理和历史保存仍由妙妙屋X负责，无需安装新的 Agent。
+LeoBridge 只读访问妙妙屋X探针 API，通过独立的原生、CFSM 和 Komari 展示协议，统一管理主题安装、预览、切换与回退。采集、服务器管理和历史保存仍由妙妙屋X负责，无需安装新的 Agent。
 
 ## 功能
 
 **网页配置数据源**：填写主控地址和 Token，检查连接、核对节点身份及 Ping 目标后保存。
 
 ![数据源设置：演示主控已连接并保存三个节点身份](docs/assets/screenshots/source-settings.jpg)
+
+**官方原生主题**：接入[妙妙屋 X 原生探针前台](docs/research/native-theme.md)，直接使用原生 API 展示数据。外观可跟随主控，也可按安装版本独立选择；已核对的源码提供像素、扁平、二次元和高级黑金外观。
 
 **双生态主题商店**：浏览 CFSM 与 Komari 主题，查看来源、固定版本和许可信息后按需安装。
 
@@ -20,13 +22,13 @@ LeoBridge 只读访问妙妙屋X探针 API，提供独立的 CFSM / Komari 展�
 
 **状态、历史与实时更新**：转换已有探针数据，缺失指标保持未知，历史空缺不补点；支持 WebSocket 和 HTTP 回退。
 
-源码已补充[妙妙屋 X 原生主题](docs/research/native-theme.md)，通过原生API展示，使用同一安装、预览、切换及回退流程；此功能尚未包含在下方v0.2.0发行产物中。
+以上介绍包含当前源码能力。官方原生主题尚未包含在下方 **v0.2.0** 发行产物中；使用此功能请按[开发构建指南](docs/development/build.md)运行当前源码。
 
 项目默认不内置第三方主题。商店收录或安装成功不代表兼容，具体能力以[兼容说明](docs/research/compatibility.md)为准。
 
 ## 快速开始
 
-当前版本为 **v0.2.0**，提供两种安装方式：
+以下 **v0.2.0** 发行产物提供两种安装方式：
 
 | 方式 | 获取产物 | 安装说明 |
 | --- | --- | --- |
@@ -47,6 +49,8 @@ Release附件受GitHub仓库访问权限控制，私有仓库需先用有权限�
 2. 进入「设置 → 数据源」，填写妙妙屋X主控地址和探针 Token。点击「检查连接」，核对节点身份与 Ping 目标后保存。
 3. 进入 CFSM 或 Komari 商店，点击「查看安装」，在弹窗阅读来源与许可信息，勾选确认后安装主题。
 4. 预览主题，确认显示正常后启用，打开 [展示首页](http://127.0.0.1:8787/)。
+
+运行当前源码时，也可从「原生主题商店」安装官方原生前台，沿用上述预览与启用流程。
 
 通过Caddy/nginx域名访问时，只需填写实际HTTPS站点地址`BRIDGE_ORIGIN`，应用仍接收HTTP，按[Docker反代步骤](docs/deployment/docker.md#对接已有反向代理)完成配置与重载。
 
@@ -75,6 +79,7 @@ Release附件受GitHub仓库访问权限控制，私有仓库需先用有权限�
 
 感谢以下项目的作者与贡献者：
 
+- [妙妙屋 X 原生探针前台](https://github.com/mmwx-group/mmwx-probe)：提供官方原生前台与原生外观。
 - [CF-Server-Monitor（CFSM）](https://github.com/huilang-me/CF-Server-Monitor)：提供前台、主题规范与主题生态。
 - [Komari](https://github.com/komari-monitor/komari)：提供公开展示协议、主题机制与主题生态。
 
