@@ -12,6 +12,7 @@ services:
       - '127.0.0.1:8787:8787'
     environment:
       # 浏览器实际访问地址；HTTPS 由 nginx/Caddy 提供
+      # BRIDGE_ORIGIN: https://[你的域名]
       BRIDGE_ORIGIN: http://127.0.0.1:8787
     # 数据就在 compose.yaml 旁边的 data 目录；不是 Docker 命名卷。
     volumes:
