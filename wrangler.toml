@@ -11,10 +11,9 @@ run_worker_first = true
 [vars]
 BRIDGE_ACCESS = "local"
 BRIDGE_TITLE = "LeoBridge"
-BRIDGE_ADMIN_ORIGIN = "http://admin.localhost:8787"
-BRIDGE_DISPLAY_ORIGIN = "http://127.0.0.1:8787"
-BRIDGE_DISPLAY_DOMAIN = "display.localhost"
-BRIDGE_PREVIEW_ORIGIN = "http://preview.localhost:8787"
+# Same single-site configuration as Node; cloud deployment remains deferred.
+BRIDGE_ROUTING = "single"
+BRIDGE_ORIGIN = "http://127.0.0.1:8787"
 # Configure the password and upstream only in the management UI; both persist in private DO state.
 
 [[r2_buckets]]

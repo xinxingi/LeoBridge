@@ -6,7 +6,7 @@ from pathlib import Path
 def load_source(root):
     values = {}
     config_file = os.environ.get('BRIDGE_ENV_FILE')
-    if not config_file and os.environ.get('BRIDGE_NODE_MODE', 'local') == 'local':
+    if not config_file and os.environ.get('NODE_ENV') != 'production' and os.environ.get('BRIDGE_NODE_MODE', 'local') == 'local':
         config_file = '.dev.vars'
     if config_file:
         path = Path(config_file)
@@ -20,7 +20,9 @@ def load_source(root):
         elif os.environ.get('BRIDGE_ENV_FILE'):
             raise ValueError('Explicit runtime configuration file is missing')
     values.update(os.environ)
-    directory = Path(values.get('BRIDGE_THEME_STORE', 'work/theme-store'))
+    if not values.get('BRIDGE_THEME_STORE') and (root / 'work/theme-store').exists():
+        raise ValueError('Migrate work/theme-store to data while stopped, or explicitly set BRIDGE_THEME_STORE')
+    directory = Path(values.get('BRIDGE_THEME_STORE') or 'data')
     if not directory.is_absolute():
         directory = root / directory
     try:

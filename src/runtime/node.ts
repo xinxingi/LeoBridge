@@ -15,20 +15,29 @@ import { BridgeError } from '../core/errors.ts';
 import { FileThemeStore } from './file-theme-store.ts';
 import { seedBundled } from '../themes/bundled.ts';
 import { Site } from '../app/site.ts';
-import { loadRuntimeEnv } from './environment.ts';
+import { loadRuntimeEnv,themeStoreDirectory } from './environment.ts';
 import { sourceSocket } from './source-socket.ts';
 import { readNodeRuntimeConfig,nodeRequest,isTrustedProxy,isLoopback } from './node-request.ts';
 
 process.umask(0o077);
-let env,config,management,runtime;
+let env,config,management,runtime,storeDirectory;
 try{
   env=await loadRuntimeEnv(process.env);config=readConfig(env);management=managementConfig(env);runtime=readNodeRuntimeConfig(env);
-  if(runtime.mode!=='local'&&config.access==='local')throw new Error('Production requires explicit display access.');
-}catch{console.error('LeoBridge configuration is invalid. See docs/configuration.md and docs/deployment/local.md.');process.exit(1);}
+  if(runtime.mode!=='local'&&config.access==='local')throw new BridgeError('NODE_CONFIGURATION',503,'direct/proxy 模式须显式设置 BRIDGE_ACCESS=public 或 private。');
+  storeDirectory=await themeStoreDirectory(env);
+}catch(error){
+  console.error(error instanceof BridgeError ? `LeoBridge configuration is invalid [${error.code}]: ${error.message}` : 'LeoBridge configuration is invalid. See docs/configuration.md and docs/deployment/docker.md.');
+  process.exit(1);
+}
+// Read-only preflight: no listener, theme store, network transport or state writes.
+if(process.argv.includes('--check-config')){
+  console.log(JSON.stringify({valid:true,mode:runtime.mode,routing:management.routing,listenHost:runtime.host,listenPort:runtime.port,origin:management.displayOrigin,adminOrigin:management.adminOrigin,previewOrigin:management.previewOrigin}));
+  process.exit(0);
+}
 const transport=createDevTransport(env.BRIDGE_DEV_PROXY,config.timeoutMs);setGlobalDispatcher(transport.http);
 if(transport.proxied)console.log('Local development proxy enabled for HTTP and WebSocket.');
 const assets=resolve(env.BRIDGE_ASSETS_DIR||'dist/bundled');
-const store=new FileThemeStore(env.BRIDGE_THEME_STORE||'work/theme-store');
+const store=new FileThemeStore(storeDirectory);
 try{await seedBundled(store,async path=>new Uint8Array(await readFile(resolve(assets,path))));}
 catch{console.error('Theme initialization failed. Build the application and check theme storage permissions.');await transport.http.close();transport.webSocket?.destroy();process.exit(1);}
 const storeTransport=createStoreTransport();
@@ -41,6 +50,14 @@ const rootSessions=new Set<{close:()=>void}>();
 site.onActiveThemeChange=()=>{for(const session of rootSessions)session.close();};
 const sessions=new Set<{close:()=>void}>(),sources=new Set<WebSocket>();
 let shuttingDown=false;
+let reportedUntrustedProxy=false;
+function reportProxyError(error:unknown,req:IncomingMessage){
+  if(!reportedUntrustedProxy&&error instanceof BridgeError&&error.code==='UNTRUSTED_PROXY'){
+    reportedUntrustedProxy=true;
+    // Socket peer only; never log request headers, paths, cookies or source secrets.
+    console.warn(`UNTRUSTED_PROXY: peer=${req.socket.remoteAddress}; configure BRIDGE_TRUSTED_PROXIES for the verified proxy source. Further warnings suppressed until restart.`);
+  }
+}
 const connect=(sourceConfig:typeof config)=>()=>new Promise<Socket>((accept,reject)=>{
   if(shuttingDown){reject(new BridgeError('SHUTTING_DOWN',503,'服务正在停止。'));return;}
   const url=new URL('/api/public/probe-ws',sourceConfig.baseUrl);url.protocol=url.protocol==='https:'?'wss:':'ws:';
@@ -68,7 +85,7 @@ const servers=ports.map(port=>{
       // Validate peer/origin before waiting for a request body, including WS upgrades.
       nodeRequest(req,runtime,management,undefined,port);
       response=await site.fetch(nodeRequest(req,runtime,management,await body(req),port));
-    }catch(error){response=errorResponse(error);}
+    }catch(error){reportProxyError(error,req);response=errorResponse(error);}
     if(!res.destroyed){res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));}
   });
   server.headersTimeout=15_000;server.requestTimeout=120_000;server.keepAliveTimeout=5000;
@@ -79,7 +96,7 @@ const servers=ports.map(port=>{
       if(!protocol||shuttingDown||sessions.size>=50){connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');return;}
       const sourceConfig=site.config;
       wss.handleUpgrade(req,connection,head,ws=>{const session=protocol.openRealtime(socket(ws),connect(sourceConfig),url.pathname);sessions.add(session);if(management.routing==='single'&&url.origin===management.displayOrigin&&!url.searchParams.has(PREVIEW_PARAMETER))rootSessions.add(session);ws.on('close',()=>{sessions.delete(session);rootSessions.delete(session);});});
-    }catch{connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');}
+    }catch(error){reportProxyError(error,req);connection.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');}
   });
   server.once('error',()=>{console.error('LeoBridge listener failed; check address and port availability.');process.exitCode=1;shutdown();});
   server.listen(port,runtime.host,()=>{

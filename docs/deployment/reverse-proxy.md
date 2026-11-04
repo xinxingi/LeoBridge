@@ -10,18 +10,11 @@ https://monitor.example.com → Caddy/nginx → 127.0.0.1:8787
 
 ## 应用配置
 
-Docker在Compose的`.env`中配置后重建容器；运行包使用显式`BRIDGE_ENV_FILE`指定私有配置文件，修改后重启。proxy模式不自动读取开发`.dev.vars`。示例域名换为自己的实际域名：
+Docker只需把Compose的BRIDGE_ORIGIN设为`https://monitor.example.com`并重建容器。运行包/源码使用相同站点地址，另设BRIDGE_ACCESS=public允许展示，保存到显式BRIDGE_ENV_FILE指定的私有文件后重启。地址不含/admin/或末尾/。
 
-```dotenv
-BRIDGE_ROUTING=single
-BRIDGE_NODE_MODE=proxy
-BRIDGE_ORIGIN=https://monitor.example.com
-BRIDGE_LISTEN_PORT=8787
-BRIDGE_ACCESS=public
-BRIDGE_TRUSTED_PROXIES=127.0.0.1/32,::1/128
-```
+应用仍监听HTTP 8787；默认不要求proxy、可信代理IP、独立管理域名或预览域名。BRIDGE_ORIGIN只用于规范站点地址、链接及Cookie协议，不能配置证书；TLS和HTTP跳转HTTPS由代理完成。必须保留原Host，不能改成上游127.0.0.1，也不能只用X-Forwarded-Host传域名。
 
-这些是反代对接参数，管理密码、状态目录等沿用原部署配置。`public`表示展示无需额外密码，后台仍需登录；展示密码见[配置参考](../configuration.md)。非容器应用默认监听127.0.0.1。Docker继续使用Compose的容器监听和回环端口映射；其实际代理来源可能是Docker网关，须把`BRIDGE_TRUSTED_PROXIES`改为应用实际看到的代理IP/CIDR，不要直接复制回环地址或放开全部网段。
+默认不采信转发协议/IP头，管理登录按实际socket来源限流，同一代理的访客共享来源。确需使用真实客户端IP时才启用[高级proxy](../configuration.md#node运行参数)，配置严格的来源白名单。已有proxy配置仍兼容。
 
 ## Caddy
 
@@ -29,16 +22,21 @@ DNS指向部署服务器，并满足Caddy签发证书的条件。在自己的Cad
 
 ```caddyfile
 monitor.example.com {
-    reverse_proxy 127.0.0.1:8787 {
-        header_up X-Real-IP {remote_host}
-        header_up -Forwarded
-        header_up -X-Forwarded-Host
-        header_up -CF-Connecting-IP
-    }
+    reverse_proxy 127.0.0.1:8787
 }
 ```
 
-Caddy处理HTTPS，HTTP上游默认保留Host，传递X-Forwarded-Proto并支持WebSocket。这里假设Caddy直接接收客户端连接；前面还有CDN或其他代理时须另外确认真实客户端IP信任链。代理在另一容器时，目标地址应换为共享网络中可达的应用地址，不能使用代理容器自身的127.0.0.1。
+Caddy处理HTTPS，HTTP上游默认保留Host并支持WebSocket。默认模式不使用转发头；若选择高级proxy，再配置`header_up X-Real-IP {remote_host}`及对应可信来源。这里假设Caddy直接接收客户端连接；前面还有CDN或其他代理时须另外确认真实客户端IP信任链。代理在另一容器时，目标地址应换为共享网络中可达的应用地址，不能使用代理容器自身的127.0.0.1。
+
+配置变更后，若使用默认`/etc/caddy/Caddyfile`和systemd服务：
+
+```sh
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+# 上一步通过后执行
+sudo systemctl reload caddy
+```
+
+容器运行的Caddy应在对应容器内用实际路径执行`caddy validate`和`caddy reload`。仅重建LeoBridge容器且上游地址不变时无需重载Caddy；修改Caddyfile则需要。Caddy默认保留Host及处理WebSocket，不能把Host改成127.0.0.1，也不能仅靠X-Forwarded-Host传递域名。
 
 ## nginx
 
@@ -71,11 +69,13 @@ location / {
 }
 ```
 
+修改nginx配置后先`sudo nginx -t`，通过后`sudo systemctl reload nginx`（按实际服务管理方式调整）。
+
 不要把`proxy_pass`改为丢弃原路径和参数的重写，也不要清除同源Referer或设置全站`Referrer-Policy: no-referrer`。原主题的根路径资源和模块依赖需要同源Referer来补齐预览版本；应用不会向跨域地址发送此Referer。
 
 ## 可选的独立源隔离
 
-同域名不同路径或查询参数不构成安全隔离，只预览和启用可信主题。需要独立源隔离时显式改用`BRIDGE_ROUTING=isolated`，另配`BRIDGE_ADMIN_ORIGIN`、`BRIDGE_DISPLAY_DOMAIN`和`BRIDGE_PREVIEW_ORIGIN`，为展示根、管理源、版本及预览子域配置DNS、HTTPS和反代。应用仍可共用一个监听端口；额外域名仅用于这种可选模式。
+同域名不同路径或查询参数不构成安全隔离，只预览和启用可信主题。需要独立源隔离时显式改用`BRIDGE_ROUTING=isolated`，另配`BRIDGE_ADMIN_ORIGIN`、`BRIDGE_DISPLAY_DOMAIN`和`BRIDGE_PREVIEW_ORIGIN`，为展示根、管理源、版本及预览子域配置DNS、HTTPS和反代。Node的HTTPS多源隔离需同时启用高级`BRIDGE_NODE_MODE=proxy`并配置可信代理及转发头。应用仍可共用一个监听端口；额外域名仅用于这种可选模式。
 
 ## 验证
 

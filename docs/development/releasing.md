@@ -16,7 +16,7 @@
 ## 正常发版
 
 1. 在`develop`更新`package.json`中的版本号，Compose的`services.app.image`保持`staractive/leobridge:latest`，更新使用说明及升级注意事项，通过PR合入`main`。Release会复制该标签的部署模板，正式发版校验镜像后将其更新到latest；镜像地址不在`.env`中配置。
-2. 确认`main`对应提交的`check`通过。该检查包含架构、类型、全部测试、Node构建、构建产物运行时、Worker打包和实际容器启动/改密/重启验证。Worker打包不是云部署。
+2. 确认`main`对应提交的`check`通过。该检查包含架构、类型、全部测试、Node构建、构建产物运行时、Worker打包和实际Compose模板的配置预检查、启动/改密/重建验证。Worker打包不是云部署。
 3. 给选定的`main`提交创建带注释的标签并推送。以下以**下一次补丁版本`0.2.1`**为例，先确保该版本已写入`package.json`并合入main；不要重复使用已发布的`v0.2.0`。远端名按自己的`git remote -v`结果填写，远端名称与分支名称不同：
 
 ```sh
@@ -37,9 +37,9 @@ git push <远端名> refs/tags/v0.2.1
 标签/版本检查 → 复用完整`check` → 两个平台分别打包并验收 → 上传Docker Hub → 创建GitHub Release。
 
 - Linux x64、arm64运行包：`leobridge-<版本>-linux-<架构>.tar.gz`、各自`.sha256`和合并的`checksums.txt`。包内包含Node、应用、生产依赖、管理资源、许可证及启停脚本，并非单文件可执行程序。两个平台使用同一确定的Node24版本，下载官方分发包并验证SHA-256。
-- 各平台在原生运行器验证实际运行包；启动时PATH不包含系统Node/npm/pnpm，测试默认密码修改、重启后密码持久化及空数据源。两平台还各自构建并验证容器。
+- 各平台在原生运行器验证实际运行包；启动时PATH不包含系统Node/npm/pnpm，测试默认密码修改、重启后密码持久化及空数据源。两平台还各自构建镜像，用交付Compose模板检查配置预检查、错配拒绝及重建持久化，需要Docker Compose v2。
 - Docker镜像：`staractive/leobridge:<版本>`，包含`linux/amd64`及`linux/arm64`。发布后校验架构清单，并按镜像摘要拉取验证。正式版本验证成功后，用同一digest更新`staractive/leobridge:latest`，保留两种架构；带连字符的预发布版本不更新latest。需要固定部署或回退时使用版本标签或摘要。
-- Release同时附带同版本`compose.yaml`和`docker.env.example`。工作流新建Release时，说明包含镜像摘要及GitHub生成的改动列表；复用已有Release会保留原说明，需维护者核对并补充镜像信息。发布Actions摘要及Docker Hub标签可用于查询digest。
+- Release附带同版本`compose.yaml`；新版不再生成docker.env.example，配置直接写在YAML。工作流新建Release时，说明包含镜像摘要及GitHub生成的改动列表；复用已有Release会保留原说明，需维护者核对并补充镜像信息。发布Actions摘要及Docker Hub标签可用于查询digest。
 
 运行包、镜像及Release均来自同一标签提交。全部检查通过后才进入上传步骤；普通PR不会读取Docker Hub发布凭据。Docker Hub和GitHub Release并非跨平台原子事务：如果镜像已上传而Release步骤失败，先排查并重跑失败任务，不删除数据或擅自重打版本标签。
 
@@ -52,7 +52,7 @@ git push <远端名> refs/tags/v0.2.1
 已触发的旧标签工作流不会因分支上的修复而更新，直接重跑仍会执行旧的创建命令。不要移动标签或删除已有Release来规避。对于已经完成打包和Docker发布的旧运行，可在原Release中补齐该次运行的产物：
 
 1. 从同一次Actions运行下载`release-linux-x64`和`release-linux-arm64`工件，在保留期内解压到同一目录，保留两个`.tar.gz`及其`.sha256`。分别校验两份SHA-256文件，再将两份校验文件合并为`checksums.txt`。
-2. 从该标签提交取得`deploy/docker/compose.yaml`和`deploy/docker/.env.example`，后者保存为`docker.env.example`；不能混入当前开发分支的文件。
+2. 从该标签提交取得`deploy/docker/compose.yaml`，新版不需要独立.env附件；不能混入当前开发分支的文件。
 3. 在已有Release的编辑页上传上述7个附件，核对同名附件后替换。保留已有发布说明，并补充该次Docker任务实际输出的镜像标签和digest；保存后检查两种架构的附件及校验文件完整。
 
 这是对已成功构建产物的手动补交，不会使原Actions运行变绿。若工件已过期或无法核实来源，应通过新版本完整发版。新版本标签包含工作流修复后，才会自动使用复用逻辑。

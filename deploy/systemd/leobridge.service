@@ -9,26 +9,22 @@ User=leobridge
 Group=leobridge
 WorkingDirectory=/opt/leobridge/current
 Environment=NODE_ENV=production
-Environment=BRIDGE_NODE_MODE=proxy
 Environment=BRIDGE_LISTEN_HOST=127.0.0.1
 Environment=BRIDGE_LISTEN_PORT=8787
-Environment=BRIDGE_TRUSTED_PROXIES=127.0.0.1/32,::1/128
-Environment=BRIDGE_THEME_STORE=/var/lib/leobridge/theme-store
+Environment=BRIDGE_THEME_STORE=./data
 # Node parses this dotenv file; do not also load it with systemd EnvironmentFile.
-Environment=BRIDGE_ENV_FILE=/etc/leobridge/runtime.env
-ExecStart=/usr/bin/node dist/node.js
+Environment=BRIDGE_ENV_FILE=/opt/leobridge/current/runtime.env
+ExecStart=/opt/leobridge/current/runtime/bin/node dist/node.js
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
 KillSignal=SIGTERM
 UMask=0077
-StateDirectory=leobridge
-StateDirectoryMode=0700
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/leobridge
+ReadWritePaths=/opt/leobridge/current/data
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 CapabilityBoundingSet=
 

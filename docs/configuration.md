@@ -10,19 +10,34 @@
 
 日后修改管理密码使用右上角账户菜单的“修改密码”，更换主控或Token使用“设置 → 数据源”。这些操作保存成功后立即生效，不用编辑配置文件或重启。密码保存成功会退出旧会话；失败时旧密码不变。
 
+## 日常部署只看这些
+
+本机启动无需填写配置。Docker只需在Compose中填写浏览器实际访问地址BRIDGE_ORIGIN；HTTPS由nginx/Caddy完成，应用仍只接收HTTP，不用切换模式或填写可信代理IP。
+
+运行包/源码默认监听本机；对外展示时，可在runtime.env写入：
+
+```dotenv
+BRIDGE_ORIGIN=https://monitor.example.com
+BRIDGE_ACCESS=public
+```
+
+第一项是浏览器访问地址，不含/admin/或末尾/；第二项显式允许展示给访客，后台仍需登录。Docker镜像已经内置public，不用再填。运行包使用`BRIDGE_ENV_FILE="$PWD/runtime.env" ./leobridge.sh start`；源码使用`BRIDGE_ENV_FILE="$PWD/runtime.env" pnpm dev`，后续重启也须提供同一文件路径。
+
+首页、后台和预览默认共用同一域名，无需填写BRIDGE_ROUTING、独立展示域或预览域。HTTP监听与外部HTTPS站点地址分开，HTTPS站点默认内部监听8787。应用按配置的站点协议生成链接和管理Cookie，仍严格核对请求Host、浏览器Origin和CSRF；默认忽略转发协议/IP头，不根据客户端头猜测站点。
+
 ## 配置在哪里修改和保存
 
-[本地.dev.vars示例](../.dev.vars.example)与[Docker.env示例](../deploy/docker/.env.example)只保留端口、用户名、标题、存储路径等每次启动生效的运行参数。管理密码与数据源统一保存在状态文件中，只通过后台修改。
+[本地.dev.vars示例](../.dev.vars.example)只展示常用可选项；[Docker模板](../deploy/docker/compose.yaml)直接填写值，不需要.env。管理密码与数据源统一保存在状态文件中，只通过后台修改。
 
 | 修改运行参数后 | 生效操作 |
 | --- | --- |
 | 源码开发的`.dev.vars` | Ctrl+C停止，再执行`pnpm dev` |
 | 运行包的`.dev.vars` | `./leobridge.sh restart` |
-| Docker的`.env` | `docker compose up -d`重新创建容器；`restart`不更新环境 |
+| Docker的`compose.yaml` | `docker compose up -d`重新创建容器；`restart`不更新环境 |
 
-切换`BRIDGE_THEME_STORE`目录或`THEME_STORE_VOLUME`卷名不会迁移数据。继续使用原密码、数据源和主题时，应保留原存储位置，或停机后完整迁移。
+切换`BRIDGE_THEME_STORE`或Compose绑定的目录不会迁移数据。继续使用原密码、数据源和主题时，应保留原存储位置，或停机后完整迁移。
 
-**后台不会回写 `.dev.vars` 或 Docker 的 `.env`。文件未变化不代表保存失败；密码和数据源不从运行配置文件读取。** 按下表选择修改入口：
+**后台不会回写 `.dev.vars` 或 Compose文件。文件未变化不代表保存失败；密码和数据源不从运行配置文件读取。** 按下表选择修改入口：
 
 | 要修改什么 | 修改入口 | 实际生效规则 |
 | --- | --- | --- |
@@ -30,23 +45,35 @@
 | 当前管理密码 | 后台“修改密码” | 只读取状态目录里的密码摘要；重启不会重置密码 |
 | 主控地址、Token、节点身份、Ping目标 | 后台“设置 → 数据源” | 整套保存到与密码相同的state.json，立即生效；没有环境变量回退 |
 | 商店目录及主题下载代理 | 后台“设置 → 商店下载” | 保存后用于后续商店请求，重启后保留；不改变主控 HTTP/WS 连接 |
-| 端口、监听地址、访问策略、开发代理、状态目录路径 | 启动环境或配置文件 | 重启后读取；Docker修改.env后须重新创建容器，单纯restart不更新容器环境 |
+| 端口、监听地址、访问策略、开发代理、状态目录路径 | 启动环境或配置文件 | 重启后读取；Docker修改Compose后须重新创建容器，单纯restart不更新容器环境 |
 
 全新状态使用默认密码admin并强制改密。尚未保存数据源时，前台显示配置引导，后台可以正常使用；不会读取旧环境配置。
 
 | 运行方式 | 启动配置从哪里读取 | 后台状态保存在哪里 |
 | --- | --- | --- |
-| 源码开发 `pnpm dev` | 项目根目录的可选 `.dev.vars`；终端环境变量覆盖同名文件项 | 默认项目内 `work/theme-store/state.json` |
-| 预编译运行包，默认local模式 | 解压目录的可选 `.dev.vars`；环境变量优先 | 默认解压目录内 `work/theme-store/state.json` |
-| Docker Compose模板 | 部署目录的 `.env` 经Compose传入容器；不读取宿主项目的 `.dev.vars` | 命名卷内 `/data/theme-store/state.json`，默认卷名 `leobridge-theme-store` |
+| 源码开发 `pnpm dev` | 项目根目录的可选 `.dev.vars`；终端环境变量覆盖同名文件项 | 默认项目内 `data/state.json` |
+| 预编译运行包，默认local模式 | 解压目录的可选 `.dev.vars`；环境变量优先 | 默认解压目录内 `data/state.json` |
+| Docker Compose模板 | 直接读取Compose的environment；不读取宿主项目的 `.dev.vars` | Compose旁的 `data/state.json`，容器中为 `/data/state.json` |
 
-Node可用 `BRIDGE_THEME_STORE`更改状态目录，`BRIDGE_ENV_FILE`指定私有配置文件；direct/proxy模式默认不读取 `.dev.vars`。后台密码以加盐摘要保存，无法从文件还原明文；数据源Token需要供服务端使用，并非密码摘要。状态目录还包含已安装主题及会话，备份应保存整个目录或卷，不能靠删除它来重置密码。
+Node可用 `BRIDGE_THEME_STORE`更改状态目录，`BRIDGE_ENV_FILE`指定私有配置文件；NODE_ENV=production或direct/proxy模式默认不读取 `.dev.vars`。后台密码以加盐摘要保存，无法从文件还原明文；数据源Token需要供服务端使用，并非密码摘要。状态目录还包含已安装主题及会话，备份应保存整个目录或卷，不能靠删除它来重置密码。
+
+### 旧数据目录迁移
+
+Node新实例默认在启动目录的`./data`保存业务数据；运行包的启动目录固定为解压目录。旧版本的`work/theme-store`不会被自动搬动或忽略：未显式指定数据目录且检测到它时，启动报STORAGE_MIGRATION，避免误建空实例。
+
+停机并备份后，若data尚不存在，可将整个work/theme-store移动为data；或者继续设置`BRIDGE_THEME_STORE=work/theme-store`使用旧位置。已有data时不要合并两套状态，先核对，再显式指定应使用的目录。升级到新程序目录时复制完整数据目录，不能只复制state.json。Docker旧命名卷按[迁移步骤](deployment/docker.md#旧命名卷迁移)处理。
 
 ### 旧版本配置迁移
 
 旧版的 `BRIDGE_ADMIN_PASSWORD`、`MMWX_BASE_URL`、`MMWX_PROBE_TOKEN`、`BRIDGE_BINDINGS`、`BRIDGE_PING_TARGETS` 已移除，遗留值不会参与登录或连接。已保存的密码摘要、数据源和稳定ID保持有效。升级前若数据源仅在环境中配置，请先在旧版后台检查并保存，核对节点沿用原ID，再移除文件中的旧变量；不要删除状态目录。旧的 `configure` 和 `configure:admin` 初始化命令已移除。
 
 “设置 → 数据源”显示已保存的地址、节点数和Token状态，修改时同一主控留空Token会沿用保存值。更换主控必须填写新Token并重新核对节点身份。
+
+### 启动前检查（新版）
+
+包含部署优化的版本支持`node dist/node.js --check-config`；Linux运行包使用`./runtime/bin/node dist/node.js --check-config`，Docker使用`docker compose run --rm --no-deps app node dist/node.js --check-config`。使用与正常启动相同的环境或显式BRIDGE_ENV_FILE。成功输出有限的站点/监听信息并以0退出；失败输出不含配置值的错误原因并以1退出。此命令只检查配置及旧数据目录是否存在，不启动监听、不读取业务文件或写入主题状态、不连接网络，不能证明反代、Token或主题正常。旧镜像/运行包不支持，不能在旧版上执行。
+
+Compose的`config --quiet`仅验证YAML，不替代应用配置校验；配置中固定的YAML值不受.env覆盖。HTTP和HTTPS站点均可使用默认HTTP监听，HTTPS由外部代理提供，详见[反代步骤](deployment/docker.md#对接已有反向代理)。
 
 ## 商店下载代理
 
@@ -68,7 +95,7 @@ Token 不在任何管理响应或主题响应中回显。同一主控留空保�
 
 配置保存使用独立版本号防止并发覆盖，需要有效管理会话、默认密码完成改密、Origin与CSRF校验。保存后重建两个协议的数据源及缓存，关闭本进程旧实时连接；迟到HTTP结果和旧版本实时帧被拒绝。其他Worker实例在后续请求/实时输出时检查版本。网络监听、域名/TLS和展示访问策略仍由部署参数配置。
 
-## 配置与访问控制
+## 高级配置与访问控制
 
 | 变量 | 含义 |
 | --- | --- |
@@ -81,7 +108,7 @@ Token 不在任何管理响应或主题响应中回显。同一主控留空保�
 | `BRIDGE_ADMIN_ORIGIN` | isolated模式管理源，默认`http://admin.localhost:8786`；single使用BRIDGE_ORIGIN |
 | `BRIDGE_DISPLAY_ORIGIN` / `BRIDGE_DISPLAY_DOMAIN` | 展示根源和旧版本子域后缀；默认single预览无需子域，Node默认`http://127.0.0.1:8787`及`display.localhost` |
 | `BRIDGE_PREVIEW_ORIGIN` | isolated预览子域基源，默认`http://preview.localhost:8789`；single预览使用BRIDGE_ORIGIN及版本参数，无需设置此项 |
-| `BRIDGE_THEME_STORE` | Node主题、数据源凭据与管理会话存储目录，默认`work/theme-store`；不提交该目录 |
+| `BRIDGE_THEME_STORE` | Node主题、数据源凭据与管理会话存储目录，默认`./data`；不提交该目录 |
 | `PORT` | 未显式配置站点源时的Node单端口，默认8787；旧isolated模式不改变管理/预览端口 |
 | `BRIDGE_DEV_PROXY` | 可选Node开发HTTP CONNECT代理，例如本机已核实的`http://127.0.0.1:7897`；用于数据源HTTP和WS；商店下载代理独立且默认关闭，Worker不读取 |
 
@@ -127,18 +154,18 @@ Node最多50个访客实时连接；Workers无跨isolate共享限流，DO保存�
 
 | 参数 | 行为 |
 | --- | --- |
-| `BRIDGE_NODE_MODE` | 默认local；proxy为HTTPS反代；direct用于明确配置的HTTP访问（Docker默认回环端口），必须single、显式public/private |
+| `BRIDGE_NODE_MODE` | Node默认local回环HTTP，Docker内置direct；两者在single模式均支持外部HTTPS站点。proxy为可选的严格代理/IP识别模式 |
 | `BRIDGE_LISTEN_HOST` | 默认127.0.0.1；direct/proxy容器可设0.0.0.0，local只允许回环 |
-| `BRIDGE_LISTEN_PORT` | single只监听此端口；仅旧local+isolated按三个origin端口监听 |
-| `BRIDGE_TRUSTED_PROXIES` | 代理IP/CIDR逗号列表，默认127.0.0.1/32,::1/128；Docker默认direct不信任转发身份头；接入自有反代时填写应用实际看到的代理IP |
-| `BRIDGE_ENV_FILE` | 显式私有Node dotenv路径；环境变量优先。proxy/direct默认不读.dev.vars，路径错误拒绝启动 |
+| `BRIDGE_LISTEN_PORT` | HTTPS站点或proxy默认8787，与外部HTTPS端口无关；single只监听此端口；仅旧local+isolated按三个origin端口监听 |
+| `BRIDGE_TRUSTED_PROXIES` | 代理IP/CIDR逗号列表，默认127.0.0.1/32,::1/128；Docker默认direct不信任转发身份头；仅显式启用高级proxy时填写应用实际看到的代理IP，普通HTTPS反代无需配置 |
+| `BRIDGE_ENV_FILE` | 显式私有Node dotenv路径；环境变量优先。NODE_ENV=production或proxy/direct默认不读.dev.vars，路径错误拒绝启动 |
 | `BRIDGE_ASSETS_DIR` | 内置资源目录，默认dist/bundled；不是主题状态目录 |
 
 域名解析由部署者在DNS服务商处配置，域名对应的站点反代、HTTPS终止、证书及续期交给nginx或Caddy。LeoBridge只监听HTTP端口；origin配置用于来源校验和链接生成，不用于管理域名或证书。反向代理需保留Host、Origin、Cookie及WebSocket升级头。
 
-proxy要求使用HTTPS站点源：single配置BRIDGE_ORIGIN，isolated还需配置独立管理和预览源；所有生效origin均须HTTPS，并拒绝BRIDGE_DEV_PROXY。Host必须匹配配置范围；Forwarded和X-Forwarded-Host不用于生成站点地址。只有受信任代理的单一X-Forwarded-Proto=https和单IP X-Real-IP有效。HTTP与WS一致校验，客户端伪造CF-Connecting-IP无法绕过登录节流。
+高级proxy用于需要验证代理来源及采信X-Real-IP的部署，不是HTTPS的前提。默认direct/local忽略转发头，管理登录按socket来源限流，同一代理的访客共享此来源。启用proxy时，须配置BRIDGE_NODE_MODE=proxy、BRIDGE_TRUSTED_PROXIES，并由可信代理覆盖单值X-Forwarded-Proto=https与X-Real-IP；Docker宿主代理的来源通常是网关，容器代理通常是代理容器IP。该模式要求使用HTTPS站点源：single配置BRIDGE_ORIGIN，isolated还需配置独立管理和预览源；所有生效origin均须HTTPS，并拒绝BRIDGE_DEV_PROXY。Host必须匹配配置范围；Forwarded和X-Forwarded-Host不用于生成站点地址。只有受信任代理的单一X-Forwarded-Proto=https和单IP X-Real-IP有效。HTTP与WS一致校验，客户端伪造CF-Connecting-IP无法绕过登录节流。
 
-Docker的.env由Compose解析并传环境，本地部署的私有dotenv文件由Node解析；不要将两个不同用途的文件直接互换。不要同时让多个解析器重复解释引号和JSON。完整示例见[Docker部署](deployment/docker.md)。
+Docker新版直接使用Compose的environment；运行包/源码的私有dotenv文件由Node解析，二者语法不同。旧自定义Compose只有包含变量引用才会读取.env；不要把不同用途的文件直接互换。完整示例见[Docker部署](deployment/docker.md)。
 
 ## 管理密码持久化
 
@@ -146,4 +173,4 @@ Docker的.env由Compose解析并传环境，本地部署的私有dotenv文件由
 
 Node将随机盐和PBKDF2-SHA256摘要（600,000次）写入状态目录的 `state.json`，不保存新密码明文，公开状态API排除凭据和会话。备份和迁移必须包含整个状态目录；删除状态目录会同时丢失主题管理状态和已更改的密码，不能作为常规改密方法。已有密码摘要继续有效，不受环境变量影响。后台改密不会回写`.dev.vars`或其他环境配置文件。用户名仍由`BRIDGE_ADMIN_USERNAME`配置。
 
-single模式根入口直接提供当前主题资源，不跳转版本域；根资源禁用长期缓存。启用/回退主题时关闭根入口旧实时连接，刷新后使用新协议。single预览使用同域名的`?__preview=<安装ID>`，HTTP/WS按请求选择版本，不改变正式站或其他标签页；只需反代一个域名到同一端口，见[单域名反代](deployment/reverse-proxy.md)。isolated及旧版本/预览主机仍绑定安装版本，独立域名需另配DNS、证书和反代。direct校验配置的精确Host，不信任转发身份头；建议正式部署使用HTTPS的proxy模式。
+single模式根入口直接提供当前主题资源，不跳转版本域；根资源禁用长期缓存。启用/回退主题时关闭根入口旧实时连接，刷新后使用新协议。single预览使用同域名的`?__preview=<安装ID>`，HTTP/WS按请求选择版本，不改变正式站或其他标签页；只需反代一个域名到同一端口，见[单域名反代](deployment/reverse-proxy.md)。isolated及旧版本/预览主机仍绑定安装版本，独立域名需另配DNS、证书和反代。direct校验配置的精确Host，不信任转发身份头；正式部署由nginx/Caddy处理HTTPS并保留Host；需要真实客户端IP时才配置高级proxy。

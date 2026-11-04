@@ -10,7 +10,7 @@ export interface NodeRuntimeConfig {
   port: number;
   trustedProxies: BlockList;
 }
-const configuration = () => new BridgeError('NODE_CONFIGURATION', 503, 'Node监听或反向代理配置无效。');
+const configuration = (message = 'Node监听或反向代理配置无效，请检查 BRIDGE_NODE_MODE、BRIDGE_LISTEN_HOST、BRIDGE_LISTEN_PORT 和 BRIDGE_TRUSTED_PROXIES。') => new BridgeError('NODE_CONFIGURATION', 503, message);
 const badRequest = () => new BridgeError('BAD_REQUEST', 400, '请求地址或转发头无效。');
 const loopback = new BlockList();
 loopback.addSubnet('127.0.0.0', 8, 'ipv4');
@@ -28,13 +28,15 @@ function proxyOrigins(config: ManagementConfig) {
   for (const origin of [config.adminOrigin, config.displayOrigin, config.previewOrigin]) {
     let url: URL;
     try { url = new URL(origin); } catch { throw configuration(); }
-    if (url.protocol !== 'https:' || url.origin !== origin || url.username || url.password) throw configuration();
+    if (url.protocol !== 'https:' || url.origin !== origin || url.username || url.password) throw configuration('proxy 模式要求所有站点源使用 HTTPS；请检查 BRIDGE_ORIGIN 及独立管理/预览源。');
   }
 }
 export function readNodeRuntimeConfig(env: Env): NodeRuntimeConfig {
   const mode = env.BRIDGE_NODE_MODE ?? 'local';
+  const management = managementConfig(env);
   const host = env.BRIDGE_LISTEN_HOST ?? '127.0.0.1';
-  const portText = env.BRIDGE_LISTEN_PORT ?? env.PORT ?? (managementConfig(env).routing === 'single' ? new URL(managementConfig(env).displayOrigin).port || '80' : '8787');
+  const siteUrl = new URL(management.displayOrigin);
+  const portText = env.BRIDGE_LISTEN_PORT ?? env.PORT ?? (mode === 'proxy' || siteUrl.protocol === 'https:' ? '8787' : management.routing === 'single' ? siteUrl.port || '80' : '8787');
   if ((mode !== 'local' && mode !== 'proxy' && mode !== 'direct') || (host !== 'localhost' && !isIP(host))
     || (mode === 'local' && host !== 'localhost' && !isLoopback(host))
     || !/^\d{1,5}$/.test(portText) || Number(portText) < 1 || Number(portText) > 65535) throw configuration();
@@ -48,10 +50,13 @@ export function readNodeRuntimeConfig(env: Env): NodeRuntimeConfig {
       else trustedProxies.addSubnet(address!, Number(prefix), family === 4 ? 'ipv4' : 'ipv6');
     } catch { throw configuration(); }
   }
-  if (mode === 'direct' && (managementConfig(env).routing !== 'single' || env.BRIDGE_ACCESS === 'local' || !['public','private'].includes(env.BRIDGE_ACCESS || ''))) throw configuration();
+  if (mode !== 'proxy' && [management.adminOrigin, management.displayOrigin, management.previewOrigin].some(origin => new URL(origin).protocol !== (management.routing === 'single' ? siteUrl.protocol : 'http:'))) {
+    throw configuration('single 模式的站点源须使用一致协议；独立 HTTPS 多源请使用高级 proxy 模式。');
+  }
+  if (mode === 'direct' && (management.routing !== 'single' || !['public','private'].includes(env.BRIDGE_ACCESS || ''))) throw configuration('direct 模式要求 BRIDGE_ROUTING=single 且 BRIDGE_ACCESS=public 或 private。');
   if (mode === 'proxy') {
-    if (env.BRIDGE_DEV_PROXY) throw configuration();
-    proxyOrigins(managementConfig(env));
+    if (env.BRIDGE_DEV_PROXY) throw configuration('proxy 模式不能使用 BRIDGE_DEV_PROXY；该变量仅用于开发出站代理。');
+    proxyOrigins(management);
   }
   return { mode, host, port: Number(portText), trustedProxies };
 }
@@ -83,11 +88,13 @@ export function nodeRequest(req: IncomingMessage, runtime: NodeRuntimeConfig, ma
   authority(host);
   const peer = req.socket.remoteAddress;
   if (!peer || !isIP(peer)) throw badRequest();
-  let protocol = 'http:', client = peer;
+  // This server always receives HTTP. In single-site mode the configured public
+  // origin defines URL/cookie semantics; untrusted forwarding headers never do.
+  let protocol = management.routing === 'single' ? new URL(management.displayOrigin).protocol : 'http:', client = peer;
   if (runtime.mode === 'proxy') {
     proxyOrigins(management);
-    if (!isTrustedProxy(runtime, peer)) throw new BridgeError('UNTRUSTED_PROXY', 403, '请求未经过受信任的反向代理。');
-    if (singleHeader(req, 'x-forwarded-proto', true) !== 'https') throw badRequest();
+    if (!isTrustedProxy(runtime, peer)) throw new BridgeError('UNTRUSTED_PROXY', 403, '请求未经过受信任的反向代理，请核对 BRIDGE_TRUSTED_PROXIES；实际连接来源见服务端日志。');
+    if (singleHeader(req, 'x-forwarded-proto') !== 'https') throw new BridgeError('BAD_REQUEST', 400, '反向代理须覆盖 X-Forwarded-Proto 为单值 https。');
     protocol = 'https:';
     const realIp = singleHeader(req, 'x-real-ip');
     if (realIp !== undefined) {
@@ -99,7 +106,7 @@ export function nodeRequest(req: IncomingMessage, runtime: NodeRuntimeConfig, ma
   try { url = new URL(`${protocol}//${host}${target}`); } catch { throw badRequest(); }
   if (runtime.mode === 'proxy' || runtime.mode === 'direct' || management.routing === 'single') {
     const origins = [management.adminOrigin, management.displayOrigin, management.previewOrigin];
-    if (!origins.includes(url.origin) && !installationFromUrl(management, url)) throw new BridgeError('UNKNOWN_HOST', 421, '请求主机不在配置的站点范围内。');
+    if (!origins.includes(url.origin) && !installationFromUrl(management, url)) throw new BridgeError('UNKNOWN_HOST', 421, '请求主机或端口与站点配置不匹配，请核对 BRIDGE_ORIGIN 及反向代理保留的 Host。');
   } else {
     const hostname = url.hostname.replace(/^\[|\]$/g, '');
     if ((hostname !== 'localhost' && !hostname.endsWith('.localhost') && !isLoopback(hostname))

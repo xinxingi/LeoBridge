@@ -129,3 +129,24 @@ v0.2.0提供[Docker Hub镜像](../deployment/docker.md)和[Linux x64/arm64运行
 新增`core/prepared-data.ts`及CFSM/Komari的`bridge.data`扩展：资源衍生、带source/scope的流量、日账本汇总、价格月/年折算、UTC日期倒计时、完整源Ping目标桶摘要及公共元信息。中立历史保留累计U/D源桶，两个协议以`bridge.sourceCounters`提供，不假造精确区间增量；Komari扁平近期补load5/load15。标准价格/额度/累计字段和主题开关不强行映射，不扩大实际主题兼容声明。当前剩余基础缺口见[data-gap-audit](data-gap-audit.md)第2类，实施状态见[bridge-field-coverage](bridge-field-coverage.md)文首。
 
 验证：pnpm check（267测试、架构/类型/构建）、构建后Node运行时3项通过；20:44真实响应回放778+189项检查通过。未执行新增实时源调用、浏览器/WS验收、VPS/云部署、推送。价格缺4台、CPU型号缺3台等仍属节点资料/上报覆盖问题，不列为接口整体无能力。
+
+
+## 2026-11-03：部署配置与诊断修复（源码，待发布）
+
+用户反馈生产Caddy反代部署经调整为proxy及实际Docker网关后成功；这是用户提供的部署结果，本轮未操作生产服务器。源码现拒绝direct/local搭配HTTPS源，新增只读配置预检查、脱敏启动原因和首次不可信代理来源日志；NODE_ENV=production不自动读取开发文件。Host/Origin/CSRF与HTTP/WS信任边界保持，临时依赖空间默认调整为512MiB上限。
+
+本地273项测试、构建后4项运行时检查、macOS arm64实际运行包以及Compose配置/已创建网络查询通过；新镜像完整构建受Docker Hub元数据502阻塞，修改后的Compose镜像启动验收未完成。未重新验收真实Caddy/TLS、生产前台或容器原生主题安装，不扩大主题兼容声明。部署步骤见[Docker](../deployment/docker.md)与[反代](../deployment/reverse-proxy.md)。
+
+
+## 2026-11-04：统一配置与本地数据布局（源码，待发布）
+
+Node新实例使用./data，存在旧work/theme-store且未显式选目录时要求迁移；Docker采用`./data:/data:Z`普通目录映射，模板直接填值、不再需要.env。运行包、systemd、只读诊断及文档已同步；Worker示例统一single站点，但持久化仍为R2/DO。proxy内部默认8787与外部HTTPS端口分离，高级隔离配置仍兼容。
+
+274项测试、构建后4项运行时、macOS arm64运行包与实际data持久化通过；缓存完整运行镜像下的新Compose短映射、UID1000写入和重建持久化通过。未构建新镜像、验收SELinux实际标签、systemd服务、生产Caddy或云端，不扩展主题兼容声明。
+
+
+## 2026-11-04：默认HTTP接入简化（源码，待发布）
+
+本条取代前述direct+HTTPS拒绝策略。single的local/direct始终监听HTTP，使用显式站点源协议生成链接和Cookie，支持nginx/Caddy提供的HTTPS公开站点；不信任转发头，继续验证Host、Origin、CSRF，默认按socket来源限流。高级proxy仍保留严格来源/IP识别。Compose仅列BRIDGE_ORIGIN，其余运行默认值放回镜像和程序。
+
+275项测试、构建后5项运行时及新Linux arm64镜像的实际Compose检查通过；真实本机Caddy/TLS下管理登录、改密、Secure Cookie及Origin/CSRF拒绝通过，app只配置站点地址。本轮解除此前镜像构建502阻塞；未发布镜像或更新生产，不代表真实主题兼容或云端验收。

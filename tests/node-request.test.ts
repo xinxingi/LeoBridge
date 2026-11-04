@@ -181,4 +181,36 @@ test('HTTPS proxy single mode needs only the one public origin',()=>{
   const preview=installationUrl(config,'a'.repeat(32),true);
   const req=nodeRequest(input({host:'single.example.test',url:new URL(preview).pathname+new URL(preview).search,headers:[['X-Forwarded-Proto','https']]}),runtime,config);
   assert.equal(req.url,preview);
+  assert.equal(readNodeRuntimeConfig({...values,BRIDGE_LISTEN_PORT:undefined}).port,8787);
+  assert.equal(readNodeRuntimeConfig({...values,BRIDGE_ORIGIN:'https://single.example.test:8443',BRIDGE_LISTEN_PORT:undefined}).port,8787);
+});
+
+test('single-site HTTP listeners accept configured HTTPS origins, rejecting mixed schemes and malformed origins',()=>{
+  for(const mode of ['direct','local']){
+    const values={BRIDGE_NODE_MODE:mode,BRIDGE_ACCESS:'public',BRIDGE_ORIGIN:'https://monitor.example.test:8443'};
+    const runtime=readNodeRuntimeConfig(values),config=managementConfig(values);
+    assert.equal(runtime.port,8787);
+    for(const headers of [[],[['X-Forwarded-Proto','http'],['X-Real-IP','192.0.2.99'],['X-Forwarded-Host','evil.test']]] as [string,string][][]){
+      const req=nodeRequest(input({host:'monitor.example.test:8443',peer:'172.20.0.1',headers}),runtime,config);
+      assert.equal(req.url,'https://monitor.example.test:8443/');
+      assert.equal(req.headers.get('cf-connecting-ip'),'172.20.0.1');
+      rejects(()=>nodeRequest(input({host:'monitor.example.test',headers}),runtime,config),421);
+      rejects(()=>nodeRequest(input({host:'evil.test:8443',headers}),runtime,config),421);
+    }
+  }
+  rejects(()=>readNodeRuntimeConfig({BRIDGE_NODE_MODE:'direct',BRIDGE_ROUTING:'single',BRIDGE_ACCESS:'public',BRIDGE_ORIGIN:'http://127.0.0.1:8787',BRIDGE_PREVIEW_ORIGIN:'https://preview.example.test'}),503);
+  for(const origin of ['https://monitor.example.test/','https://monitor.example.test/admin/','https://user:synthetic-secret@monitor.example.test','not-an-origin','ftp://localhost']){
+    assert.throws(()=>managementConfig({BRIDGE_ORIGIN:origin}),error=>error instanceof BridgeError&&error.code==='MANAGEMENT_CONFIGURATION'&&!error.message.includes('synthetic-secret'));
+  }
+});
+
+test('Docker gateway trust is exact for HTTP and WS, including IPv4-mapped peers',()=>{
+  const values={BRIDGE_NODE_MODE:'proxy',BRIDGE_ROUTING:'single',BRIDGE_ORIGIN:'https://monitor.example.test',BRIDGE_TRUSTED_PROXIES:'172.20.0.1/32'};
+  const config=managementConfig(values),runtime=readNodeRuntimeConfig(values);
+  for(const upgrade of [false,true]){
+    const headers:[string,string][]=[...forwarded,...(upgrade?[['Upgrade','websocket'] as [string,string]]:[])];
+    for(const peer of ['172.20.0.1','::ffff:172.20.0.1'])assert.equal(nodeRequest(input({host:'monitor.example.test',peer,headers}),runtime,config).url,'https://monitor.example.test/');
+    for(const peer of ['172.20.0.2','127.0.0.1'])rejects(()=>nodeRequest(input({host:'monitor.example.test',peer,headers}),runtime,config),403);
+    rejects(()=>nodeRequest(input({host:'127.0.0.1:8787',peer:'172.20.0.1',headers}),runtime,config),421);
+  }
 });

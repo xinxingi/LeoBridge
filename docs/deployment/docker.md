@@ -1,110 +1,108 @@
 # Docker 部署
 
-Docker Compose只启动LeoBridge应用，映射HTTP端口并保存数据卷。域名、DNS、HTTPS证书及反向代理由部署者自己的服务管理，模板不启动nginx或Caddy，不占用80/443。
+只需一个`compose.yaml`，直接在文件里改配置，不再需要`.env`。密码、数据源和主题保存在同目录的`./data`，不使用Docker命名卷。Docker只运行应用，Caddy/nginx及证书由你现有的服务管理。
 
-镜像已发布到[Docker Hub：staractive/leobridge](https://hub.docker.com/r/staractive/leobridge/tags)，可匿名拉取。Compose直接使用`staractive/leobridge:latest`，支持`linux/amd64`和`linux/arm64`，Docker会选择宿主架构。正式版本镜像验证成功后，发布流程将同一多架构镜像更新到latest；预发布不更新latest。需要固定版本时可把Compose的image改为`staractive/leobridge:0.2.0`等版本标签。也可使用`staractive/leobridge@sha256:<镜像索引摘要>`固定内容，摘要从对应版本的Docker Hub标签或成功的发布Actions摘要取得。自行构建见[开发文档](../development/build.md)，目标机器无需Node、pnpm或源码编译。
+本页模板须搭配包含HTTP接入简化的新版镜像，镜像已内置运行默认值；旧镜像不能仅替换模板后省略参数。旧Release附件不会自动更新。已有命名卷部署先按下方“旧命名卷迁移”处理，不能直接换成空data目录。
 
-## 配置及首次启动
+## 下载和首次启动
 
-准备Docker Engine和Docker Compose v2，从[v0.2.0 Release](https://github.com/xinxingi/LeoBridge/releases/tag/v0.2.0)下载`compose.yaml`和`docker.env.example`到新建的部署目录。也可从同一Git标签的`deploy/docker/compose.yaml`和`deploy/docker/.env.example`取得模板，后者在Release附件中重命名为`docker.env.example`。不要用开发分支模板覆盖已有部署配置。
+准备Docker Engine和Docker Compose v2，取得与版本对应的[Compose模板](../../deploy/docker/compose.yaml)。镜像直接写在`services.app.image`，默认[staractive/leobridge:latest](https://hub.docker.com/r/staractive/leobridge/tags)，支持amd64/arm64；需要锁定版本时改为已发布的版本标签或摘要。Release入口见[部署方式](../deployment-checklist.md)。
 
-模板下载受GitHub仓库权限控制，私有仓库需先登录有访问权限的账号；拉取Docker镜像不需要GitHub账号。运行参数按需编辑原`.env`，不要重新复制示例覆盖配置；镜像版本直接在`compose.yaml`的`services.app.image`中修改。
+部署目录如下：
+
+```text
+LeoBridge/
+├── compose.yaml
+├── data/             # 密码、数据源、主题和会话；升级时保留
+└── tmp/              # 下载、解压和构建的临时文件，不需要备份
+```
+
+以下是data和tmp尚不存在的新安装步骤，已有部署先按迁移说明操作。在该目录执行。创建目录和设置权限的命令需要root，非root账号在对应命令前加sudo：
 
 ```sh
-cd /path/to/leobridge-deploy
-cp docker.env.example .env
-chmod 600 .env
-# 检查 compose.yaml 中 services.app.image 为 staractive/leobridge:latest。
+mkdir data tmp
+chown 1000:1000 data tmp
+chmod 700 data tmp
 docker compose config --quiet
 docker compose pull app
 docker compose up -d --no-build
-docker compose ps
+docker compose logs --tail=30 app
 ```
 
-当前仓库的Compose直接指定`image: staractive/leobridge:latest`，镜像地址不放入`.env`。已经发布的v0.2.0附件不会随仓库修改自动更新；使用该旧附件时，将`services.app.image`的变量表达式替换为上述镜像地址，并删除`.env`中旧的镜像变量。
+镜像使用UID/GID1000运行。启动前创建data和tmp并设置上述权限；否则Docker自动创建的目录可能归root所有，应用无法写入。`./data`和`./tmp`相对于Compose文件所在目录，不是随意执行命令时的工作目录。配置就是`./data:/data`与`./tmp:/tmp`两条普通目录映射，不创建Docker命名卷。
 
-首次使用latest前，须完成包含最新发布工作流的正式发版。旧v0.2.0流程只发布版本标签，未生成latest；如果Docker Hub尚无latest，可暂将Compose的image设为`staractive/leobridge:0.2.0`。修改本地模板不会自动创建远端标签。
+默认只允许服务器本机访问`http://127.0.0.1:8787/admin/`，远程通过SSH隧道或下方HTTPS反代访问。全新数据用admin/admin登录并按提示改密，再到“设置 → 数据源”保存主控配置。主控Token和管理密码不用填入Compose。
 
-### 首次打开后台
+## 只填站点地址
 
-默认在宿主机打开 `http://127.0.0.1:8787/admin/`。远程服务器部署时通过SSH隧道或配置好的HTTPS反代访问；自己电脑上的127.0.0.1不会直接连到服务器：
+Compose的environment只需填写浏览器实际访问地址，不含/admin/或末尾/：
 
-1. 全新卷且未自定义账号时，用`admin / admin`登录，设置12–128位、含大小写字母、数字和符号的新密码后重新登录。已有卷使用当前密码。
-2. 在“设置 → 数据源”填写主控地址和Token，检查连接、核对节点身份和Ping目标，确认“保存并应用”；不用预填环境JSON。
-3. 按[主题管理](../themes.md)安装、预览并启用主题。
+```yaml
+environment:
+  BRIDGE_ORIGIN: http://127.0.0.1:8787
+```
 
-后台改密和保存数据源立即生效，统一写入持久卷的`/data/theme-store/state.json`，不在`.env`配置。具体规则及旧版本迁移见[配置在哪里修改和保存](../configuration.md#配置在哪里修改和保存)。
+通过HTTPS域名访问时改为`https://monitor.example.com`即可。应用始终接收HTTP请求，HTTPS、证书及HTTP跳转HTTPS由nginx/Caddy负责；不用切换proxy模式或填写Docker网关。
 
-[.env示例](../../deploy/docker/.env.example)只保留每次启动生效的运行参数。`.env`由Compose读取并传入应用环境，运行参数修改后执行`docker compose up -d --no-build`重新创建容器；单独`restart`不会更新容器环境。不要覆盖已有`.env`或把展开后的`docker compose config`、`docker inspect`环境内容贴到工单。
+NODE_ENV、监听地址/端口、数据路径及公开展示策略已内置在镜像；程序默认single，让首页、后台和预览共用同一站点。后台始终需要登录。高级隔离、展示密码或可信客户端IP需求另见[配置参考](../configuration.md#高级配置与访问控制)，默认模板不再罗列它们。
 
-| 可选配置 | 默认与用途 |
-| --- | --- |
-| `LEOBRIDGE_PORT` | 宿主机端口8787；容器内部始终8787，默认站点源自动使用宿主端口 |
-| `LEOBRIDGE_BIND_HOST` | 127.0.0.1，仅宿主机连接；远程访问先完成自有反代对接 |
-| `BRIDGE_ORIGIN` | `http://127.0.0.1:<宿主端口>`；实际浏览器站点源，必须与访问地址一致 |
-| `BRIDGE_ADMIN_USERNAME` | 当前管理用户名，默认admin；修改后重新创建容器 |
-| `THEME_STORE_VOLUME` | leobridge-theme-store；升级保持同一卷名 |
-
-默认使用single路由：`/`展示当前主题，`/admin/`管理。应用在容器内用direct模式监听HTTP，宿主只映射回环端口；无需域名和证书。同源主题能访问同源管理资源，只应预览和启用可信主题；需要主题与后台隔离时改用isolated，见[配置参考](../configuration.md)。single预览与站点同域名同端口，链接使用`?__preview=<安装ID>`，无需额外域名、DNS或证书。
-
-旧实例迁移时保留原卷、后台密码和源配置。旧Compose内的nginx服务、`BRIDGE_*_HOST`、`TLS_DIRECTORY`和固定代理网段不再由模板管理；先按下一节把已有HTTPS站点接到独立反代，再切换应用配置。不要直接覆盖旧部署文件并假定这些旧变量仍生效；旧nginx容器的停用由部署者在确认入口切换后处理。
+端口直接改ports左侧，例如`127.0.0.1:8788:8787`；容器内部8787不用改。HTTP直连时也把站点地址端口改为8788；HTTPS反代的BRIDGE_ORIGIN填写外部HTTPS地址，代理上游端口改为8788。
 
 ## 对接已有反向代理
 
-这里只配置LeoBridge如何识别站点和可信代理，不配置代理软件、DNS或证书。宿主上的代理可转发到回环映射端口；代理若运行在另一容器，需自行安排共享网络和可达地址，不能把代理容器里的127.0.0.1当作应用。
+以Caddy/nginx运行在宿主机为例，保留`127.0.0.1:8787:8787`映射：
 
-在`.env`中补充应用参数，示例如下；域名与代理地址按实际环境填写：
+1. 把Compose中的BRIDGE_ORIGIN改为自己的HTTPS地址，例如`https://monitor.example.com`。
+2. 按[Caddy/nginx示例](reverse-proxy.md)将该域名整站转发到`http://127.0.0.1:8787`，保留原Host、路径、查询参数、Referer、Origin、Cookie和WebSocket。修改代理配置后校验并重载代理。
+3. 应用配置修改后重建容器：
 
-```dotenv
-BRIDGE_NODE_MODE=proxy
-BRIDGE_ORIGIN=https://monitor.example.com
-BRIDGE_ROUTING=single
-# 填应用实际看到的代理来源IP/CIDR；Docker转发后的地址可能与宿主不同。
-BRIDGE_TRUSTED_PROXIES=<实际代理来源IP>/32
-```
+   ```sh
+   docker compose config --quiet
+   docker compose up -d --no-build --force-recreate app
+   docker compose logs --tail=30 app
+   ```
 
-默认只需把`monitor.example.com`整站转发到应用同一端口；管理地址为`https://monitor.example.com/admin/`，预览也使用该域名。完整Caddy/nginx示例及可选isolated模式见[单域名反代](reverse-proxy.md)。
+日志仍为direct listener，这是正常的HTTP监听；浏览器进入`https://monitor.example.com/admin/`。只有修改代理配置才需要重载代理，单纯修改Compose无需重载Caddy。仅restart不会更新应用环境。新版镜像还支持启动前执行`docker compose run --rm --no-deps app node dist/node.js --check-config`，旧镜像不要执行此命令。
 
-代理须保留查询参数、Referer、Host、Origin、Cookie和WebSocket升级头，覆盖`X-Forwarded-Proto=https`及单IP的`X-Real-IP`，清除客户端提供的Forwarded、X-Forwarded-Host和CF-Connecting-IP；应用只接受配置的可信代理来源，不信任任意转发头。历史请求可能接近110秒，代理读超时应覆盖该预算（例如120秒）。对外HTTPS上线前验证Host/Origin、认证及WSS，不能仅靠首页200判断完成。完整参数见[配置参考](../configuration.md#node运行参数)。
+若代理也运行在Docker容器内，使用双方可达的共享网络，将上游设为应用服务名及8787端口，不能使用代理容器的127.0.0.1。默认不采信转发IP头，管理登录限流按实际连接来源计算；同一代理的访客共享该来源限流。如确需按真实客户端IP区分，才使用[高级proxy配置](../configuration.md#node运行参数)。
 
-应用以UID/GID1000（node）运行，根文件系统只读，仅数据卷和临时目录可写。Compose保留默认bridge网络用于访问主控和主题商店，不配置固定网段。direct/proxy不会自动读取开发`.dev.vars`，不挂载开发私有文件。
+已有文件名为docker-compose.yml时继续使用它，命令加`-f docker-compose.yml`，不要并排放两份配置。固定YAML值不受旧.env控制。健康检查仅确认应用进程，不能替代后台登录、主题预览及真实HTTP/WSS验证。
 
-## 状态、备份与恢复
+## 数据、备份和恢复
 
-`leobridge-theme-store`命名卷挂载至 `/data/theme-store`，保存完整主题包、安装元数据、active/previous指针、数据源凭据、管理密码摘要和会话。首次空卷启动无主题，显示安装引导；重启保留安装及启用状态。`/healthz`只确认本机进程存活，不读取主控，不证明Token、身份、历史或WebSocket正确。Compose健康检查失败会标记unhealthy，单靠该标记不会自动修复上游或重新启动仍在运行的进程。
+`./data/state.json`保存管理凭据、数据源和会话，`./data/packages/`保存主题资源。备份整个data目录，不单独复制state.json。数据目录只供一个实例使用；不执行多副本扩容。
 
-当前文件存储按**单站、单进程、单副本**运行。文件锁/原子替换不等于共享盘分布式事务；不要 `--scale app`、不要让多台VPS/NFS共同写此目录，也不要由滚动更新临时启动第二写入者。主题切换可以在管理站完成；应用二进制升级需要停机窗口。
-
-以下是停止写入后的整卷备份示例，工作目录仍为部署目录：
+停机后备份，以下权限操作以root执行：
 
 ```sh
 docker compose stop app
-BACKUP_DIRECTORY="$HOME/leobridge-backups/$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -p "$BACKUP_DIRECTORY"
-chmod 700 "$BACKUP_DIRECTORY"
-docker compose run --rm --no-deps --user 0 \
-  --volume "$BACKUP_DIRECTORY:/backup" --entrypoint sh app \
-  -c 'umask 077; tar -C /data/theme-store -czf /backup/theme-store.tgz .'
+mkdir -p backups
+chmod 700 backups
+tar -czf "backups/data-$(date +%Y%m%dT%H%M%S).tar.gz" data
+chmod 600 backups/*.tar.gz
 docker compose up -d
 ```
 
-备份位于仓库之外，归属root、权限0600；宿主管理员后续加密/转移时应保留受限访问，按时间/版本保存，避免覆盖。单独加密备份 `.env`；卷备份含管理会话，应按凭据同等级保护。只备份 `state.json`、active指针或镜像不够，必须包含所有 `packages/` 资源。停止后仍有 `state.lock` 时先确认没有其他写入进程，保留原始备份后再按排障文档处理；不可在线删除锁。不能依赖容器内存缓存恢复历史，历史仍在上游。
+同时保存compose.yaml。恢复时先停止应用，将备份解压到新的空目录，保留当前data用于回退；确认备份完整后将恢复的data放回Compose旁边，恢复UID/GID1000及私有权限，再启动。不要向运行中的目录覆盖解包。验证登录、数据源、主题资源及实时连接后再清理旧副本。备份包含凭据，不公开分享。
 
-恢复时先停止应用，将备份解包到一个**新的空命名卷**，恢复UID/GID1000及私有权限，再把`.env`中的`THEME_STORE_VOLUME`改为新卷名后启动。先保留原卷，不向在线卷覆盖解包。验证已安装主题资源、active/previous、管理登录和真实HTTP/WS后才决定清理旧卷。恢复会话会恢复备份时的认证状态，应按自己的会话撤销流程处理，不对外传递备份包。`docker compose down`保留命名卷；**不要执行 `down -v`**，除非明确要删除全部主题及管理状态。
+## 旧命名卷迁移
 
-## 升级与回退
+已有部署**先使用原Compose停止应用**，保留原文件和卷。以下默认容器名与旧模板一致；若曾改项目名，使用自己的原容器名。部署目录内data必须尚不存在：
 
-1. 记录当前镜像摘要、配置和完整卷备份。使用latest时执行`docker compose pull app`获取更新；固定版本部署则先修改`compose.yaml`中的`services.app.image`再拉取。latest不会自动更新正在运行的容器。
-2. 新镜像拉取完成后停止旧app，执行`docker compose up -d --no-build`，以同一持久卷单实例启动新镜像。不能仅替换`dist/node.js`而继续使用过期管理资源或依赖。
-3. 完成下方验收后保留回退窗口。启动不导入第三方主题，也不更改已有启用版本；在管理站显式审查并切换。
-4. 应用回退时停止新容器，使用先前记录的固定版本或摘要、对应配置（不能靠latest定位旧版本），并在状态格式或内容发生变化时恢复同批次完整卷备份。当前没有跨版本状态迁移/降级保证。管理界面的“回退主题”只改当前主题，不能回退应用代码或存储格式。
+```sh
+docker compose stop app
+# 从停止的旧容器复制完整数据；不读取或输出凭据内容。
+docker cp leobridge-app-1:/data/theme-store ./data
+chown -R 1000:1000 data
+chmod 700 data
+```
 
-## 部署检查与排障
+确认复制成功并备份后，再将原Compose的存储改为新版`./data → /data`，同时把BRIDGE_THEME_STORE改为`/data`，然后重建应用。旧容器必须保留到复制完成；不要先替换Compose或删除旧卷。若data已存在，先核对其来源，勿将旧数据混入另一实例。迁移后沿用原密码、Token、稳定ID和主题；旧卷保留到验收完成。不执行`down -v`清除旧卷。
 
-- 默认部署检查回环映射端口、`/admin/`登录/改密、数据源保存、重启持久化；指定不同宿主端口时核对站点源和预览链接。
-- 自有HTTPS反代检查DNS、证书、同域预览参数、Host/Origin、可信代理及WebSocket；isolated模式还需确认展示和预览不能读取管理接口。
-- 检查主题目录读取、安装、预览、启用/回退；真实主题首页、详情、历史及实时逐项验收，不把安装成功当兼容。
-- private展示认证应覆盖HTML、资源、HTTP和WS；真实主控Token不出现在浏览器。上游故障显示故障/过期，不伪装全部节点离线。
-- 在独立卷演练备份恢复和应用回退，记录版本、环境、失败及未执行项。
+## 升级与排障
 
-连接失败先查看`docker compose ps`及`docker compose logs --tail=100 app`，仅分享脱敏日志。未知Host核对实际访问地址与`BRIDGE_ORIGIN`；proxy模式拒绝请求时核对应用看到的代理来源和转发协议，不关闭来源校验。其他问题见[排障](../troubleshooting.md)。
+升级前备份data及Compose；`docker compose pull app`后执行`docker compose up -d --no-build`，保持同一data目录。latest不会自动更新运行中的容器。回退使用事先记录的固定版本/摘要；状态格式不兼容时恢复对应版本的完整备份，主题回退不能替代应用回退。
+
+根文件系统只读，容器/tmp通过`./tmp:/tmp`映射到Compose旁的磁盘目录，用于下载、解压及原生主题临时依赖。不再使用tmpfs或512MiB上限，容量取决于宿主磁盘。应用正常完成任务时清理对应工作目录，停止或重建容器不会自动清空宿主tmp；异常残留可在停止应用后清理tmp内容，保留目录及UID/GID1000、0700权限。tmp无需备份，data须保留。已有部署新增映射前先创建tmp并设置权限，再重建容器。容器不会读取宿主的.dev.vars。
+
+先查看`docker compose logs --tail=100 app`。写入失败检查data是否存在且UID/GID为1000；UNKNOWN_HOST核对站点地址、模式及Host；UNTRUSTED_PROXY核对实际代理来源。完整说明见[排障](../troubleshooting.md)。

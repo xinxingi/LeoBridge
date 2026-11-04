@@ -1,29 +1,12 @@
-# 本地开发配置（可选）：复制为项目根目录的 .dev.vars，已有文件直接编辑。
-#
-# 修改后停止并重新执行 pnpm dev 生效（终端环境变量优先于同名文件项）：
-# BRIDGE_LISTEN_PORT、BRIDGE_ADMIN_USERNAME、BRIDGE_TITLE、BRIDGE_THEME_STORE、BRIDGE_DEV_PROXY。
-# 注意：修改 BRIDGE_THEME_STORE 会切换数据目录，不会自动迁移原数据。
-#
-# 管理密码和数据源只在后台配置，统一保存到数据目录，不在本文件配置。
+# 本机开发 / 运行包可选配置；默认无需创建此文件。
+# 修改后：源码重启 pnpm dev；运行包执行 ./leobridge.sh restart。
+# 默认后台：http://127.0.0.1:8787/admin/；数据保存到当前目录的 ./data。
+# 密码、主控地址和 Token 在后台配置，不填在这里。
 
-# 首次准备依赖和构建见 docs/development/build.md；默认无需创建本文件即可 pnpm dev。
-# 管理后台：http://127.0.0.1:8787/admin/；前台运行，Ctrl+C停止。
-# 以下均可不填，按需取消注释。完整说明见 docs/configuration.md。
-
-# 本机监听端口。
+# 本机端口（可选）。
 # BRIDGE_LISTEN_PORT=8787
 
-# 管理账号默认admin/admin；使用默认密码首次登录必须改密。
-# BRIDGE_ADMIN_USERNAME=admin
-
-# 监控展示站名称，具体显示位置由主题决定。
+# 展示站名称（可选）。
 # BRIDGE_TITLE=LeoBridge
 
-# 数据目录，保存密码摘要、数据源和主题；升级保留，备份整个目录。
-# BRIDGE_THEME_STORE=work/theme-store
-
-# 可选Node开发代理；先确认端口支持HTTP CONNECT，Worker不使用此项。
-# BRIDGE_DEV_PROXY=http://127.0.0.1:7897
-
-# 主控地址、Token、节点身份及 Ping 目标在后台“设置 → 数据源”检查并“保存并应用”。
-# Docker配置使用 deploy/docker/.env.example。
+# HTTPS 域名部署、代理和旧数据迁移见 docs/configuration.md。

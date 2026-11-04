@@ -13,7 +13,7 @@ const script = step.split('        run: |\n')[1].split('\n')
   .filter(line => line.startsWith('          ')).map(line => line.slice(10)).join('\n');
 const assets = ['leobridge-0.1.0-linux-x64.tar.gz', 'leobridge-0.1.0-linux-x64.tar.gz.sha256',
   'leobridge-0.1.0-linux-arm64.tar.gz', 'leobridge-0.1.0-linux-arm64.tar.gz.sha256',
-  'checksums.txt', 'compose.yaml', 'docker.env.example'];
+  'checksums.txt', 'compose.yaml'];
 
 async function run(t: TestContext, releases: string, version = '0.1.0', mutationExit = 0, queryExit = 0) {
   const root = await mkdtemp(join(tmpdir(), 'leobridge release '));

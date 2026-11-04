@@ -43,13 +43,13 @@ flowchart LR
 
 ## Node运行与反向代理边界
 
-本地Node和Docker部署负责应用进程、HTTP监听及持久化，不管理域名或证书。DNS由部署者配置，站点反向代理、HTTPS终止和证书生命周期交给nginx或Caddy。应用约定HTTPS来源、Host及可信客户端IP的传递方式，不依赖nginx或Caddy的产品接口；Docker Compose只启动应用、映射端口并挂载数据卷，反向代理由部署者独立管理。
+本地Node和Docker部署负责应用进程、HTTP监听及持久化，不管理域名或证书。DNS由部署者配置，站点反向代理、HTTPS终止和证书生命周期交给nginx或Caddy。应用约定HTTPS来源、Host及可信客户端IP的传递方式，不依赖nginx或Caddy的产品接口；Docker Compose只启动应用、映射端口并绑定部署目录的./data，反向代理由部署者独立管理。
 
 `deploy/local/leobridge.sh`在源码仓库集中存放，打包时复制为运行包根目录的`leobridge.sh`；脚本只运行已有产物，使用包内Node或开发者已有Node，不下载、安装依赖或构建。`scripts/local-service.ts`编译为`dist/local-service.js`，使用Node内置模块管理后台进程、日志和启停；控制记录位于`work/local`，不混入主题业务存储。`scripts/package-local.ts`只供开发/发行阶段使用，按白名单打包Node、应用、生产依赖及许可证，省略源码、开发工具和私有状态；构建流程见[开发构建指南](build.md)。管理进程通过IPC等待Node入口全部端口就绪；应用在管理IPC断开时退出，避免遗留写入者。回环控制端口使用私有令牌，不按持久化PID直接终止进程；控制逻辑不进入Worker或协议层。
 
-Node默认single路由只开一个监听端口，local使用回环HTTP，direct用于显式HTTP访问，Docker默认仅映射宿主回环端口，proxy用于HTTPS反代。旧local+isolated配置保留多端口行为。只有允许的代理IP/CIDR可以提供单值`X-Forwarded-Proto=https`和`X-Real-IP`。Host必须匹配配置源或有效版本域；HTTP与WS使用同一验证函数。来自客户的Forwarded/X-Forwarded-Host/CF-Connecting-IP不能改变路由或绕过管理节流。
+Node默认single路由只开一个监听端口，local使用回环HTTP，Docker内置direct并仅映射宿主回环端口。single在两种模式下按配置的公开站点协议生成请求URL及Cookie，支持外部HTTPS反代；不信任转发头。proxy仅供需要严格验证代理来源和采信真实客户端IP的高级部署。旧local+isolated配置保留多端口行为。高级proxy下只有允许的代理IP/CIDR可以提供单值`X-Forwarded-Proto=https`和`X-Real-IP`。Host必须匹配配置源或有效版本域；HTTP与WS使用同一验证函数。来自客户的Forwarded/X-Forwarded-Host/CF-Connecting-IP不能改变路由或绕过管理节流。
 
-生产模式默认不读取`.dev.vars`。配置来自环境变量或显式`BRIDGE_ENV_FILE`；环境覆盖文件，日志不输出内容。文件存储在独立持久卷，按单站单副本运行。请求/WS有大小和数量界限，退出停止新请求、关闭上下游连接、终止出站连接池并限定排空时间。健康检查只检查进程，不访问真实源。
+NODE_ENV=production或direct/proxy模式默认不读取`.dev.vars`。配置来自环境变量或显式`BRIDGE_ENV_FILE`；环境覆盖文件，日志不输出内容。Node新实例文件存储在启动目录的./data；检测到旧work/theme-store时要求显式选择或迁移，不静默创建空站点，按单站单副本运行。请求/WS有大小和数量界限，退出停止新请求、关闭上下游连接、终止出站连接池并限定排空时间。健康检查只检查进程，不访问真实源。`--check-config`复用启动校验后立即退出，不初始化存储或监听；single的direct/local接受HTTP监听与HTTPS公开源分离，仍核对精确Host、Origin及CSRF，按socket来源限流。代理拒绝只在日志记录首次socket来源，不记录请求头、路径或凭据。
 
 ## 修改与验证
 
