@@ -1,3 +1,4 @@
+import { sourceCompatibility } from './catalog.ts';
 import { isNativeTheme, type NativeTheme } from '../core/presentation.ts';
 import type { PublicResourceSource } from './default-resources.ts';
 import { parseStoreProxy,type SavedStoreProxy,type StoreProxySettings } from '../core/store-proxy.ts';
@@ -22,6 +23,12 @@ export interface Installation {
   themeId?:string; manifest?:Record<string,unknown>; configuration?:Record<string,unknown>;
   resourceNotices?:string[]; remoteFiles?:Record<string,RemoteThemeFile>; dependencySources?:Record<string,PublicResourceSource>;
   files:Record<string,{contentType:string;size:number;offset?:number}>; bundled:boolean;
+}
+/** Resolve legacy stored flags without changing immutable packages or requiring reinstallation. */
+export function installationCompatibility(item: Installation): Compatibility {
+  return item.protocolProfile === 'mmwx-native-v1'
+    ? sourceCompatibility(item.ecosystem, item.themeId, item.source, item.compatibility)
+    : item.compatibility;
 }
 export interface AdminSession {expires:number;csrf:string;credentialVersion?:number;review?:InstallReview;sourceReview?:SourceReview;}
 export interface AdminCredential {version:number;algorithm:'PBKDF2-SHA256';salt:string;iterations:number;hash:string;}
@@ -135,6 +142,7 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
   }
   if(command.type==='install'){
     const item=structuredClone(command.installation);
+    item.compatibility=installationCompatibility(item);
     if(next.pendingAssetCleanup?.includes(item.id))throw new BridgeError('THEME_CLEANUP_PENDING',409,'此版本的资源尚未清理完成，请在主题工作台重试清理后再安装。');
     if(command.review){
       const session=next.sessions[command.review.sessionId],review=session?.review;
@@ -156,8 +164,8 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
     const id=command.type==='rollback'?next.previous:command.id;
     const item=id?next.installations[id]:null;
     if(!item)throw new BridgeError('THEME_NOT_INSTALLED',404,'该版本尚未安装或没有可回退版本。');
-    if(item.compatibility==='incompatible')throw new BridgeError('THEME_INCOMPATIBLE',409,'该版本不支持当前桥接协议。');
-    if(command.type==='activate'&&item.compatibility!=='verified'&&!command.acknowledgeUnverified)throw new BridgeError('PREVIEW_REQUIRED',409,'该包未经实测兼容，请先预览并明确确认。');
+    if(installationCompatibility(item)==='incompatible')throw new BridgeError('THEME_INCOMPATIBLE',409,'该版本不支持当前桥接协议。');
+    if(command.type==='activate'&&installationCompatibility(item)!=='verified'&&!command.acknowledgeUnverified)throw new BridgeError('PREVIEW_REQUIRED',409,'该包未经实测兼容，请先预览并明确确认。');
     if(id===next.active)return next;
     next.previous=next.active;next.active=id;
   }
@@ -165,7 +173,7 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
   next.events.push({at:new Date(now).toISOString(),action:command.type,installationId:command.type==='install'?command.installation.id:next.active!,generation:next.generation});
   next.events=next.events.slice(-30);return next;
 }
-export function publicThemeState(state:ThemeState){const {sessions,adminCredential,source,storeProxy,...publicState}=state;return publicState;}
+export function publicThemeState(state:ThemeState){const {sessions,adminCredential,source,storeProxy,...publicState}=state;return {...publicState,installations:Object.fromEntries(Object.entries(publicState.installations).map(([id,item])=>[id,{...item,compatibility:installationCompatibility(item)}]))};}
 
 /** Complete immutable files before publishing metadata; failures leave active untouched. */
 export async function commitInstallation(store:ThemeStore,item:Installation,files:{path:string;bytes:Uint8Array;contentType:string}[],activateIfEmpty=false,review?:{sessionId:string;id:string}){

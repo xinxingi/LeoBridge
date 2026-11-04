@@ -854,3 +854,37 @@ test('authenticated state exposes appearance choices from each installed native 
   assert.deepEqual(result.nativeAppearances[item.id],{status:'detected',options:[{id:'sweet',label:'天真'}]});
   assert.equal(result.installations[item.id].nativeTheme,'future-custom');assert.deepEqual(await store.state(),before);
 });
+
+
+test('accepted native sources resolve legacy installed flags and activate without unverified acknowledgement', async () => {
+  for (const [themeId, repository] of [['mmwx-probe', 'mmwx-group/mmwx-probe'], ['jiwo-probe', 'chnnic/jiwo-probe']]) {
+    const store = new MemoryStore();
+    const item = installation(0, { ecosystem: 'native', protocolProfile: 'mmwx-native-v1', themeId,
+      source: `https://github.com/${repository}`, compatibility: 'unverified' });
+    // Simulate an existing persisted installation from an older bridge release.
+    store.value.installations[item.id] = item;
+    const admin = new Admin(management(), store, ui), session = await login(admin);
+    const response = await admin.handle(request('/manage/api/state', session));
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).installations[item.id].compatibility, 'verified');
+    assert.equal(store.value.installations[item.id].compatibility, 'unverified');
+    const activated = await admin.handle(request('/manage/api/activate', { ...session, method: 'POST', body: { id: item.id, generation: store.value.generation } }));
+    assert.equal(activated.status, 200);
+    assert.equal((await activated.json()).installations[item.id].compatibility, 'verified');
+    assert.equal(store.value.active, item.id);
+  }
+});
+
+test('native acceptance requires matching identity and protocol and preserves explicit incompatibility', async () => {
+  const { installationCompatibility } = await import('../src/themes/store.ts');
+  const item = installation(0, { ecosystem: 'native', protocolProfile: 'mmwx-native-v1', themeId: 'jiwo-probe',
+    source: 'https://github.com/chnnic/jiwo-probe', compatibility: 'unverified' });
+  for (const overrides of [
+    { source: 'https://github.com/other/jiwo-probe' }, { themeId: 'mmwx-probe' }, { themeId: undefined },
+    { ecosystem: 'komari' as const }, { protocolProfile: 'komari-adhesive-v1' },
+  ]) assert.equal(installationCompatibility({ ...item, ...overrides }), 'unverified');
+  const incompatible = { ...item, compatibility: 'incompatible' as const };
+  assert.equal(installationCompatibility(incompatible), 'incompatible');
+  const state = emptyThemeState(); state.installations[item.id] = incompatible;
+  assert.throws(() => applyThemeCommand(state, { type: 'activate', id: item.id, expectedGeneration: 0, acknowledgeUnverified: true }), { code: 'THEME_INCOMPATIBLE' });
+});

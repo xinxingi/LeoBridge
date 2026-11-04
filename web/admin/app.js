@@ -52,9 +52,13 @@ function button(text,handler,primary=false){const node=element('button',text,pri
 function displayText(value){if(typeof value==='string')return value;if(value&&typeof value==='object')return value['zh-CN']||value.zh||value.en||Object.values(value).find(v=>typeof v==='string')||'';return ''}
 async function refreshState(){state=await api('state');$('display-link').href=state.displayOrigin;$('display-link').hidden=false;renderActive()}
 function renderActive(){const host=$('active');host.replaceChildren();const item=state.installations[state.active];const current=element('div',undefined,'current');current.append(element('div',item?(item.ecosystem==='native'?'M':item.ecosystem==='komari'?'K':'C'):'L','icon'));const info=element('div');info.append(element('p','当前启用 / ACTIVE THEME','eyebrow'),element('h2',item?.title||'尚未启用主题'),element('p',item?`${item.ecosystem.toUpperCase()} · 固定版本 ${item.pinnedVersion.slice(0,16)} · 第 ${state.generation} 次状态修订`:'安装主题并完成预览后启用'));current.append(info);host.append(current);const actions=element('div',undefined,'actions');if(item)actions.append(link('查看 ↗',state.links[item.id].display));if(state.previous)actions.append(button('回退上一版本',async()=>{await api('rollback',{generation:state.generation});await refreshState();await render();notice('已回退。新打开的展示站将使用上一版本。')}));host.append(actions)}
+function compatibilityBadge(status){
+  const labels={verified:'已验证兼容',unverified:'未验证兼容',incompatible:'不兼容'};
+  return element('span',labels[status]||labels.unverified,`badge ${status==='verified'?'verified':status==='incompatible'?'incompatible':'unknown'}`);
+}
 function installedCard(item){
   const card=element('article',undefined,'card installed-card'),top=element('div',undefined,'card-top');
-  top.append(element('span',item.ecosystem==='native'?(item.themeId==='jiwo-probe'?'社区 · Jiwo':'官方 · 原生'):item.ecosystem.toUpperCase(),'ecosystem'),element('span',item.compatibility==='verified'?'实测兼容':'未验证兼容',`badge ${item.compatibility==='verified'?'':'unknown'}`));
+  top.append(element('span',item.ecosystem==='native'?(item.themeId==='jiwo-probe'?'社区 · Jiwo':'官方 · 原生'):item.ecosystem.toUpperCase(),'ecosystem'),compatibilityBadge(item.compatibility));
   const info=element('div',undefined,'installed-info');
   info.append(element('h3',item.title),element('p',item.bundled?'随项目构建 · 保留上游来源与适配记录':'商店安装 · 固定来源已校验'),element('p',`版本 ${item.pinnedVersion}`,'version'),element('small',`${item.license.status==='missing'?'未发现明确许可文件':`许可信息 ${item.license.spdx}`} · ${new Set([...Object.keys(item.files),...Object.keys(item.remoteFiles||{})]).size} 个资源`));
   card.append(top,info);
@@ -184,7 +188,7 @@ function cleanupCard(id){
 }
 function catalogCard(entry,ecosystem){
   const card=element('article',undefined,'card catalog-card'),top=element('div',undefined,'card-top');
-  top.append(element('span',entry.tag||ecosystem.toUpperCase(),'ecosystem'),element('span','未验证兼容','badge unknown'));
+  top.append(element('span',entry.tag||ecosystem.toUpperCase(),'ecosystem'),compatibilityBadge(entry.compatibility));
   const title=displayText(entry.title||entry.name)||entry.id;
   card.append(top,element('h3',title),element('p',displayText(entry.description)||'来自生态官方目录。','catalog-description'));
   const meta=element('div',undefined,'catalog-meta');
