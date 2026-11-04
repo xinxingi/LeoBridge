@@ -29,6 +29,7 @@ function progressMessage(message){
 }
 function restoreProgress(){if(progressInDialog){$('task-progress-home').append($('task-progress'));progressInDialog=false;}}
 function startProgress(){
+  const previousError=installDialog?.querySelector('.install-status');if(previousError)previousError.hidden=true;
   notice('');$('task-progress').hidden=false;progressMessage('正在处理，请稍候…');
   const started=Date.now();
   const tick=()=>{const seconds=Math.floor((Date.now()-started)/1000);$('task-elapsed').textContent=`已等待 ${seconds} 秒${seconds>=15?' · 仍在等待结果，请勿重复操作。':''}`;};
@@ -41,7 +42,11 @@ function requestMessage(path,body){
   return messages[action]||'正在处理，请稍候…';
 }
 async function api(path,body){progressMessage(requestMessage(path,body));const response=await fetch(apiRoot+path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:body===undefined?undefined:JSON.stringify(body)});const data=await response.json();if(!response.ok){if(response.status===401)await showLogin();if(data.code==='PASSWORD_CHANGE_REQUIRED')showPasswordChange(true);throw new Error(data.message||data.error||'请求失败')}return data}
-async function task(action){if(busy)return;busy=true;document.querySelectorAll('button:not([data-appearance]):not(#notice-close)').forEach(b=>b.disabled=true);try{startProgress();await action()}catch(error){notice(error.message,true)}finally{stopProgress();busy=false;document.querySelectorAll('button:not([data-appearance]):not(#notice-close)').forEach(b=>b.disabled=b.dataset.requiresConfirmation==='true'&&!b.confirmationInput?.checked);if(focusAfterTask){focusAfterTask.focus();focusAfterTask=null}}}
+function taskError(error){
+  notice(error.message,true);
+  if(installDialog){let status=installDialog.querySelector('.install-status');if(!status){status=element('p',undefined,'install-status');status.setAttribute('role','alert');installDialog.querySelector('.install-footer').append(status);}status.className='install-status error';status.textContent=error.message;status.hidden=false;}
+}
+async function task(action){if(busy)return;busy=true;document.querySelectorAll('button:not([data-appearance]):not(#notice-close)').forEach(b=>b.disabled=true);try{startProgress();await action()}catch(error){taskError(error)}finally{stopProgress();busy=false;document.querySelectorAll('button:not([data-appearance]):not(#notice-close)').forEach(b=>b.disabled=b.dataset.requiresConfirmation==='true'&&!b.confirmationInput?.checked);if(focusAfterTask){focusAfterTask.focus();focusAfterTask=null}}}
 function link(text,href){const node=element('a',text,'button secondary');node.href=href;node.target='_blank';node.rel='noopener noreferrer';return node}
 function button(text,handler,primary=false){const node=element('button',text,primary?'primary':'secondary');node.addEventListener('click',()=>task(handler));return node}
 function displayText(value){if(typeof value==='string')return value;if(value&&typeof value==='object')return value['zh-CN']||value.zh||value.en||Object.values(value).find(v=>typeof v==='string')||'';return ''}
@@ -88,14 +93,15 @@ function installedCard(item){
 function nativeThemeControl(item){
   const control=element('div',undefined,'native-theme-control'),label=element('label','原生外观'),select=element('select');
   select.setAttribute('aria-label','原生外观');
-  for(const [value,text]of [['source','跟随主控'],['pixel','像素'],['flat','扁平'],['anime','二次元'],['premium','高级黑金（付费许可证）'],['custom','自定义主题标识']]){
+  const appearances=state.nativeAppearances?.[item.id],options=appearances?.options||[];
+  for(const [value,text]of [['source','跟随主控'],...options.map(option=>[option.id,option.label]),['custom','自定义主题标识']]){
     const option=element('option',text);option.value=value;select.append(option);
   }
-  const current=item.nativeTheme||'source',preset=['source','pixel','flat','anime','premium'].includes(current);
+  const current=item.nativeTheme||'source',preset=current==='source'||options.some(option=>option.id===current);
   select.value=preset?current:'custom';label.append(select);
   const customLabel=element('label','主题标识'),custom=element('input');custom.type='text';custom.maxLength=64;custom.setAttribute('aria-label','主题标识');custom.value=preset?'':current;customLabel.append(custom);customLabel.hidden=select.value!=='custom';
   select.addEventListener('change',()=>{customLabel.hidden=select.value!=='custom'});
-  control.append(label,customLabel,element('small','可跟随主控，或填写上游提供的主题标识；显示效果由安装的原生前台提供。'));
+  control.append(label,customLabel,element('small',appearances?.status==='detected'?'外观列表来自已安装前台；也可填写上游提供的自定义主题标识。':'未能从已安装前台识别外观列表；可跟随主控或填写上游提供的主题标识。'));
   const save=button('保存外观',async()=>{
     const theme=select.value==='custom'?custom.value.trim():select.value;
     if(!/^[A-Za-z0-9_-]{1,64}$/.test(theme))throw new Error('主题标识须为1–64位字母、数字、下划线或连字符。');
@@ -245,7 +251,8 @@ function sourceTokenHint(){
 }
 async function loadSource(){
   clearSourceReview();$('source-check-status').hidden=true;$('source-summary').hidden=true;$('source-editor').hidden=true;$('source-configured').hidden=true;
-  $('source-status').textContent='正在读取配置…';sourceStatus=await api('source');
+  $('source-status').textContent='正在读取配置…';
+  try{sourceStatus=await api('source')}catch(error){$('source-status').textContent='配置读取失败，请重新进入设置页重试。';throw error}
   $('source-configured').hidden=!sourceStatus.configured;
   $('source-status').textContent=sourceStatus.configured?'当前配置已生效，无需重复配置。':'尚未配置数据源。填写主控地址和探针 Token 后检查连接。';
   $('source-current-url').textContent=sourceStatus.baseUrl;
@@ -262,7 +269,7 @@ function networkFields(){
 }
 async function loadNetwork(){
   $('network-form').hidden=true;$('network-status').textContent='正在读取设置…';
-  networkStatus=await api('store-proxy');
+  try{networkStatus=await api('store-proxy')}catch(error){$('network-status').textContent='设置读取失败，请重新进入设置页重试。';throw error}
   if(!networkStatus.supported){$('network-status').textContent='当前运行环境不支持配置商店代理。';return}
   $('network-form').hidden=false;$('network-enabled').checked=networkStatus.enabled;$('network-url').value='';$('network-url').placeholder=networkStatus.hasAddress?'已保存，留空保留原地址':'http://127.0.0.1:7897';
   $('network-status').textContent=networkStatus.enabled?`当前使用代理：${networkStatus.url}${networkStatus.hasCredentials?'（含认证信息）':''}`:'当前直接连接主题商店（代理已关闭）。';

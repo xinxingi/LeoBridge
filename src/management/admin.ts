@@ -6,6 +6,7 @@ import { installationUrl,type ManagementConfig } from './config.ts';
 import { fetchCatalog,ThemePackageError } from '../themes/catalog.ts';
 import { StoreNetwork } from './store-network.ts';
 import { CatalogStars } from '../themes/stars.ts';
+import { NativeAppearanceIndex } from '../themes/native-appearances.ts';
 import type { SourceManagement } from './source.ts';
 
 import { DEFAULT_ADMIN_PASSWORD,constantEqual,hashPassword,validatePassword,verifyPassword } from './password.ts';
@@ -14,6 +15,7 @@ export class Admin {
   private attempts=new Map<string,{count:number;until:number}>();
   private installing=false;
   private stars=new CatalogStars();
+  private nativeAppearances=new NativeAppearanceIndex();
   constructor(readonly config:ManagementConfig,readonly store:ThemeStore,private loadUi:(path:string)=>Promise<Response>,private source?:SourceManagement,private network=new StoreNetwork(store)){ }
   private cookieName(){return this.config.routing==='single'?(this.config.adminOrigin.startsWith('https:')?'__Secure-leobridge_admin_path':'leobridge_admin_path'):(this.config.adminOrigin.startsWith('https:')?'__Host-leobridge_admin':'leobridge_admin_local');}
   private cookie(value:string,maxAge=14400){return `${this.cookieName()}=${value}; Path=${this.config.routing==='single'?'/admin':'/'}; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${this.config.adminOrigin.startsWith('https:')?'; Secure':''}`;}
@@ -87,7 +89,9 @@ export class Admin {
       }
       if(url.pathname==='/manage/api/state'&&request.method==='GET'){
         const state=publicThemeState(await this.store.state());
-        return this.secure(json({...state,supportsUninstall:this.store.supportsUninstall===true,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:this.config.routing==='single'&&id===state.active?this.config.displayOrigin:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));
+        const nativeAppearances:Record<string,Awaited<ReturnType<NativeAppearanceIndex['read']>>>={};
+        for(const item of Object.values(state.installations))if(item.ecosystem==='native')nativeAppearances[item.id]=await this.nativeAppearances.read(this.store,item);
+        return this.secure(json({...state,nativeAppearances,supportsUninstall:this.store.supportsUninstall===true,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:this.config.routing==='single'&&id===state.active?this.config.displayOrigin:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));
       }
       if(url.pathname==='/manage/api/catalog'&&request.method==='GET'){
         const ecosystem=url.searchParams.get('ecosystem');if(ecosystem!=='cfsm'&&ecosystem!=='komari'&&ecosystem!=='native')throw new BridgeError('ECOSYSTEM',400,'请选择原生、CFSM或Komari主题。');

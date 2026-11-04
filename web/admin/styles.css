@@ -117,12 +117,12 @@ p{color:var(--secondary);font-size:13px;line-height:1.7;margin:0}
 .ack{font-size:11px;display:flex;align-items:flex-start;gap:6px;margin-top:12px;color:var(--warning);line-height:1.7}
 .ack input{margin-top:4px}
 .footnote{font-size:11px;margin-top:24px;max-width:800px;color:var(--muted);line-height:1.9}
-#notification{position:fixed;top:20px;right:20px;z-index:1000;display:flex;align-items:flex-start;gap:12px;width:max-content;max-width:min(460px,calc(100% - 32px));max-height:calc(100dvh - 40px);overflow:auto;padding:14px 12px 14px 18px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 8px 32px #0003}
+#notification{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;align-items:flex-start;gap:12px;width:max-content;max-width:min(460px,calc(100% - 32px));max-height:calc(100dvh - 40px);overflow:auto;padding:14px 12px 14px 18px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 8px 32px #0003}
 #notification:has(.error){background:var(--error-bg);border-color:var(--error);color:var(--error)}
 #notice{align-self:center;min-width:0;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
 #notice-close{display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;border-radius:6px;background:transparent;color:inherit;font-size:22px;line-height:1}
 #notice-close:hover{background:var(--selected);filter:none}
-@media(max-width:580px){#notification{top:12px;right:16px;max-height:calc(100dvh - 24px)}}
+@media(max-width:580px){#notification{top:12px;max-height:calc(100dvh - 24px)}}
 .login{max-width:410px;margin:50px auto;padding:34px}
 .login .mark{display:block;width:56px;height:56px;margin-bottom:23px}
 .login form{display:grid;gap:18px;margin:28px 0 24px}
@@ -256,7 +256,7 @@ button.danger{color:var(--error,#c73535);border-color:currentColor}
 @media(max-width:1000px){.interface-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.interface-toolbar>label:first-child{grid-column:1/-1}.interface-toolbar button{grid-column:1/-1}}@media(max-width:580px){.interface-card>summary{padding:18px}.interface-body{padding:0 18px 18px}.interface-metadata>div{grid-template-columns:1fr;gap:3px}.interface-heading{align-items:flex-start}.interface-unavailable{padding:18px}}
 
 /* Shared wait feedback stays visible in the dialog top layer as well. */
-.task-progress{position:fixed;top:20px;right:20px;z-index:1001;display:flex;align-items:center;gap:14px;width:max-content;max-width:min(460px,calc(100% - 32px));padding:18px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 8px 32px #0003}
+.task-progress{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:1001;display:flex;align-items:center;gap:14px;width:max-content;max-width:min(460px,calc(100% - 32px));padding:18px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 8px 32px #0003}
 .task-progress>div{min-width:0}.task-progress p{margin:0;font-size:13px;line-height:1.7;overflow-wrap:anywhere}.task-progress small{display:block;margin-top:5px;font-size:12px;line-height:1.7;color:var(--muted);font-variant-numeric:tabular-nums}
-.install-dialog>.task-progress{position:sticky;bottom:0;right:auto;top:auto;flex:none;align-self:stretch;width:auto;max-width:none;margin:0 24px 24px;box-shadow:none;background:var(--input)}
-@media(max-width:580px){.task-progress{top:12px;right:16px}.install-dialog>.task-progress{margin:0 18px 18px}}
+.install-dialog>.task-progress{position:sticky;bottom:0;left:auto;top:auto;transform:none;flex:none;align-self:stretch;width:auto;max-width:none;margin:0 24px 24px;box-shadow:none;background:var(--input)}
+@media(max-width:580px){.task-progress{top:12px}.install-dialog>.task-progress{margin:0 18px 18px}}

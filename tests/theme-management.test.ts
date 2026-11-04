@@ -841,3 +841,16 @@ test('native update resolves upstream once and passes that exact commit through 
   const result=await post('native-theme',{id:installed.id,generation:store.value.generation,theme:'future-meow'});assert.equal(result.status,200);
   assert.equal(store.value.installations[installed.id].nativeTheme,'future-meow');
 });
+
+test('authenticated state exposes appearance choices from each installed native package, including existing installs',async()=>{
+  const store=new MemoryStore(),admin=new Admin(management(),store,ui);
+  const themeFiles=[...files(),{path:'assets/main.css',bytes:encoder.encode(':root.theme-sweet{color:pink}'),contentType:'text/css'}];
+  const item=installation(0,{ecosystem:'native',protocolProfile:'mmwx-native-v1',nativeTheme:'future-custom',files:Object.fromEntries(themeFiles.map(f=>[f.path,{size:f.bytes.length,contentType:f.contentType}]))});
+  await commitInstallation(store,item,themeFiles);
+  assert.equal((await admin.handle(request('/manage/api/state'))).status,401);
+  const session=await login(admin),before=await store.state();
+  const response=await admin.handle(request('/manage/api/state',{cookie:session.cookie}));assert.equal(response.status,200);
+  const result=await response.json();
+  assert.deepEqual(result.nativeAppearances[item.id],{status:'detected',options:[{id:'sweet',label:'天真'}]});
+  assert.equal(result.installations[item.id].nativeTheme,'future-custom');assert.deepEqual(await store.state(),before);
+});

@@ -154,3 +154,10 @@ Node新实例使用./data，存在旧work/theme-store且未显式选目录时要
 本条取代前述direct+HTTPS拒绝策略。single的local/direct始终监听HTTP，使用显式站点源协议生成链接和Cookie，支持nginx/Caddy提供的HTTPS公开站点；不信任转发头，继续验证Host、Origin、CSRF，默认按socket来源限流。高级proxy仍保留严格来源/IP识别。Compose仅列BRIDGE_ORIGIN，其余运行默认值放回镜像和程序。
 
 275项测试、构建后5项运行时及新Linux arm64镜像的实际Compose检查通过；真实本机Caddy/TLS下管理登录、改密、Secure Cookie及Origin/CSRF拒绝通过，app只配置站点地址。本轮解除此前镜像构建502阻塞；未发布镜像或更新生产，不代表真实主题兼容或云端验收。
+
+
+## 2026-11-04：原生外观目录发现
+
+原生mmwx-probe固定提交38848348f91d73694894a873ab05f5c282074058已包含sweet（天真）样式；此前LeoBridge管理下拉框硬编码导致更新前台后仍漏项。当前管理state接口按已安装CSS根选择器和JS appearance.theme字面量分支发现选项；无须修改或重装已有包。上游该版本的Worker路由没有完整外观目录，当前appearance只代表当前选择，不能作为全部选项。未来若改变实现约定，静态发现可能不完整，保留自定义ID；不据此标记兼容。
+
+实际旧48e14d0包发现anime/flat/pixel/premium，新38848348包增加sweet。真实新前台在隔离合成源上经管理UI保存sweet，实际粉色波点、28px圆角及阴影显示通过。仅验证本轮选择与渲染，不代表真实主控全功能、新主题生态或生产部署通过。日志和截图work/native-options/；297项项目测试、5项构建后Node运行时、Worker本地打包通过，未执行云端部署。
