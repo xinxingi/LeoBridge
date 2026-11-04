@@ -65,7 +65,7 @@ test('page rate limits stop queued requests; optional metadata has a bounded dea
 test('catalog cards display exact formatted stars, genuine zero and unavailable distinctly', async () => {
   const source = await readFile(new URL('../web/admin/app.js', import.meta.url), 'utf8');
   const element = (tag: string, text?: string, className?: string) => ({ tag, text, className, children: [] as any[], append(...children: any[]) { this.children.push(...children); } });
-  const render = runInNewContext(source.slice(source.indexOf('function catalogCard('), source.indexOf('async function render()')) + '\ncatalogCard', {
+  const render = runInNewContext(source.slice(source.indexOf('function compatibilityBadge('), source.indexOf('function installedCard(')) + source.slice(source.indexOf('function catalogCard('), source.indexOf('async function render()')) + '\ncatalogCard', {
     element, displayText: (value: string) => value, link: element, button: element,
   });
   for (const [stars, expected] of [[1234, '★ 1,234 Stars'], [0, '★ 0 Stars'], [null, '☆ - Stars']] as const) {

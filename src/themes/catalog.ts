@@ -11,18 +11,25 @@ export const CATALOG_SOURCES = Object.freeze({
 });
 /** Curated native frontend sources. Repository identity never comes from request URLs. */
 export const NATIVE_SOURCES = Object.freeze({
-  'mmwx-probe': { repository: 'mmwx-group/mmwx-probe', branch: 'main', sourceId: 'mmwx-native', name: '妙妙屋 X 原生主题', tag: '官方', description: '官方原生前台；按选定提交构建安装，外观可跟随主控。' },
-  'jiwo-probe': { repository: 'chnnic/jiwo-probe', branch: 'main', sourceId: 'jiwo-native', name: 'Jiwo Probe · 鸡窝状态站', tag: '社区 · Jiwo', description: '社区作者 chnnic 基于原生前台开发的多主题版本，包含玻璃、LuminaPlus、岚、哪吒等外观；整套安装，独立检查更新。' },
+  'mmwx-probe': { repository: 'mmwx-group/mmwx-probe', compatibility: 'verified' as const, branch: 'main', sourceId: 'mmwx-native', name: '妙妙屋 X 原生主题', tag: '官方', description: '官方原生前台；按选定提交构建安装，外观可跟随主控。' },
+  'jiwo-probe': { repository: 'chnnic/jiwo-probe', compatibility: 'verified' as const, branch: 'main', sourceId: 'jiwo-native', name: 'Jiwo Probe · 鸡窝状态站', tag: '社区 · Jiwo', description: '社区作者 chnnic 基于原生前台开发的多主题版本，包含玻璃、LuminaPlus、岚、哪吒等外观；整套安装，独立检查更新。' },
 });
 export function nativeSource(id: string = 'mmwx-probe') {
   if (!Object.hasOwn(NATIVE_SOURCES, id)) throw new ThemePackageError('THEME_NOT_FOUND', '原生主题来源不存在。', 404);
   return NATIVE_SOURCES[id as keyof typeof NATIVE_SOURCES];
 }
+export type ThemeCompatibility = 'unverified' | 'verified' | 'incompatible';
+/** User accepted both native sources on 2026-11-04; this is source-level support. */
+export function sourceCompatibility(ecosystem: string, themeId: string | undefined, source: string | null, current: ThemeCompatibility = 'unverified'): ThemeCompatibility {
+  if (current !== 'unverified' || ecosystem !== 'native' || !themeId || !Object.hasOwn(NATIVE_SOURCES, themeId)) return current;
+  const expected = `https://github.com/${nativeSource(themeId).repository}`;
+  return source === expected ? nativeSource(themeId).compatibility : current;
+}
 export interface CatalogEntry {
   id: string; ecosystem: Ecosystem; sourceId: string; name: string; description: string; tag?: string;
   catalogRevision: string; catalogSource: string;
   repositoryUrl: string | null; branch?: string; version?: string; downloadUrl?: string; sha256?: string;
-  canAttemptInstall: boolean; blockReasons: string[]; licenseStatus: 'unverified'; compatibility: 'unverified';
+  canAttemptInstall: boolean; blockReasons: string[]; licenseStatus: 'unverified'; compatibility: ThemeCompatibility;
 }
 export interface Catalog {
   ecosystem: Ecosystem; source: string; sourceId: string; pinnedVersion: string; catalogRevision: string;
@@ -180,7 +187,7 @@ async function catalogAtRevision(ecosystem: Ecosystem, revision: string, fetcher
   const url = `https://raw.githubusercontent.com/${source.repository}/${revision}/${source.file}`;
   if(ecosystem==='native'){
     const selected=nativeSource(nativeThemeId);
-    const entry={...baseEntry('native',nativeThemeId,selected.name,selected.description),tag:selected.tag,sourceId:selected.sourceId,catalogRevision:revision,catalogSource:`https://github.com/${selected.repository}/tree/${revision}`,repositoryUrl:`https://github.com/${selected.repository}`,version:revision};
+    const entry={...baseEntry('native',nativeThemeId,selected.name,selected.description),compatibility:sourceCompatibility('native',nativeThemeId,`https://github.com/${selected.repository}`),tag:selected.tag,sourceId:selected.sourceId,catalogRevision:revision,catalogSource:`https://github.com/${selected.repository}/tree/${revision}`,repositoryUrl:`https://github.com/${selected.repository}`,version:revision};
     return {ecosystem,source:entry.catalogSource,sourceId:selected.sourceId,pinnedVersion:revision,catalogRevision:revision,catalogLicense:'See the selected repository license documents before installation',catalogLicenseRevision:revision,fetchedAt:new Date().toISOString(),fromCache:false,entries:[entry]};
   }
   const raw = await fetchPublicJson(url, { fetcher, maxBytes: 2_000_000 });
@@ -205,7 +212,7 @@ export async function fetchCatalog(ecosystem: Ecosystem, fetcher: PublicFetcher 
     const entries=results.flatMap((result,index)=>{
       if(result.status==='fulfilled')return result.value.entries;
       const id=ids[index]!,source=nativeSource(id);
-      return [{...baseEntry('native',id,source.name,source.description),tag:source.tag,sourceId:source.sourceId,repositoryUrl:`https://github.com/${source.repository}`,catalogSource:`https://github.com/${source.repository}`,catalogRevision:'',canAttemptInstall:false,blockReasons:['来源暂时不可读取，请稍后刷新。']}];
+      return [{...baseEntry('native',id,source.name,source.description),compatibility:sourceCompatibility('native',id,`https://github.com/${source.repository}`),tag:source.tag,sourceId:source.sourceId,repositoryUrl:`https://github.com/${source.repository}`,catalogSource:`https://github.com/${source.repository}`,catalogRevision:'',canAttemptInstall:false,blockReasons:['来源暂时不可读取，请稍后刷新。']}];
     });
     return {...available[0]!.value,sourceId:'native-store',fromCache:available.length===results.length&&available.every(result=>result.value.fromCache),entries};
   }

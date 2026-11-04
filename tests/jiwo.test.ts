@@ -34,7 +34,7 @@ test('native aggregation preserves each repository revision and isolates refresh
   ]);
   const jiwo=first.entries.find(entry=>entry.id==='jiwo-probe')!;
   assert.equal(jiwo.repositoryUrl,`https://github.com/${communityRepository}`);
-  assert.equal(jiwo.tag,'社区 · Jiwo');assert.equal(jiwo.compatibility,'unverified');
+  assert.equal(jiwo.tag,'社区 · Jiwo');assert.equal(jiwo.compatibility,'verified');
   const cached=await fetchCatalog('native',fetcher);
   assert.equal(cached.fromCache,true);assert.equal(calls.length,2);
   cached.entries[1].catalogRevision='mutated';
@@ -267,7 +267,7 @@ test('Jiwo update only resolves its own repository and keeps reviewed source, re
   const installed=store.value.installations[(await installedResponse.json()).id];
   assert.equal(installed.themeId,'jiwo-probe');assert.equal(installed.source,`https://github.com/${communityRepository}`);
   assert.equal(installed.pinnedVersion,'c'.repeat(40));assert.equal(installed.catalogRevision,'c'.repeat(40));assert.equal(installed.nativeTheme,'luminaplus');
-  assert.equal(installed.compatibility,'unverified');assert.equal(store.value.active,old.id);
+  assert.equal(installed.compatibility,'verified');assert.equal(store.value.active,old.id);
   assert.deepEqual(builds,[{revision:'c'.repeat(40),themeId:'jiwo-probe'},{revision:'c'.repeat(40),themeId:'jiwo-probe'}]);
   assert.equal(requested.length,2);assert.ok(requested.every(url=>url.includes(communityRepository)));
 });
@@ -287,7 +287,7 @@ test('partial native source failures keep the other source installable and mark 
     const failed=catalog.entries.find(entry=>entry.repositoryUrl===`https://github.com/${failedRepository}`)!;
     const working=catalog.entries.find(entry=>entry!==failed)!;
     assert.equal(failed.canAttemptInstall,false);assert.equal(failed.catalogRevision,'');assert.equal(failed.version,undefined);
-    assert.ok(failed.blockReasons.length);assert.equal(failed.compatibility,'unverified');
+    assert.ok(failed.blockReasons.length);assert.equal(failed.compatibility,'verified');
     assert.equal(working.canAttemptInstall,true);assert.match(working.catalogRevision,/^[ab]{40}$/);assert.equal(working.blockReasons.length,0);
     unavailable=false;
     const recovered=await fetchCatalog('native',fetcher,{refresh:true});

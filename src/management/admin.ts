@@ -142,7 +142,7 @@ export class Admin {
           if(pkg.digest!==review.digest)throw new BridgeError('INSTALL_PACKAGE_CHANGED',409,'主题内容与确认时不一致，请重新查看。');
           const protocolProfile=ecosystem==='native'?'mmwx-native-v1':ecosystem==='cfsm'?'cfsm-609cc0b':'komari-adhesive-v1';
           const id=(await sha256(`${ecosystem}:${protocolProfile}:${pkg.id}`)).slice(0,32);
-          const item:Installation={id,title:pkg.name,ecosystem,source:pkg.source,pinnedVersion:pkg.pinnedVersion,catalogRevision:review.catalogRevision,themeId:pkg.themeId,manifest:pkg.manifest,configuration:pkg.configuration,resourceNotices:pkg.audit.notices,remoteFiles:pkg.remoteFiles,dependencySources:pkg.dependencySources,protocolProfile,license:pkg.license,packageDigest:pkg.digest,entry:pkg.entry,installedAt:new Date().toISOString(),compatibility:'unverified',files:Object.fromEntries(pkg.files.map(f=>[f.path,{contentType:f.contentType,size:f.bytes.byteLength}])),bundled:false};
+          const item:Installation={id,title:pkg.name,ecosystem,source:pkg.source,pinnedVersion:pkg.pinnedVersion,catalogRevision:review.catalogRevision,themeId:pkg.themeId,manifest:pkg.manifest,configuration:pkg.configuration,resourceNotices:pkg.audit.notices,remoteFiles:pkg.remoteFiles,dependencySources:pkg.dependencySources,protocolProfile,license:pkg.license,packageDigest:pkg.digest,entry:pkg.entry,installedAt:new Date().toISOString(),compatibility:pkg.compatibility,files:Object.fromEntries(pkg.files.map(f=>[f.path,{contentType:f.contentType,size:f.bytes.byteLength}])),bundled:false};
           await commitInstallation(this.store,item,pkg.files,false,{sessionId:session.id,id:review.id});return this.secure(json({ok:true,id}));
         }finally{this.installing=false;}
       }

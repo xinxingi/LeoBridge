@@ -15,7 +15,7 @@ test('native catalog resolves upstream main and pins chosen revisions without a 
   let revision='a'.repeat(40),calls=0;
   const fetcher=async()=>{calls++;return Response.json({sha:revision})};
   const value=await fetchCatalog('native',fetcher,{latest:true,refresh:true,nativeThemeId:'mmwx-probe'});
-  assert.equal(value.entries[0].repositoryUrl,'https://github.com/mmwx-group/mmwx-probe');assert.equal(value.entries[0].compatibility,'unverified');
+  assert.equal(value.entries[0].repositoryUrl,'https://github.com/mmwx-group/mmwx-probe');assert.equal(value.entries[0].compatibility,'verified');
   assert.equal(value.catalogRevision,revision);assert.equal(value.entries[0].catalogRevision,revision);assert.match(value.source,new RegExp(revision));
   revision='b'.repeat(40);
   const cached=await fetchCatalog('native',fetcher,{latest:true,nativeThemeId:'mmwx-probe'});assert.equal(cached.catalogRevision,'a'.repeat(40));assert.equal(calls,1);

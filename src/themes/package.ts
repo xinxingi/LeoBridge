@@ -2,7 +2,7 @@ import { cssDependencySources } from './resource-sources-css.ts';
 import type { PublicResourceSource } from './default-resources.ts';
 import { Inflate } from 'fflate';
 import { tokenizer } from 'acorn';
-import { fetchCatalog, fetchPublicBytes, fetchPublicJson, repositoryRevision, repositoryParts, validatePublicUrl, ThemePackageError, type CatalogEntry, type Ecosystem, type PublicFetcher } from './catalog.ts';
+import { sourceCompatibility, type ThemeCompatibility, fetchCatalog, fetchPublicBytes, fetchPublicJson, repositoryRevision, repositoryParts, validatePublicUrl, ThemePackageError, type CatalogEntry, type Ecosystem, type PublicFetcher } from './catalog.ts';
 export { ThemePackageError } from './catalog.ts';
 export interface RemoteThemeFile { sha: string; size: number; contentType: string; }
 export interface ThemeFile { path: string; bytes: Uint8Array; contentType: string; }
@@ -22,7 +22,7 @@ export interface ThemePackage {
   id: string; digest: string; themeId: string; name: string; ecosystem: Ecosystem;
   source: string; catalogSource: string; catalogRevision: string; pinnedVersion: string;
   license: LicenseRecord; entry: 'index.html'; files: ThemeFile[];
-  compatibility: 'unverified'; configuration?: Record<string, unknown>; manifest?: Record<string, unknown>; remoteFiles?: Record<string, RemoteThemeFile>; dependencySources?: Record<string, PublicResourceSource>;
+  compatibility: ThemeCompatibility; configuration?: Record<string, unknown>; manifest?: Record<string, unknown>; remoteFiles?: Record<string, RemoteThemeFile>; dependencySources?: Record<string, PublicResourceSource>;
   audit: { staticReferencesChecked: true; dynamicReferencesRequireBrowser: true; notices: string[] };
 }
 export const PACKAGE_LIMITS = Object.freeze({ archive: 16_000_000, total: 32_000_000, file: 8_000_000, files: 1200, ratio: 200 });
@@ -238,7 +238,7 @@ export async function finish(entry: CatalogEntry, files: ThemeFile[], license: L
   license.documents = await Promise.all(files.filter(f => /(?:^|\/)(?:LICENSE|LICENCE|COPYING|NOTICE|THIRD_PARTY)(?:\.[^/]*)?$|(?:^|\/)licenses?\//i.test(f.path)).filter(f => f.contentType.startsWith('text/')).map(async f => ({path:f.path,text:new TextDecoder().decode(f.bytes),sha256:await sha256(f.bytes)})));
   const descriptor = JSON.stringify({ ecosystem: entry.ecosystem, themeId: entry.id, source, pinnedVersion, license: license.sha256, ...(Object.keys(dependencySources).length ? {dependencySources} : {}), ...(remoteFiles ? {remoteFiles} : {}), files: await Promise.all(files.map(async f => [f.path, f.contentType, await sha256(f.bytes)])) });
   const digest = await sha256(encoder.encode(descriptor));
-  return { id: digest.slice(0, 32), digest, themeId: entry.id, name: entry.name, ecosystem: entry.ecosystem, source, catalogSource: entry.catalogSource, catalogRevision: entry.catalogRevision, pinnedVersion, license, entry: 'index.html', files, compatibility: 'unverified', ...(Object.keys(dependencySources).length ? {dependencySources} : {}), ...(remoteFiles ? {remoteFiles} : {}), ...(configuration ? { configuration } : {}), audit: { staticReferencesChecked: true, dynamicReferencesRequireBrowser: true, notices } };
+  return { id: digest.slice(0, 32), digest, themeId: entry.id, name: entry.name, ecosystem: entry.ecosystem, source, catalogSource: entry.catalogSource, catalogRevision: entry.catalogRevision, pinnedVersion, license, entry: 'index.html', files, compatibility: sourceCompatibility(entry.ecosystem, entry.id, source), ...(Object.keys(dependencySources).length ? {dependencySources} : {}), ...(remoteFiles ? {remoteFiles} : {}), ...(configuration ? { configuration } : {}), audit: { staticReferencesChecked: true, dynamicReferencesRequireBrowser: true, notices } };
 }
 export async function buildKomariPackage(entry: CatalogEntry, archive: Uint8Array, options: InstallOptions = {}): Promise<ThemePackage> {
   if (entry.ecosystem !== 'komari' || !entry.sha256 || await sha256(archive) !== entry.sha256) fail('PACKAGE_SHA256', '主题ZIP与固定目录摘要不一致。');

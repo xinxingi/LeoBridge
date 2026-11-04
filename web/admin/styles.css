@@ -13,6 +13,8 @@
   --accent: #e2e6eb;
   --on-accent: #1b1e22;
   --focus: #4d5866;
+  --success-bg: #183c2b;
+  --success: #9ce5b8;
   --warning-bg: #3d3222;
   --warning: #efd09a;
   --error-bg: #422c30;
@@ -34,6 +36,8 @@
   --accent: #25292e;
   --on-accent: #ffffff;
   --focus: #cbd2dc;
+  --success-bg: #e1f4e8;
+  --success: #216e40;
   --warning-bg: #fff0d3;
   --warning: #775211;
   --error-bg: #fbe7e9;
@@ -106,6 +110,8 @@ p{color:var(--secondary);font-size:13px;line-height:1.7;margin:0}
 .card-top{display:flex;justify-content:space-between;gap:8px}
 .ecosystem{font-size:11px;font-weight:750;letter-spacing:1px;color:var(--secondary)}
 .badge{padding:4px 8px;border-radius:4px;font-size:10px;background:var(--selected);color:var(--text);white-space:nowrap}
+.badge.verified{background:var(--success-bg);color:var(--success)}
+.badge.incompatible{background:var(--error-bg);color:var(--error)}
 .badge.unknown{background:var(--warning-bg);color:var(--warning)}
 .card p{font-size:12px;overflow-wrap:anywhere}
 .card .theme-stars{font-size:13px;font-weight:600;color:var(--text);margin:12px 0}
