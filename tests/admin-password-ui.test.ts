@@ -19,7 +19,7 @@ async function fixture(required=true,initiallyLoggedIn=true,infoFails=false,cred
   let loggedIn=initiallyLoggedIn,mustChangePassword=required;
   const calls:{path:string;body?:any}[]=[];
   runInNewContext(source,{
-    location:{pathname:'/admin/'},
+    location:{pathname:'/admin/'},setInterval,clearInterval,
     document:{getElementById:get,createElement:()=>new Element(),querySelectorAll:()=>[],createTextNode:()=>new Element()},
     FormData:class {constructor(private form:Element){}get(name:string){return this.form.values[name];}},
     fetch:async(url:string,options:any)=>{

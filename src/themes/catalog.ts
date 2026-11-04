@@ -168,9 +168,8 @@ async function catalogAtRevision(ecosystem: Ecosystem, revision: string, fetcher
   const source = CATALOG_SOURCES[ecosystem];
   const url = `https://raw.githubusercontent.com/${source.repository}/${revision}/${source.file}`;
   if(ecosystem==='native'){
-    if(revision!==source.revision)throw new ThemePackageError('NATIVE_REVISION','原生主题尚未核对该源码版本。');
-    const entry={...baseEntry('native','mmwx-probe','妙妙屋 X 原生主题','可在桥接器选择 Pixel、Flat、Anime 或 Premium 外观，也可跟随主控；首次准备需下载并构建固定源码。'),repositoryUrl:'https://github.com/mmwx-group/mmwx-probe',version:revision};
-    return {ecosystem,source:source.url,sourceId:source.id,pinnedVersion:revision,catalogRevision:revision,catalogLicense:source.license,catalogLicenseRevision:revision,fetchedAt:new Date().toISOString(),fromCache:false,entries:[entry]};
+    const entry={...baseEntry('native','mmwx-probe','妙妙屋 X 原生主题','直接使用妙妙屋 X 原生前台；检查上游更新后按选定提交构建安装，外观可跟随主控。'),catalogRevision:revision,catalogSource:`https://github.com/${source.repository}/tree/${revision}`,repositoryUrl:`https://github.com/${source.repository}`,version:revision};
+    return {ecosystem,source:entry.catalogSource,sourceId:source.id,pinnedVersion:revision,catalogRevision:revision,catalogLicense:source.license,catalogLicenseRevision:revision,fetchedAt:new Date().toISOString(),fromCache:false,entries:[entry]};
   }
   const raw = await fetchPublicJson(url, { fetcher, maxBytes: 2_000_000 });
   const entries = (ecosystem === 'cfsm' ? parseCfsmCatalog(raw) : parseKomariCatalog(raw)).map(entry => ({ ...entry, catalogRevision: revision, catalogSource: url }));
@@ -178,7 +177,7 @@ async function catalogAtRevision(ecosystem: Ecosystem, revision: string, fetcher
     catalogLicense: source.license, catalogLicenseRevision: source.revision,
     fetchedAt: new Date().toISOString(), fromCache: false, entries };
 }
-/** Two-argument callers retain the audited baseline. Management opts into latest. */
+/** CFSM/Komari retain their baseline for legacy callers; native discovery tracks upstream. */
 export async function fetchCatalog(ecosystem: Ecosystem, fetcher: PublicFetcher = fetch, options: CatalogReadOptions = {}): Promise<Catalog> {
   if (ecosystem !== 'cfsm' && ecosystem !== 'komari' && ecosystem !== 'native') throw new ThemePackageError('ECOSYSTEM', '未知主题生态。');
   if (!options || (options.latest !== undefined && typeof options.latest !== 'boolean') || (options.refresh !== undefined && typeof options.refresh !== 'boolean')) throw new ThemePackageError('CATALOG_OPTIONS', '目录读取选项无效。');
@@ -187,8 +186,7 @@ export async function fetchCatalog(ecosystem: Ecosystem, fetcher: PublicFetcher 
     return catalogAtRevision(ecosystem, validateRevision(options.revision), fetcher);
   }
   const source = CATALOG_SOURCES[ecosystem];
-  if (ecosystem==='native')return catalogAtRevision(ecosystem,source.revision,fetcher);
-  if (!options.latest && !options.refresh) return catalogAtRevision(ecosystem, source.revision, fetcher);
+  if (ecosystem!=='native'&&!options.latest&&!options.refresh)return catalogAtRevision(ecosystem,source.revision,fetcher);
   let scoped = latestCatalogs.get(fetcher);
   if (!scoped) { scoped = new Map(); latestCatalogs.set(fetcher, scoped); }
   let cached = scoped.get(ecosystem);

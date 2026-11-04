@@ -1,4 +1,4 @@
-import { NATIVE_THEMES, type NativeTheme } from '../core/presentation.ts';
+import { isNativeTheme, type NativeTheme } from '../core/presentation.ts';
 import type { PublicResourceSource } from './default-resources.ts';
 import { parseStoreProxy,type SavedStoreProxy,type StoreProxySettings } from '../core/store-proxy.ts';
 import { BridgeError } from '../core/errors.ts';
@@ -6,7 +6,7 @@ import type { LicenseRecord,RemoteThemeFile } from './package.ts';
 import type { SavedSource, SourceReview, SourceSettings } from '../core/source.ts';
 export const INSTALL_NOTICE_VERSION='2026-11-03.1';
 export const INSTALL_NOTICE_TEXT='我已查看上游来源及可用的许可说明，了解 LeoBridge 不提供授权判断，并决定安装此主题。';
-export interface InstallReview {id:string;expires:number;ecosystem:ThemeEcosystem;themeId:string;catalogRevision:string;pinnedVersion:string;digest:string;noticeVersion:string;}
+export interface InstallReview {id:string;expires:number;ecosystem:ThemeEcosystem;themeId:string;catalogRevision:string;pinnedVersion:string;digest:string;noticeVersion:string;updateOf?:string;}
 export interface InstallConfirmation {at:string;noticeVersion:string;noticeText:string;source:string;pinnedVersion:string;digest:string;licenseStatus:'found'|'missing';}
 
 
@@ -31,9 +31,11 @@ export interface ThemeState {
   adminCredential?:AdminCredential;
   source?:SavedSource;
   storeProxy?:SavedStoreProxy;
+  pendingAssetCleanup?:string[];
   events:{at:string;action:string;installationId:string;generation:number}[];
 }
 export type ThemeCommand=
+  |{type:'uninstall';id:string;expectedGeneration:number;sessionId:string;acknowledgePrevious?:boolean}
   |{type:'native-theme';id:string;theme:NativeTheme;expectedGeneration:number;sessionId:string}
   |{type:'store-proxy';sessionId:string;expectedVersion:number;settings:StoreProxySettings}
   |{type:'source-review';sessionId:string;review:SourceReview}
@@ -47,6 +49,7 @@ export type ThemeCommand=
   |{type:'password';sessionId:string;expectedVersion:number;credential:AdminCredential}
   |{type:'logout';id:string};
 export interface ThemeStore {
+  readonly supportsUninstall?:boolean;
   state():Promise<ThemeState>;
   command(command:ThemeCommand):Promise<ThemeState>;
   putAsset(id:string,path:string,bytes:Uint8Array,contentType:string):Promise<void>;
@@ -59,13 +62,31 @@ export function validAssetPath(path:string){return !!path&&!path.startsWith('/')
 export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date.now()):ThemeState {
   const next=structuredClone(state);
   for(const [id,session]of Object.entries(next.sessions))if(session.expires<=now)delete next.sessions[id];
+  if(command.type==='uninstall'){
+    const session=next.sessions[command.sessionId];
+    if(!session||!next.adminCredential||(session.credentialVersion??0)!==next.adminCredential.version)throw new BridgeError('LOGIN_REQUIRED',401,'请重新登录。');
+    if(command.expectedGeneration!==next.generation)throw new BridgeError('REVISION_CONFLICT',409,'状态已变更，请刷新后重试。');
+    if(!validInstallationId(command.id))throw new BridgeError('BAD_REQUEST',400,'版本信息无效。');
+    if(command.id===next.active)throw new BridgeError('THEME_ACTIVE',409,'请先启用其他版本，再删除当前启用版本。');
+    if(command.id===next.previous&&!command.acknowledgePrevious)throw new BridgeError('THEME_PREVIOUS',409,'删除此版本将清除上一版本回退入口，请明确确认。');
+    if(!next.installations[command.id]){
+      if(next.pendingAssetCleanup?.includes(command.id))return next;
+      throw new BridgeError('THEME_NOT_INSTALLED',404,'该版本已不存在，请刷新。');
+    }
+    delete next.installations[command.id];
+    if(next.previous===command.id)next.previous=null;
+    next.pendingAssetCleanup=[...new Set([...(next.pendingAssetCleanup??[]),command.id])];
+    next.generation++;
+    next.events.push({at:new Date(now).toISOString(),action:command.type,installationId:command.id,generation:next.generation});
+    next.events=next.events.slice(-30);return next;
+  }
   if(command.type==='native-theme'){
     const session=next.sessions[command.sessionId];
     if(!session||!next.adminCredential||(session.credentialVersion??0)!==next.adminCredential.version)throw new BridgeError('LOGIN_REQUIRED',401,'请重新登录。');
     if(command.expectedGeneration!==next.generation)throw new BridgeError('REVISION_CONFLICT',409,'状态已变更，请刷新后重试。');
     const item=next.installations[command.id];
     if(!item||item.ecosystem!=='native'||item.protocolProfile!=='mmwx-native-v1')throw new BridgeError('NATIVE_THEME_REQUIRED',400,'请选择已安装的原生主题。');
-    if(!NATIVE_THEMES.includes(command.theme))throw new BridgeError('NATIVE_THEME_INVALID',400,'当前固定版本不支持此原生外观。');
+    if(!isNativeTheme(command.theme))throw new BridgeError('NATIVE_THEME_INVALID',400,'原生外观标识须为1–64位字母、数字、下划线或连字符。');
     if((item.nativeTheme??'source')===command.theme)return next;
     item.nativeTheme=command.theme;next.generation++;
     next.events.push({at:new Date(now).toISOString(),action:command.type,installationId:item.id,generation:next.generation});
@@ -114,9 +135,15 @@ export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date
   }
   if(command.type==='install'){
     const item=structuredClone(command.installation);
+    if(next.pendingAssetCleanup?.includes(item.id))throw new BridgeError('THEME_CLEANUP_PENDING',409,'此版本的资源尚未清理完成，请在主题工作台重试清理后再安装。');
     if(command.review){
       const session=next.sessions[command.review.sessionId],review=session?.review;
       if(!review||review.id!==command.review.id||review.expires<=now||review.noticeVersion!==INSTALL_NOTICE_VERSION||review.digest!==item.packageDigest||review.pinnedVersion!==item.pinnedVersion||review.catalogRevision!==item.catalogRevision||review.ecosystem!==item.ecosystem)throw new BridgeError('INSTALL_REVIEW_EXPIRED',409,'安装确认已失效，请重新查看来源与许可信息。');
+      if(review.updateOf){
+        const previous=next.installations[review.updateOf];
+        if(!previous||previous.ecosystem!==item.ecosystem||previous.themeId!==item.themeId)throw new BridgeError('UPDATE_SOURCE_REMOVED',409,'待更新版本已删除，请重新从商店选择主题。');
+        if(item.ecosystem==='native')item.nativeTheme=previous.nativeTheme;
+      }
       item.confirmation={at:new Date(now).toISOString(),noticeVersion:INSTALL_NOTICE_VERSION,noticeText:INSTALL_NOTICE_TEXT,source:item.source,pinnedVersion:item.pinnedVersion,digest:review.digest,licenseStatus:item.license.status??(item.license.text?'found':'missing')};
       delete session.review;
     }
@@ -144,7 +171,9 @@ export function publicThemeState(state:ThemeState){const {sessions,adminCredenti
 export async function commitInstallation(store:ThemeStore,item:Installation,files:{path:string;bytes:Uint8Array;contentType:string}[],activateIfEmpty=false,review?:{sessionId:string;id:string}){
   const paths=files.map(file=>file.path),declared=Object.keys(item.files);
   if(!validInstallationId(item.id)||!validAssetPath(item.entry)||!declared.includes(item.entry)||new Set(paths).size!==paths.length||paths.length!==declared.length||files.some(file=>!validAssetPath(file.path)||!Object.hasOwn(item.files,file.path)||item.files[file.path].size!==file.bytes.length||item.files[file.path].contentType!==file.contentType)||declared.some(path=>!paths.includes(path)))throw new BridgeError('INVALID_PACKAGE',400,'主题资源清单不完整或与内容不符。');
-  if((await store.state()).installations[item.id]){if(review)await store.command({type:'install',installation:item,review});return;}
+  const state=await store.state();
+  if(state.pendingAssetCleanup?.includes(item.id))throw new BridgeError('THEME_CLEANUP_PENDING',409,'此版本的资源尚未清理完成，请在主题工作台重试清理后再安装。');
+  if(state.installations[item.id]){if(review)await store.command({type:'install',installation:item,review});return;}
   let offset=0;
   for(const file of files){
     if(!validAssetPath(file.path))throw new BridgeError('INVALID_PATH',400,'主题资源路径无效。');

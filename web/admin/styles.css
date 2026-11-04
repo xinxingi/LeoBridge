@@ -215,7 +215,7 @@ body:has(.install-dialog[open]){overflow:hidden}
 .settings-summary{margin:24px 0;display:grid;gap:0}.settings-summary>div{display:grid;grid-template-columns:100px minmax(0,1fr);gap:20px;padding:15px 0;border-bottom:1px solid var(--border);font-size:13px;line-height:1.7}.settings-summary dt{color:var(--muted)}.settings-summary dd{margin:0;color:var(--text);overflow-wrap:anywhere}.settings-note{margin-top:20px;padding:14px 16px;background:var(--input);border-radius:8px;overflow-wrap:anywhere}.source-settings label.proxy-toggle{display:flex;align-items:center;gap:10px;color:var(--text)}.proxy-toggle input{width:18px;height:18px;margin:0}#network-address small{display:block;margin-top:8px}#network-status{color:var(--text)}
 @media(max-width:580px){.settings-summary>div{grid-template-columns:80px minmax(0,1fr);gap:12px}}
 
-.settings-page{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:24px;width:100%;min-width:0;align-items:start}.settings-page>.panel{min-width:0;max-width:none}.settings-page form{margin-bottom:0}
+.settings-page{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:24px;width:100%;min-width:0;align-items:stretch}.settings-page>.panel{min-width:0;max-width:none}.settings-page form{margin-bottom:0}
 
 /* Installed versions use the full workspace; all actions share one footer. */
 .installed-cards{grid-template-columns:minmax(0,1fr);container-type:inline-size}
@@ -227,7 +227,7 @@ body:has(.install-dialog[open]){overflow:hidden}
 .installed-card>.ack{grid-column:1/-1;margin:0}
 .native-theme-control{display:grid;align-content:center;gap:8px;min-width:0}
 .native-theme-control label{display:grid;gap:10px;font-size:13px}
-.native-theme-control select{width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid var(--input-border);border-radius:8px;background:var(--input);color:var(--text)}
+.native-theme-control select,.native-theme-control input{width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid var(--input-border);border-radius:8px;background:var(--input);color:var(--text)}
 .installed-footer{grid-column:1/-1;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px 24px;padding-top:20px;border-top:1px solid var(--border);min-width:0}
 .installed-footer>details{flex:1;min-width:160px;margin:0;padding-top:12px;overflow-wrap:anywhere}
 .installed-footer summary{cursor:pointer;font-size:12px}
@@ -238,10 +238,25 @@ body:has(.install-dialog[open]){overflow:hidden}
   .installed-card{grid-template-columns:minmax(0,1fr);gap:20px;padding:22px}
   .installed-footer{flex-direction:column}
   .installed-footer>details{width:100%;padding-top:0}
-  .installed-footer .buttons{width:100%;margin:0;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr)}
+  .installed-footer .buttons{width:100%;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr))}
   .installed-footer .buttons>*{min-width:0;padding:10px 8px;font-size:12px}
 }
 @container(max-width:340px){
   .installed-card{padding:18px}
   .installed-footer .buttons{grid-auto-flow:row;grid-template-columns:minmax(0,1fr)}
 }
+
+.installed-footer .buttons{flex-wrap:wrap}
+button.danger{color:var(--error,#c73535);border-color:currentColor}
+
+.installed-info .lifecycle-note{display:block;margin-top:8px}
+
+/* Read-only data interface catalog. */
+.data-interfaces{min-width:0}.interface-unavailable p{line-height:1.8;overflow-wrap:anywhere}.interface-tags{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.interface-tag{display:inline-block;padding:4px 9px;border-radius:5px;background:var(--selected);color:var(--secondary);font-size:11px;line-height:1.6;white-space:nowrap}.interface-tag.source{border:1px solid var(--input-border);background:var(--input);color:var(--text)}.interface-tag.bridge{background:var(--selected);border:1px solid var(--border);color:var(--text)}.interface-unavailable summary{cursor:pointer;color:var(--text)}.interface-toolbar{display:grid;grid-template-columns:minmax(180px,1fr) minmax(140px,190px) minmax(120px,170px) auto;gap:16px;align-items:end;margin:26px 0 14px}.interface-toolbar label{display:grid;gap:8px;color:var(--secondary);font-size:12px;min-width:0}.interface-toolbar input,.interface-toolbar select{width:100%;min-width:0;height:44px;border:1px solid var(--input-border);border-radius:7px;padding:10px 12px;background:var(--input);color:var(--text)}.interface-toolbar button{height:44px}.interface-count{font-size:12px;color:var(--muted);margin:0 0 24px}.interface-group{margin-bottom:30px}.interface-group>h2{font-size:15px;margin:0 0 14px;color:var(--secondary)}.interface-card{border:1px solid var(--border);border-radius:10px;background:var(--surface);margin-bottom:10px;min-width:0;overflow:hidden}.interface-card>summary{padding:20px 24px;cursor:pointer;list-style:none}.interface-card>summary::-webkit-details-marker{display:none}.interface-card>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}.interface-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.interface-heading h3{margin:0;font-size:15px}.interface-card summary p{font-size:13px;margin:9px 0;line-height:1.7;color:var(--secondary)}.interface-path{display:block;font-size:12px;overflow-wrap:anywhere;color:var(--text)}.interface-expand{display:block;font-size:11px;margin-top:12px;color:var(--muted)}.interface-expand:after{content:' ＋'}.interface-card[open] .interface-expand:after{content:' −'}.interface-body{padding:0 24px 24px;border-top:1px solid var(--border)}.interface-metadata{margin:8px 0 24px}.interface-metadata>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:20px;padding:12px 0;border-bottom:1px solid var(--border);font-size:12px;line-height:1.8}.interface-metadata dt{color:var(--muted)}.interface-metadata dd{margin:0;overflow-wrap:anywhere;color:var(--secondary)}.interface-body h4{font-size:13px;margin:0 0 12px}.interface-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}.interface-field{background:var(--input);border-radius:7px;padding:14px;min-width:0}.interface-field code{font-size:12px;overflow-wrap:anywhere}.interface-field p{margin:7px 0;font-size:12px;line-height:1.7;color:var(--secondary)}.interface-field small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}.interface-unavailable{padding:20px 24px;font-size:13px}.interface-unavailable p{margin-top:12px;color:var(--secondary)}
+@media(max-width:1000px){.interface-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.interface-toolbar>label:first-child{grid-column:1/-1}.interface-toolbar button{grid-column:1/-1}}@media(max-width:580px){.interface-card>summary{padding:18px}.interface-body{padding:0 18px 18px}.interface-metadata>div{grid-template-columns:1fr;gap:3px}.interface-heading{align-items:flex-start}.interface-unavailable{padding:18px}}
+
+/* Shared wait feedback stays visible in the dialog top layer as well. */
+.task-progress{position:fixed;top:20px;right:20px;z-index:1001;display:flex;align-items:center;gap:14px;width:max-content;max-width:min(460px,calc(100% - 32px));padding:18px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 8px 32px #0003}
+.task-progress>div{min-width:0}.task-progress p{margin:0;font-size:13px;line-height:1.7;overflow-wrap:anywhere}.task-progress small{display:block;margin-top:5px;font-size:12px;line-height:1.7;color:var(--muted);font-variant-numeric:tabular-nums}
+.install-dialog>.task-progress{position:sticky;bottom:0;right:auto;top:auto;flex:none;align-self:stretch;width:auto;max-width:none;margin:0 24px 24px;box-shadow:none;background:var(--input)}
+@media(max-width:580px){.task-progress{top:12px;right:16px}.install-dialog>.task-progress{margin:0 18px 18px}}

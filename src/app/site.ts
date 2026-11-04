@@ -19,6 +19,7 @@ export class Site {
   protocols:Record<string,ProtocolApplication>;
   private sourceVersion=0;
   private sourceSessions=new Set<{close():void}>();
+  private versionSessions=new Map<string,Set<{close():void}>>();
   private initial:Config;
   constructor(public config:Config,readonly management:ManagementConfig,readonly store:ThemeStore,loadUi:(path:string)=>Promise<Response>,network?:StoreNetwork){
     this.initial=config;
@@ -68,20 +69,22 @@ export class Site {
     if(!protocol?.websocketPaths.includes(url.pathname))return null;
     const presentation=presentationContext(selected.item);
     return {...protocol,openRealtime:(client,connect,path)=>{
-      if(selected.item.ecosystem!=='native')return protocol.openRealtime(client,connect,path,presentation);
-      // A preview or version host may still have a socket with the previous choice.
-      // Check before forwarding each frame, including across Worker isolates.
+      // Deleted previews must stop for every protocol; native choices also need
+      // a frame-time check so an old socket cannot restore the previous appearance.
       let session:{close():void}|undefined,closed=false,queue=Promise.resolve();
-      const close=()=>{if(closed)return;closed=true;session?.close();};
+      const close=()=>{if(closed)return;closed=true;session?.close();client.close(1000,'主题版本或设置已变更，请重新打开预览。');const sessions=this.versionSessions.get(selected.id);sessions?.delete(tracked);if(!sessions?.size)this.versionSessions.delete(selected.id);};
+      const tracked={close};
       session=protocol.openRealtime({...client,close:(code,reason)=>client.close(code,reason),onMessage:fn=>client.onMessage(fn),onClose:fn=>client.onClose(fn),onError:fn=>client.onError(fn),send:data=>{
         queue=queue.then(async()=>{
           if(closed)return;
           const item=(await this.store.state()).installations[selected.id];
-          if(!item||(item.nativeTheme??'source')!==presentation.nativeTheme){close();return;}
+          if(!item||(item.ecosystem==='native'&&(item.nativeTheme??'source')!==presentation.nativeTheme)){close();return;}
           client.send(data);
         }).catch(close);
       }},connect,path,presentation);
-      client.onClose(close);return {close};
+      if(!closed){let sessions=this.versionSessions.get(selected.id);if(!sessions){sessions=new Set();this.versionSessions.set(selected.id,sessions)}sessions.add(tracked)}
+      else session.close();
+      client.onClose(close);return tracked;
     }};
   }
   async fetch(request:Request):Promise<Response>{
@@ -92,6 +95,10 @@ export class Site {
       const response=await this.admin.handle(request);
       if(request.method==='POST'&&response.ok&&url.pathname.endsWith('/source/save'))await this.syncSource();
       if(single&&request.method==='POST'&&response.ok&&['/admin/api/activate','/admin/api/rollback'].includes(url.pathname))this.onActiveThemeChange();
+      if(request.method==='POST'&&response.ok&&url.pathname.endsWith('/uninstall')){
+        const state=await this.store.state();
+        for(const [id,sessions]of this.versionSessions)if(!state.installations[id])for(const session of [...sessions])session.close();
+      }
       return response;
     }
     try{

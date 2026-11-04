@@ -75,6 +75,19 @@ NODE_ENV=production或direct/proxy模式默认不读取`.dev.vars`。配置来�
 
 ## 原生源码准备
 
-`themes/native-source.ts`保存固定源码/公共资源的Git blob索引；`runtime/native-build.ts`仅在Node按需下载、安装锁定依赖并用自有esbuild配置构建原生前台。npm生命周期脚本禁用，不执行上游Worker/构建配置。管理层经`StoreNetwork`注入构建能力，Worker不能导入npm/esbuild或Node构建器。原生协议在`protocols/native`独立访问上游；展示槽位映射显式绑定，历史前后仍核对源身份顺序。
+原生目录按官方main解析到本次固定提交；`themes/native-source.ts`动态读取该提交的完整Git树，验证前台源码/公共资源路径、类型、blob摘要、大小及入口，不再保存固定版本白名单。`runtime/native-build.ts`在Node按需下载、安装锁定依赖并用自有esbuild配置构建原生前台，缓存和并发任务按提交隔离。npm生命周期脚本禁用，不执行上游Worker/构建配置。管理层经`StoreNetwork`传入确认的提交和下载传输，Worker不能导入npm/esbuild或Node构建器。原生协议在`protocols/native`独立访问上游；展示槽位映射显式绑定，历史前后仍核对源身份顺序。研究参考清单仍保存历史审计版本，不作为运行时更新门槛。
 
 原生外观选择保存在Installation.nativeTheme中，旧安装缺省为source；管理事务校验会话、原生协议及generation。展示上下文传递给原生HTTP/WS，仅覆盖appearance.theme。Site在原生WS发送前核对对应安装的设置，设置变更后关闭旧连接，避免旧快照覆盖新HTTP外观；预览和版本主机同样适用。原生资源包和摘要不因外观选择变化。
+
+
+## 安装版本更新与删除
+
+管理层prepare-update按Installation.ecosystem/themeId解析最新官方目录并准备固定包，与原安装digest比较；复用session review、许可确认和commitInstallation，新包不自动激活。原生直接查询上游main；只有最新提交与已安装提交相同时才跳过重建并报告最新，其他提交进入按需构建。确认安装继续使用review内的提交，不重新解析main。更新关联保存在review.updateOf，最终事务校验原安装仍存在并继承原生外观；已经存在的新安装保留自身设置。外观快捷列表不作为允许值白名单，接受符合上游约定的自定义标识。
+
+Node的uninstall在同一文件事务锁内校验会话、generation、当前启用和上一版本确认，先公布元数据删除及pendingAssetCleanup，再删除packages/<id>，最后原子移除待清理记录。失败或进程中断后可重试，待清理期间禁止重新安装相同ID。管理层将下载、安装、删除串行化；仍以单站单进程单副本为部署约束。Worker未声明supportsUninstall，不提供仅删除元数据却遗留R2对象的入口。
+
+Site按安装ID跟踪三个协议的预览/版本实时会话；删除后立即关闭本Site内对应连接，并在转发每帧前重新核对安装存在及原生外观。新请求继续通过既有版本路由核对安装状态。
+
+## 数据接口目录
+
+管理页「数据接口列表」使用web/admin/data-interfaces.js中的只读契约目录，按原生、CFSM和Komari三种协议分组，接口提供方独立标记为主控或桥接器；筛选、格式转换与衍生计算等处理方式在详情中说明。目录记录主要字段、来源/转换/计算、参数、接入范围与验证依据，不携带源凭据、不探测接口，也不增加数据协议端点。管理页按需加载模块；Node与Worker沿用同一管理静态资源白名单。页面直接显示搜索、筛选和接口列表；所有条目的当前实例状态均明确为未检查。修改协议service、adapter、metrics或prepared-data时，应同步核对目录，不能用目录接入标签代替真实接口或主题验收。

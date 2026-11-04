@@ -6,44 +6,45 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, readdir } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { CATALOG_SOURCES, fetchCatalog, fetchPublicBytes, ThemePackageError, type PublicFetcher } from '../themes/catalog.ts';
-import { NATIVE_SOURCE } from '../themes/native-source.ts';
+import { fetchNativeSource } from '../themes/native-source.ts';
 import { contentType, finish, sha256, type ThemeFile, type ThemePackage, type RemoteThemeFile } from '../themes/package.ts';
 
-const revision=CATALOG_SOURCES.native.revision;
-const source=`https://raw.githubusercontent.com/mmwx-group/mmwx-probe/${revision}/`;
 const encoder=new TextEncoder();
 const require=createRequire(import.meta.url);
 /** No upstream scripts/config are executed. npm lifecycle scripts are disabled;
  * the fixed lockfile's registry tarballs are verified by npm and routed through
  * the same injected store transport. The compiler configuration is owned here. */
 export function createNativeBuilder(){
-  let cached:ThemePackage|undefined,pending:Promise<ThemePackage>|undefined;
+  const cached=new Map<string,ThemePackage>(),pending=new Map<string,Promise<ThemePackage>>();
   const controller=new AbortController();
-  const prepare=async(fetcher:PublicFetcher):Promise<ThemePackage>=>{
+  const prepare=async(fetcher:PublicFetcher,revision:string):Promise<ThemePackage>=>{
+    if(!/^[a-f0-9]{40}$/.test(revision))throw new ThemePackageError('NATIVE_REVISION','原生源码版本必须为上游的固定提交。');
     if(controller.signal.aborted)throw new ThemePackageError('NATIVE_BUILD_STOPPED','原生主题构建器已停止。',503);
-    if(cached)return structuredClone(cached);
-    if(!pending)pending=compile((input,init)=>fetcher(input,{...init,signal:AbortSignal.any([controller.signal,...(init?.signal?[init.signal]:[])])}),controller.signal).then(value=>cached=value).finally(()=>{pending=undefined;});
-    return structuredClone(await pending);
+    if(cached.has(revision))return structuredClone(cached.get(revision)!);
+    if(!pending.has(revision))pending.set(revision,compile(revision,(input,init)=>fetcher(input,{...init,signal:AbortSignal.any([controller.signal,...(init?.signal?[init.signal]:[])])}),controller.signal).then(value=>{cached.set(revision,value);while(cached.size>2)cached.delete(cached.keys().next().value!);return value;}).finally(()=>{pending.delete(revision);}));
+    return structuredClone(await pending.get(revision)!);
   };
-  return Object.assign(prepare,{close:()=>controller.abort()});
+  return Object.assign(prepare,{close:()=>{controller.abort();cached.clear()}});
 }
-async function compile(fetcher:PublicFetcher,signal:AbortSignal):Promise<ThemePackage>{
+async function compile(revision:string,fetcher:PublicFetcher,signal:AbortSignal):Promise<ThemePackage>{
+  const source=`https://raw.githubusercontent.com/${CATALOG_SOURCES.native.repository}/${revision}/`;
+  const index=await fetchNativeSource(revision,fetcher);
   const root=await mkdtemp(join(tmpdir(),'leobridge-native-'));
   const remote:Record<string,RemoteThemeFile>={};
   const files:ThemeFile[]=[];
   try{
-    const selected=NATIVE_SOURCE.filter(([path])=>!path.startsWith('public/')||/LICENSE|README/.test(path));
-    for(const [path,sha,size]of NATIVE_SOURCE)if(path.startsWith('public/'))remote[path.slice(7)]={sha,size,contentType:contentType(path)??'application/octet-stream'};
+    const selected=index.filter(([path])=>!path.startsWith('public/')||/LICENSE|README/.test(path));
+    for(const [path,sha,size]of index)if(path.startsWith('public/'))remote[path.slice(7)]={sha,size,contentType:contentType(path)??'application/octet-stream'};
     let next=0;
     const downloads=await Promise.allSettled(Array.from({length:6},async()=>{
       while(next<selected.length){
         const [path,expected,size]=selected[next++]!;
-        const bytes=await fetchPublicBytes(source+path,{fetcher,maxBytes:8_000_000});
+        const bytes=await fetchPublicBytes(source+path.split('/').map(encodeURIComponent).join('/'),{fetcher,maxBytes:8_000_000});
         const prefix=encoder.encode(`blob ${bytes.length}\0`),input=new Uint8Array(prefix.length+bytes.length);input.set(prefix);input.set(bytes,prefix.length);
         const actual=Buffer.from(await crypto.subtle.digest('SHA-1',input)).toString('hex');
         if(bytes.length!==size||actual!==expected)throw new ThemePackageError('NATIVE_SOURCE_HASH','原生主题源码与固定提交不符。');
         await mkdir(dirname(join(root,path)),{recursive:true});await writeFile(join(root,path),bytes);
-        if(path==='LICENSE'||path.startsWith('public/'))files.push({path:path.startsWith('public/')?path.slice(7):path,bytes,contentType:'text/plain; charset=utf-8'});
+        if(/^(LICENSE|LICENCE|COPYING|NOTICE)(?:[.][^/]+)?$/i.test(path)||path.startsWith('public/'))files.push({path:path.startsWith('public/')?path.slice(7):path,bytes,contentType:contentType(path)??'text/plain; charset=utf-8'});
       }
     }));
     const failed=downloads.find(result=>result.status==='rejected');if(failed?.status==='rejected')throw failed.reason;
@@ -70,10 +71,10 @@ async function compile(fetcher:PublicFetcher,signal:AbortSignal):Promise<ThemePa
         }
       }
     }
-    await licenses(join(root,'node_modules'));
-    const license=files.find(file=>file.path==='LICENSE')!;
-    const catalog=await fetchCatalog('native');
-    return await finish(catalog.entries[0]!,files,{spdx:'NOASSERTION',text:new TextDecoder().decode(license.bytes),source:source+'LICENSE',sha256:await sha256(license.bytes),status:'found'},'https://github.com/mmwx-group/mmwx-probe',revision,undefined,remote);
+    await mkdir(join(root,'node_modules'),{recursive:true});await licenses(join(root,'node_modules'));
+    const license=files.find(file=>/^(LICENSE|LICENCE|COPYING)(?:[.][^/]+)?$/i.test(file.path));
+    const catalog=await fetchCatalog('native',fetcher,{revision});
+    return await finish(catalog.entries[0]!,files,{spdx:'NOASSERTION',text:license?new TextDecoder().decode(license.bytes):'',source:source+(license?.path??''),sha256:await sha256(license?.bytes??new Uint8Array()),status:license?'found':'missing'},'https://github.com/mmwx-group/mmwx-probe',revision,undefined,remote);
   }catch(error){
     if(error instanceof ThemePackageError)throw error;
     throw Object.assign(new ThemePackageError('NATIVE_BUILD_FAILED','原生主题构建失败；请检查商店下载网络、磁盘空间及内存后重试。',502),{cause:error});
