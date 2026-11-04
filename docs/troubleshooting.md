@@ -38,6 +38,7 @@
 | --- | --- |
 | UNKNOWN_HOST / 421 | 请求的协议、主机、端口须与BRIDGE_ORIGIN一致。新版默认HTTP监听按配置的站点协议识别地址；HTTPS反代保留原Host即可。源不含/admin/或末尾/，详见[Docker反代步骤](deployment/docker.md#对接已有反向代理) |
 | STORAGE_MIGRATION | 默认数据目录已改为./data；发现旧work/theme-store时拒绝静默切换，停机完整迁移或显式设置BRIDGE_THEME_STORE沿用旧目录 |
+| 原生主题提示「请检查数据源 Token」 / UPSTREAM_AUTH / UPSTREAM_NOT_FOUND | 主控401/403表示拒绝访问；404也可能由Token失效、地址变更或独立探针接口关闭导致。管理员在「设置 → 数据源」核对地址、更新Token、检查连接后保存，再点展示页「重新检查」。新提示随桥接器升级生效，已有主题无需重装；不向页面回显Token或上游响应正文 |
 | 旧版提示HTTPS必须proxy | 这是旧版本校验；新版本支持默认HTTP监听加HTTPS公开源。旧镜像继续沿用原有效配置，不能仅替换精简模板，须升级配套镜像 |
 | UNTRUSTED_PROXY / 403 | 仅高级proxy模式触发，核对BRIDGE_TRUSTED_PROXIES；新版日志首次记录peer（socket实际来源），确认属于代理再加入精确IP。宿主反代通常经Docker网关；容器反代通常为代理容器IP，不能盲信整个私有网段 |
 | BAD_REQUEST / 反代协议头 | 仅高级proxy模式要求代理覆盖单值X-Forwarded-Proto=https；重复值、http或缺失均拒绝。不要把HTTP请求伪装成HTTPS |

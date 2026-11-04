@@ -586,6 +586,19 @@ test('declared extensionless remote resources are resolved before HTML SPA fallb
   assert.equal(new TextDecoder().decode((await store.asset(item.id,'index.html'))!.bytes),'<html>synthetic theme</html>');
 });
 
+test('native source guidance reaches existing root and preview HTML without modifying stored assets',async()=>{
+  const store=new MemoryStore(),item=installation(0,{ecosystem:'native',protocolProfile:'mmwx-native-v1'});
+  await commitInstallation(store,item,files(),true);
+  const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test'});
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'public'}),config,store,ui);
+  for(const suffix of ['',`?__preview=${item.id}`]){
+    const response=await site.fetch(new Request(config.displayOrigin+'/'+suffix));
+    assert.equal(response.status,200);assert.match(await response.text(),/请检查数据源 Token/);
+    assert.equal(response.headers.get('cache-control'),'no-store');
+  }
+  assert.equal(new TextDecoder().decode((await store.asset(item.id,'index.html'))!.bytes),'<html>synthetic theme</html>');
+});
+
 test('exact installation assets and observed CSS dependencies precede Komari namespace aliases',async()=>{
   const {ThemeResources}=await import('../src/themes/resources.ts');
   const local='themes/default/assets/local.woff',declared='themes/default/assets/declared.woff',observed='themes/default/assets/observed.woff';
@@ -611,4 +624,42 @@ test('exact installation assets and observed CSS dependencies precede Komari nam
   await get('themes/default/assets/logo/os-alma.svg');
   assert.deepEqual(calls.at(-1),{path:'assets/logo/os-alma.svg',defaultOnly:true});
   assert.equal((await get('themes/Other/dist/index.html')).status,404);
+});
+
+test('native selection requires auth, CSRF, valid installation and current generation; survives disk reload without changing packages or active version',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'leobridge-native-selection-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  const store=new FileThemeStore(root),item=installation(0,{ecosystem:'native',protocolProfile:'mmwx-native-v1'});
+  await commitInstallation(store,item,files(),true);await commitInstallation(store,installation(1),files());
+  const admin=new Admin(management(),store,ui),session=await login(admin),before=await store.state();
+  const body={id:item.id,generation:before.generation,theme:'flat'},path='/manage/api/native-theme';
+  assert.equal((await admin.handle(request(path,{method:'POST',body}))).status,401);
+  assert.equal((await admin.handle(request(path,{method:'POST',cookie:session.cookie,body}))).status,403);
+  assert.equal((await admin.handle(request(path,{method:'POST',...session,origin:'https://wrong.test',body}))).status,403);
+  for(const patch of [{theme:'glass'},{theme:{}},{id:ids[1]},{id:'missing'}])assert.equal((await admin.handle(request(path,{method:'POST',...session,body:{...body,...patch}}))).status,400);
+  assert.equal((await admin.handle(request(path,{method:'POST',...session,body}))).status,200);
+  assert.equal((await admin.handle(request(path,{method:'POST',...session,body:{...body,theme:'anime'}}))).status,409);
+  const reloaded=await new FileThemeStore(root).state();
+  assert.equal(reloaded.installations[item.id].nativeTheme,'flat');assert.equal(reloaded.active,before.active);assert.equal(reloaded.previous,before.previous);
+  assert.deepEqual({...reloaded.installations[item.id],nativeTheme:undefined},{...before.installations[item.id],nativeTheme:undefined});
+  assert.equal(reloaded.generation,before.generation+1);
+  assert.equal((await admin.handle(request(path,{method:'POST',...session,body:{...body,generation:reloaded.generation,theme:'source'}}))).status,200);
+  assert.equal((await store.state()).installations[item.id].nativeTheme,'source');
+});
+
+test('native site binds independent preview choices and closes old WS before forwarding a frame with stale appearance',async()=>{
+  const store=new MemoryStore();
+  for(let i=0;i<2;i++)await commitInstallation(store,installation(i,{ecosystem:'native',protocolProfile:'mmwx-native-v1',nativeTheme:i?'anime':'flat'}),files(),i===0);
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://source.test',BRIDGE_ACCESS:'public'}),management(),store,ui);
+  let send:(data:string)=>void=()=>{},closed=false;const frames:string[]=[];
+  site.protocols['mmwx-native-v1']={websocketPaths:['/api/stream'],fetch:async(_request,presentation)=>Response.json(presentation),openRealtime:client=>{send=data=>client.send(data);return {close(){closed=true;}};}};
+  for(let i=0;i<2;i++){
+    const url=new URL(installationUrl(management(),ids[i],true));url.pathname='/api/probe';
+    assert.equal((await (await site.fetch(new Request(url))).json()).nativeTheme,i?'anime':'flat');
+  }
+  const url=new URL(installationUrl(management(),ids[0],true));url.pathname='/api/stream';
+  const protocol=await site.websocket(new Request(url));assert.ok(protocol);
+  const client={send:(data:string)=>frames.push(data),close:()=>{},onMessage:()=>{},onClose:()=>{},onError:()=>{}};
+  protocol.openRealtime(client,async()=>client,'/api/stream');send('old choice');await new Promise(r=>setImmediate(r));assert.deepEqual(frames,['old choice']);
+  store.value.installations[ids[0]].nativeTheme='premium';send('must not escape');await new Promise(r=>setImmediate(r));
+  assert.equal(closed,true);assert.deepEqual(frames,['old choice']);
 });

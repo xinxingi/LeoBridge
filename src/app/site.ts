@@ -1,4 +1,5 @@
 import { ThemeResources,presentationContext } from '../themes/resources.ts';
+import { sourceErrorHtml } from './source-error.ts';
 import { authorize,type Config } from '../core/config.ts';
 import { StoreNetwork } from '../management/store-network.ts';
 import { Admin } from '../management/admin.ts';
@@ -66,7 +67,22 @@ export class Site {
     const protocol=this.protocols[selected.item.protocolProfile];
     if(!protocol?.websocketPaths.includes(url.pathname))return null;
     const presentation=presentationContext(selected.item);
-    return {...protocol,openRealtime:(client,connect,path)=>protocol.openRealtime(client,connect,path,presentation)};
+    return {...protocol,openRealtime:(client,connect,path)=>{
+      if(selected.item.ecosystem!=='native')return protocol.openRealtime(client,connect,path,presentation);
+      // A preview or version host may still have a socket with the previous choice.
+      // Check before forwarding each frame, including across Worker isolates.
+      let session:{close():void}|undefined,closed=false,queue=Promise.resolve();
+      const close=()=>{if(closed)return;closed=true;session?.close();};
+      session=protocol.openRealtime({...client,close:(code,reason)=>client.close(code,reason),onMessage:fn=>client.onMessage(fn),onClose:fn=>client.onClose(fn),onError:fn=>client.onError(fn),send:data=>{
+        queue=queue.then(async()=>{
+          if(closed)return;
+          const item=(await this.store.state()).installations[selected.id];
+          if(!item||(item.nativeTheme??'source')!==presentation.nativeTheme){close();return;}
+          client.send(data);
+        }).catch(close);
+      }},connect,path,presentation);
+      client.onClose(close);return {close};
+    }};
   }
   async fetch(request:Request):Promise<Response>{
     const url=new URL(request.url);
@@ -136,7 +152,12 @@ export class Site {
   private assetResponse(request:Request,item:Installation,asset:{bytes:Uint8Array;contentType:string},preview=false){
     const url=new URL(request.url),wsOrigin=url.origin.replace(/^http/,'ws');
     let body:BodyInit=asset.bytes as BodyInit;
-    if(preview&&asset.contentType.startsWith('text/html'))body=previewHtml(new TextDecoder().decode(asset.bytes),item.id);
+    if(asset.contentType.startsWith('text/html')){
+      let html=new TextDecoder().decode(asset.bytes);
+      if(item.protocolProfile==='mmwx-native-v1')html=sourceErrorHtml(html);
+      if(preview)html=previewHtml(html,item.id);
+      body=html;
+    }
     const response=new Response(request.method==='HEAD'?null:body,{headers:{'Content-Type':asset.contentType,'Cache-Control':(this.management.routing==='single'&&url.origin===this.management.displayOrigin)||asset.contentType.startsWith('text/html')?'no-store':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Referrer-Policy':preview?'same-origin':'no-referrer','Vary':'Referer','Cross-Origin-Resource-Policy':'same-origin','X-Frame-Options':'DENY'}});
     response.headers.set('Content-Security-Policy',`default-src 'none'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; media-src 'self' https: data: blob:; connect-src 'self' ${wsOrigin} https:; frame-src https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`);
     return response;

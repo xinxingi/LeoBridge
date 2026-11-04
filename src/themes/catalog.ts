@@ -169,7 +169,7 @@ async function catalogAtRevision(ecosystem: Ecosystem, revision: string, fetcher
   const url = `https://raw.githubusercontent.com/${source.repository}/${revision}/${source.file}`;
   if(ecosystem==='native'){
     if(revision!==source.revision)throw new ThemePackageError('NATIVE_REVISION','原生主题尚未核对该源码版本。');
-    const entry={...baseEntry('native','mmwx-probe','妙妙屋 X 原生主题','沿用主控的 Pixel、Flat、Anime 或 Premium 外观；首次准备需下载并构建固定源码。'),repositoryUrl:'https://github.com/mmwx-group/mmwx-probe',version:revision};
+    const entry={...baseEntry('native','mmwx-probe','妙妙屋 X 原生主题','可在桥接器选择 Pixel、Flat、Anime 或 Premium 外观，也可跟随主控；首次准备需下载并构建固定源码。'),repositoryUrl:'https://github.com/mmwx-group/mmwx-probe',version:revision};
     return {ecosystem,source:source.url,sourceId:source.id,pinnedVersion:revision,catalogRevision:revision,catalogLicense:source.license,catalogLicenseRevision:revision,fetchedAt:new Date().toISOString(),fromCache:false,entries:[entry]};
   }
   const raw = await fetchPublicJson(url, { fetcher, maxBytes: 2_000_000 });

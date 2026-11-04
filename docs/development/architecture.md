@@ -76,3 +76,5 @@ NODE_ENV=production或direct/proxy模式默认不读取`.dev.vars`。配置来�
 ## 原生源码准备
 
 `themes/native-source.ts`保存固定源码/公共资源的Git blob索引；`runtime/native-build.ts`仅在Node按需下载、安装锁定依赖并用自有esbuild配置构建原生前台。npm生命周期脚本禁用，不执行上游Worker/构建配置。管理层经`StoreNetwork`注入构建能力，Worker不能导入npm/esbuild或Node构建器。原生协议在`protocols/native`独立访问上游；展示槽位映射显式绑定，历史前后仍核对源身份顺序。
+
+原生外观选择保存在Installation.nativeTheme中，旧安装缺省为source；管理事务校验会话、原生协议及generation。展示上下文传递给原生HTTP/WS，仅覆盖appearance.theme。Site在原生WS发送前核对对应安装的设置，设置变更后关闭旧连接，避免旧快照覆盖新HTTP外观；预览和版本主机同样适用。原生资源包和摘要不因外观选择变化。

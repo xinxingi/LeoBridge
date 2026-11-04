@@ -215,3 +215,8 @@ body:has(.install-dialog[open]){overflow:hidden}
 @media(max-width:580px){.settings-summary>div{grid-template-columns:80px minmax(0,1fr);gap:12px}}
 
 .settings-page{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;max-width:1444px;align-items:start}.settings-page>.panel{min-width:0;max-width:none}.settings-page form{margin-bottom:0}@media(min-width:1200px){.settings-page{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.native-theme-control{display:grid;gap:8px;margin-top:18px}
+.native-theme-control label{display:grid;gap:8px;font-size:12px}
+.native-theme-control select{width:100%;min-width:0;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)}
+.native-theme-control button{justify-self:start}

@@ -4,7 +4,7 @@
 
 ## 源码与获取
 
-核对时仓库只有main分支、没有Release或预构建分支，CI仅检查类型及构建，不上传前台工件。不能把源码index.html当成可安装静态入口。README描述Pixel、Flat、Anime；固定App.tsx还包含`appearance.theme === "premium"`分支，实际覆盖Premium。主题和深浅色默认跟随主控appearance，浏览器仍保留上游提供的深浅色选择。LeoBridge不强制改变主控选择或许可标记。
+核对时仓库只有main分支、没有Release或预构建分支，CI仅检查类型及构建，不上传前台工件。不能把源码index.html当成可安装静态入口。README描述Pixel、Flat、Anime；固定App.tsx还包含`appearance.theme === "premium"`分支，实际覆盖Premium。外观默认跟随主控appearance，也可在桥接器已安装主题卡片独立选择Pixel、Flat、Anime或Premium，按安装版本保存。HTTP和WS仅覆盖公开响应中的appearance.theme，不改上游源对象或主控配置；color_mode、revision和license_badge保留，浏览器仍保留上游提供的深浅色选择。固定源码的App.tsx SHA-256与清单一致，样式包含Pixel/Flat/Anime、Premium使用独立组件；没有Meow或液态玻璃实现，不提供这些选项。
 
 Node首次准备时按固定Git blob索引下载前台源码和锁文件，使用随桥接器提供的npm与esbuild生成静态页面。不会执行上游Worker、部署脚本、npm生命周期脚本或Vite配置。npm依赖必须来自锁文件固定的registry.npmjs.org tarball并含SHA-512 integrity；通过只允许这些URL的临时回环下载入口转交商店传输，沿用代理且失败不直连。不读取用户npm凭据或全局配置。依赖安装限时4分钟，单包80MB、总下载300MB；源码下载并发6。需要临时磁盘及构建内存，失败后可重试。
 

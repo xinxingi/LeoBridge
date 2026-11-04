@@ -16,7 +16,7 @@ export interface ProtocolApplication {
 export function protocolApplications(config:Config):Record<string,ProtocolApplication>{
   const upstream=new Upstream(config),cfsm=new Bridge(config,upstream),komari=new KomariService(config,upstream),native=new NativeService(config,upstream);
   return {
-    'mmwx-native-v1':{fetch:r=>native.handle(r),websocketPaths:['/api/stream'],openRealtime:(client,connect)=>nativeRealtime(native,client,connect)},
+    'mmwx-native-v1':{fetch:(r,presentation)=>native.handle(r,presentation),websocketPaths:['/api/stream'],openRealtime:(client,connect,_path,presentation)=>nativeRealtime(native,client,connect,presentation)},
     'cfsm-609cc0b':{fetch:r=>cfsm.api(r),websocketPaths:['/api/ws'],openRealtime:(client,connect)=>realtime(cfsm,client,connect)},
     'komari-adhesive-v1':{fetch:(r,presentation)=>komari.handle(r,presentation),websocketPaths:KOMARI_WS_PATHS,openRealtime:(client,connect,path,presentation)=>komariRealtime(komari,client,connect,path,presentation)},
     'komari-default-bed58b5':{fetch:(r,presentation)=>komari.handle(r,presentation),websocketPaths:KOMARI_WS_PATHS,openRealtime:(client,connect,path,presentation)=>komariRealtime(komari,client,connect,path,presentation)},

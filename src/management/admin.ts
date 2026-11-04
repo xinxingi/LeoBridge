@@ -1,3 +1,4 @@
+import { NATIVE_THEMES, type NativeTheme } from '../core/presentation.ts';
 import { BridgeError } from '../core/errors.ts';
 import { errorResponse,json } from '../core/http.ts';
 import { commitInstallation,publicThemeState,sha256,INSTALL_NOTICE_VERSION,INSTALL_NOTICE_TEXT,type ThemeStore,type Installation,type InstallReview } from '../themes/store.ts';
@@ -120,6 +121,11 @@ export class Admin {
           const item:Installation={id,title:pkg.name,ecosystem,source:pkg.source,pinnedVersion:pkg.pinnedVersion,catalogRevision:review.catalogRevision,themeId:pkg.themeId,manifest:pkg.manifest,configuration:pkg.configuration,resourceNotices:pkg.audit.notices,remoteFiles:pkg.remoteFiles,dependencySources:pkg.dependencySources,protocolProfile,license:pkg.license,packageDigest:pkg.digest,entry:pkg.entry,installedAt:new Date().toISOString(),compatibility:'unverified',files:Object.fromEntries(pkg.files.map(f=>[f.path,{contentType:f.contentType,size:f.bytes.byteLength}])),bundled:false};
           await commitInstallation(this.store,item,pkg.files,false,{sessionId:session.id,id:review.id});return this.secure(json({ok:true,id}));
         }finally{this.installing=false;}
+      }
+      if(url.pathname==='/manage/api/native-theme'&&request.method==='POST'){
+        if(typeof body.id!=='string'||!Number.isSafeInteger(body.generation)||!NATIVE_THEMES.includes(body.theme as NativeTheme))throw new BridgeError('BAD_REQUEST',400,'原生外观或版本信息无效。');
+        const state=await this.store.command({type:'native-theme',id:body.id,theme:body.theme as NativeTheme,expectedGeneration:body.generation as number,sessionId:session.id});
+        return this.secure(json(publicThemeState(state)));
       }
       if(url.pathname==='/manage/api/activate'&&request.method==='POST'){
         if(typeof body.id!=='string'||!Number.isSafeInteger(body.generation))throw new BridgeError('BAD_REQUEST',400,'版本信息无效。');

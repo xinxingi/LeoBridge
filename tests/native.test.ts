@@ -113,3 +113,19 @@ test('native dependency installation uses injected downloads, verifies integrity
   const badRoot=join(root,'bad');await mkdir(badRoot);await writeFile(join(badRoot,'package.json'),JSON.stringify(fixture));
   await assert.rejects(installDependencies(badRoot,structuredClone(lock),async()=>new Response('corrupted tarball')));
 });
+
+test('native overrides are scoped to HTTP/WS presentation and preserve source appearance, badges and disabled state',async()=>{
+  const input=raw(),upstream=new Upstream(config(),async()=>Response.json(input)),service=new NativeService(config(),upstream);
+  for(const theme of ['pixel','flat','anime','premium'] as const){
+    const presentation={theme:'mmwx-probe',settings:{},nativeTheme:theme};
+    const response=await (await service.handle(request('/api/probe'),presentation))!.json();
+    assert.deepEqual(response.appearance,{...input.appearance,theme});assert.deepEqual(response.license_badge,input.license_badge);
+    assert.deepEqual((await (await service.handle(request('/api/probe')))!.json()).appearance,input.appearance);
+    const client=new FakeSocket(),source=new FakeSocket(),session=nativeRealtime(service,client,async()=>source,presentation);
+    await new Promise(r=>setImmediate(r));source.message(JSON.stringify(input));
+    assert.deepEqual(JSON.parse(client.sent[0]).appearance,response.appearance);session.close();
+    assert.deepEqual(service.snapshot(normalizeSnapshot({...input,enabled:false}),presentation),{enabled:false});
+  }
+  assert.deepEqual(service.snapshot(normalizeSnapshot(input),{theme:'native',settings:{},nativeTheme:'source'}).appearance,input.appearance);
+  assert.deepEqual(input.appearance,{theme:'pixel',color_mode:'dark'});
+});

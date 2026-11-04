@@ -1,3 +1,4 @@
+import type { PresentationContext } from '../../core/presentation.ts';
 import type { Config } from '../../core/config.ts';
 import { BridgeError } from '../../core/errors.ts';
 import { identityVector, resolveBindings } from '../../core/identity.ts';
@@ -23,11 +24,12 @@ function forward(raw:unknown){
  * Project known public fields only; never expose arbitrary source fields. */
 export class NativeService {
   constructor(readonly config:Config,readonly upstream=new Upstream(config)){}
-  snapshot(snapshot:Snapshot):Record<string,unknown>{
+  snapshot(snapshot:Snapshot,presentation?:PresentationContext):Record<string,unknown>{
     if(!snapshot.enabled)return {enabled:false};
     const resolved=resolveBindings(snapshot,this.config.bindings),byId=new Map(resolved.map(row=>[row.id,row]));
     const raw=snapshot.raw,result=pick(raw,topFields);
     if(isRecord(raw.appearance))result.appearance=pick(raw.appearance,['theme','color_mode','revision']);
+    if(presentation?.nativeTheme&&presentation.nativeTheme!=='source')result.appearance={...(isRecord(result.appearance)?result.appearance:{}),theme:presentation.nativeTheme};
     if(isRecord(raw.license_badge))result.license_badge=pick(raw.license_badge,['name','display_name']);
     if(isRecord(raw.tri_isp))result.tri_isp={...pick(raw.tri_isp,['enabled']),targets:rows(raw.tri_isp.targets,['isp','key','label'])};
     if(snapshot.showName&&Array.isArray(raw.forward))result.forward=forward(raw.forward);
@@ -44,12 +46,12 @@ export class NativeService {
     });
     return result;
   }
-  async handle(request:Request):Promise<Response|null>{
+  async handle(request:Request,presentation?:PresentationContext):Promise<Response|null>{
     const url=new URL(request.url);
     if(!['/api/probe','/api/series','/api/forward'].includes(url.pathname))return null;
     if(request.method!=='GET')throw new BridgeError('METHOD_NOT_ALLOWED',405,'原生探针仅提供只读接口。');
     if(url.pathname==='/api/probe'){
-      try{return json(this.snapshot(await this.upstream.snapshot()));}
+      try{return json(this.snapshot(await this.upstream.snapshot(),presentation));}
       catch(error){if(error instanceof BridgeError&&error.code==='PROBE_DISABLED')return json({enabled:false});throw error;}
     }
     if(url.pathname==='/api/forward'){

@@ -1,3 +1,4 @@
+import { NATIVE_THEMES, type NativeTheme } from '../core/presentation.ts';
 import type { PublicResourceSource } from './default-resources.ts';
 import { parseStoreProxy,type SavedStoreProxy,type StoreProxySettings } from '../core/store-proxy.ts';
 import { BridgeError } from '../core/errors.ts';
@@ -16,6 +17,7 @@ export interface Installation {
   protocolProfile:string; license:LicenseRecord;
   packageDigest?:string; confirmation?:InstallConfirmation;
   entry:string; installedAt:string; compatibility:Compatibility; evidence?:string;
+  nativeTheme?:NativeTheme;
   catalogRevision?:string;
   themeId?:string; manifest?:Record<string,unknown>; configuration?:Record<string,unknown>;
   resourceNotices?:string[]; remoteFiles?:Record<string,RemoteThemeFile>; dependencySources?:Record<string,PublicResourceSource>;
@@ -32,6 +34,7 @@ export interface ThemeState {
   events:{at:string;action:string;installationId:string;generation:number}[];
 }
 export type ThemeCommand=
+  |{type:'native-theme';id:string;theme:NativeTheme;expectedGeneration:number;sessionId:string}
   |{type:'store-proxy';sessionId:string;expectedVersion:number;settings:StoreProxySettings}
   |{type:'source-review';sessionId:string;review:SourceReview}
   |{type:'source';sessionId:string;reviewId:string;expectedVersion:number;settings:SourceSettings}
@@ -56,6 +59,18 @@ export function validAssetPath(path:string){return !!path&&!path.startsWith('/')
 export function applyThemeCommand(state:ThemeState,command:ThemeCommand,now=Date.now()):ThemeState {
   const next=structuredClone(state);
   for(const [id,session]of Object.entries(next.sessions))if(session.expires<=now)delete next.sessions[id];
+  if(command.type==='native-theme'){
+    const session=next.sessions[command.sessionId];
+    if(!session||!next.adminCredential||(session.credentialVersion??0)!==next.adminCredential.version)throw new BridgeError('LOGIN_REQUIRED',401,'请重新登录。');
+    if(command.expectedGeneration!==next.generation)throw new BridgeError('REVISION_CONFLICT',409,'状态已变更，请刷新后重试。');
+    const item=next.installations[command.id];
+    if(!item||item.ecosystem!=='native'||item.protocolProfile!=='mmwx-native-v1')throw new BridgeError('NATIVE_THEME_REQUIRED',400,'请选择已安装的原生主题。');
+    if(!NATIVE_THEMES.includes(command.theme))throw new BridgeError('NATIVE_THEME_INVALID',400,'当前固定版本不支持此原生外观。');
+    if((item.nativeTheme??'source')===command.theme)return next;
+    item.nativeTheme=command.theme;next.generation++;
+    next.events.push({at:new Date(now).toISOString(),action:command.type,installationId:item.id,generation:next.generation});
+    next.events=next.events.slice(-30);return next;
+  }
   if(command.type==='store-proxy'){
     const session=next.sessions[command.sessionId];
     if(!session||!next.adminCredential||(session.credentialVersion??0)!==next.adminCredential.version)throw new BridgeError('LOGIN_REQUIRED',401,'请重新登录。');

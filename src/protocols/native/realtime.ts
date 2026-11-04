@@ -1,8 +1,9 @@
+import type { PresentationContext } from '../../core/presentation.ts';
 import type { Socket,Connect } from '../../core/socket.ts';
 import type { NativeService } from './service.ts';
 /** The upstream frontend already polls every five seconds. Send only complete
  * native snapshots over WS, never a protocol status object mistaken for data. */
-export function nativeRealtime(service:NativeService,client:Socket,connect:Connect){
+export function nativeRealtime(service:NativeService,client:Socket,connect:Connect,presentation?:PresentationContext){
   let stopped=false,source:Socket|undefined,generation=0,lastFrame=0,retry=1000;
   let timer:ReturnType<typeof setTimeout>|undefined;
   const lifetime=setTimeout(()=>stop(1012,'connection renewal'),600_000);
@@ -25,7 +26,7 @@ export function nativeRealtime(service:NativeService,client:Socket,connect:Conne
         try{
           if(data.length>12_000_000)throw new Error('Oversized frame');
           const snapshot=service.upstream.accept(JSON.parse(data));
-          client.send(JSON.stringify(service.snapshot(snapshot)));lastFrame=Date.now();retry=1000;
+          client.send(JSON.stringify(service.snapshot(snapshot,presentation)));lastFrame=Date.now();retry=1000;
         }catch{service.upstream.invalidate();stop(1013,'source data unavailable');}
       });
       socket.onClose(()=>{if(version===generation)lose();});socket.onError(()=>{if(version===generation)lose();});
