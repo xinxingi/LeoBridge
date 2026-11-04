@@ -1,4 +1,5 @@
 import { ThemeResources,presentationContext } from '../themes/resources.ts';
+import { sourceErrorHtml } from './source-error.ts';
 import { authorize,type Config } from '../core/config.ts';
 import { StoreNetwork } from '../management/store-network.ts';
 import { Admin } from '../management/admin.ts';
@@ -18,6 +19,7 @@ export class Site {
   protocols:Record<string,ProtocolApplication>;
   private sourceVersion=0;
   private sourceSessions=new Set<{close():void}>();
+  private versionSessions=new Map<string,Set<{close():void}>>();
   private initial:Config;
   constructor(public config:Config,readonly management:ManagementConfig,readonly store:ThemeStore,loadUi:(path:string)=>Promise<Response>,network?:StoreNetwork){
     this.initial=config;
@@ -66,7 +68,24 @@ export class Site {
     const protocol=this.protocols[selected.item.protocolProfile];
     if(!protocol?.websocketPaths.includes(url.pathname))return null;
     const presentation=presentationContext(selected.item);
-    return {...protocol,openRealtime:(client,connect,path)=>protocol.openRealtime(client,connect,path,presentation)};
+    return {...protocol,openRealtime:(client,connect,path)=>{
+      // Deleted previews must stop for every protocol; native choices also need
+      // a frame-time check so an old socket cannot restore the previous appearance.
+      let session:{close():void}|undefined,closed=false,queue=Promise.resolve();
+      const close=()=>{if(closed)return;closed=true;session?.close();client.close(1000,'主题版本或设置已变更，请重新打开预览。');const sessions=this.versionSessions.get(selected.id);sessions?.delete(tracked);if(!sessions?.size)this.versionSessions.delete(selected.id);};
+      const tracked={close};
+      session=protocol.openRealtime({...client,close:(code,reason)=>client.close(code,reason),onMessage:fn=>client.onMessage(fn),onClose:fn=>client.onClose(fn),onError:fn=>client.onError(fn),send:data=>{
+        queue=queue.then(async()=>{
+          if(closed)return;
+          const item=(await this.store.state()).installations[selected.id];
+          if(!item||(item.ecosystem==='native'&&(item.nativeTheme??'source')!==presentation.nativeTheme)){close();return;}
+          client.send(data);
+        }).catch(close);
+      }},connect,path,presentation);
+      if(!closed){let sessions=this.versionSessions.get(selected.id);if(!sessions){sessions=new Set();this.versionSessions.set(selected.id,sessions)}sessions.add(tracked)}
+      else session.close();
+      client.onClose(close);return tracked;
+    }};
   }
   async fetch(request:Request):Promise<Response>{
     const url=new URL(request.url);
@@ -76,6 +95,10 @@ export class Site {
       const response=await this.admin.handle(request);
       if(request.method==='POST'&&response.ok&&url.pathname.endsWith('/source/save'))await this.syncSource();
       if(single&&request.method==='POST'&&response.ok&&['/admin/api/activate','/admin/api/rollback'].includes(url.pathname))this.onActiveThemeChange();
+      if(request.method==='POST'&&response.ok&&url.pathname.endsWith('/uninstall')){
+        const state=await this.store.state();
+        for(const [id,sessions]of this.versionSessions)if(!state.installations[id])for(const session of [...sessions])session.close();
+      }
       return response;
     }
     try{
@@ -117,6 +140,9 @@ export class Site {
         if(path==='komari-theme.json'&&!defaultOnly&&item.manifest)return json(item.manifest);
         path=path.startsWith('dist/')?path.slice(5):Object.hasOwn(item.files,`.komari/${path}`)?`.komari/${path}`:path;
       }
+      // Native frontends may ship several HTML entries. Resolve their clean URLs
+      // before falling back to the SPA root (e.g. Jiwo's /map -> map.html).
+      if(item.ecosystem==='native'&&!path.split('/').at(-1)?.includes('.')&&Object.hasOwn(item.files,`${path}.html`))path=`${path}.html`;
       let asset=!defaultOnly&&Object.hasOwn(item.files,path)?await this.store.asset(item.id,path):null;
       if(!asset&&(this.resources.has(item,path)||path.split('/').at(-1)?.includes('.')))asset=await this.resources.get(item,path,defaultOnly);
       if(!asset&&request.headers.get('accept')?.includes('text/html')&&!path.split('/').at(-1)?.includes('.'))asset=await this.store.asset(item.id,item.entry);
@@ -135,10 +161,19 @@ export class Site {
   }
   private assetResponse(request:Request,item:Installation,asset:{bytes:Uint8Array;contentType:string},preview=false){
     const url=new URL(request.url),wsOrigin=url.origin.replace(/^http/,'ws');
+    const jiwo=item.ecosystem==='native'&&item.themeId==='jiwo-probe';
+    // Ran embeds its separate map document in its own dashboard. Keep every
+    // other document (including the Jiwo homepage and admin) non-embeddable.
+    const embeddedMap=jiwo&&asset.contentType.startsWith('text/html')&&['/map','/map.html'].includes(url.pathname)&&Object.hasOwn(item.files,'map.html');
     let body:BodyInit=asset.bytes as BodyInit;
-    if(preview&&asset.contentType.startsWith('text/html'))body=previewHtml(new TextDecoder().decode(asset.bytes),item.id);
-    const response=new Response(request.method==='HEAD'?null:body,{headers:{'Content-Type':asset.contentType,'Cache-Control':(this.management.routing==='single'&&url.origin===this.management.displayOrigin)||asset.contentType.startsWith('text/html')?'no-store':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Referrer-Policy':preview?'same-origin':'no-referrer','Vary':'Referer','Cross-Origin-Resource-Policy':'same-origin','X-Frame-Options':'DENY'}});
-    response.headers.set('Content-Security-Policy',`default-src 'none'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; media-src 'self' https: data: blob:; connect-src 'self' ${wsOrigin} https:; frame-src https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`);
+    if(asset.contentType.startsWith('text/html')){
+      let html=new TextDecoder().decode(asset.bytes);
+      if(item.protocolProfile==='mmwx-native-v1')html=sourceErrorHtml(html);
+      if(preview)html=previewHtml(html,item.id);
+      body=html;
+    }
+    const response=new Response(request.method==='HEAD'?null:body,{headers:{'Content-Type':asset.contentType,'Cache-Control':(this.management.routing==='single'&&url.origin===this.management.displayOrigin)||asset.contentType.startsWith('text/html')?'no-store':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff','Referrer-Policy':preview?'same-origin':'no-referrer','Vary':'Referer','Cross-Origin-Resource-Policy':'same-origin','X-Frame-Options':embeddedMap?'SAMEORIGIN':'DENY'}});
+    response.headers.set('Content-Security-Policy',`default-src 'none'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; media-src 'self' https: data: blob:; connect-src 'self' ${wsOrigin} https:; frame-src ${jiwo?"'self' ":''}https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors ${embeddedMap?"'self'":"'none'"}`);
     return response;
   }
 }

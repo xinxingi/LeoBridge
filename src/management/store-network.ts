@@ -7,7 +7,7 @@ import type { ThemeStore } from '../themes/store.ts';
 export type StoreTransport = <T>(settings:StoreProxySettings,run:(fetcher:PublicFetcher)=>Promise<T>)=>Promise<T>;
 /** Configuration and authorization stay independent of the Node transport. */
 export class StoreNetwork {
-  constructor(private store:ThemeStore,private transport?:StoreTransport,private nativeBuild?:(fetcher:PublicFetcher)=>Promise<ThemePackage>){}
+  constructor(private store:ThemeStore,private transport?:StoreTransport,private nativeBuild?:(fetcher:PublicFetcher,revision:string,themeId:string)=>Promise<ThemePackage>){}
   private async current(){const saved=(await this.store.state()).storeProxy;return saved??{enabled:false,url:'',version:0};}
   async status(){const current=await this.current();return {supported:!!this.transport,version:current.version,enabled:current.enabled,url:publicProxyUrl(current.url),hasAddress:!!current.url,hasCredentials:!!current.url&&(!!new URL(current.url).username||!!new URL(current.url).password),storage:current.version?'saved':'default'};}
   async save(body:Record<string,unknown>,sessionId:string){
@@ -22,10 +22,11 @@ export class StoreNetwork {
   async install(ecosystem:Ecosystem,id:string,options:InstallOptions):Promise<ThemePackage>{
     if(ecosystem!=='native')return this.run(fetcher=>installCatalogTheme(ecosystem,id,{...options,fetcher}));
     if(!this.nativeBuild)throw new BridgeError('NATIVE_BUILD_UNAVAILABLE',503,'当前运行环境不支持原生主题源码构建，请使用Node运行包或Docker。');
+    if(typeof options.expectedCatalogRevision!=='string')throw new BridgeError('CATALOG_REVISION',400,'请先从原生主题商店选择版本。');
     const {fetchCatalog}=await import('../themes/catalog.ts');
-    const catalog=await fetchCatalog('native',undefined,{revision:options.expectedCatalogRevision});
+    const catalog=await fetchCatalog('native',undefined,{revision:options.expectedCatalogRevision,nativeThemeId:id});
     if(!catalog.entries.some(entry=>entry.id===id))throw new BridgeError('THEME_NOT_FOUND',404,'原生主题不存在。');
-    return this.run(this.nativeBuild);
+    return this.run(fetcher=>this.nativeBuild!(fetcher,catalog.catalogRevision,id));
   }
   async run<T>(action:(fetcher:PublicFetcher)=>Promise<T>):Promise<T>{
     const current=await this.current();

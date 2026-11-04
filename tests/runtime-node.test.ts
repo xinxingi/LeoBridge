@@ -117,11 +117,11 @@ test('Node proxy subprocess: isolated origins, both native protocols, persisted 
   await mkdir(store,{recursive:true});
   await writeFile(join(store,'state.json'),JSON.stringify({...emptyThemeState(),adminCredential:await hashPassword(password,1),source:{version:1,baseUrl:`http://127.0.0.1:${upstreamPort}`,token:'synthetic-probe-token',bindings:snapshot.servers.map((server:{name:string})=>({id:server.name,match:{name:server.name}})),pingTargets:{}}}),{mode:0o600});
   await writeFile(envFile, Object.entries(configuration).map(([key, value]) => `${key}='${value}'`).join('\n'), { mode: 0o600 });
-  async function launch() {
+  async function launch(overrides:Record<string,string>={}) {
     // Whitelist the child environment: no inherited .dev.vars or network proxy settings.
     const entry = process.env.BRIDGE_TEST_BUILT_NODE === '1' ? ['dist/node.js'] : ['--import', 'tsx', 'src/runtime/node.ts'];
     const child = spawn(process.execPath, entry, {
-      cwd: root, env: { BRIDGE_ENV_FILE: envFile, BRIDGE_NODE_MODE: 'proxy', NODE_NO_WARNINGS: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: root, env: { BRIDGE_ENV_FILE: envFile, BRIDGE_NODE_MODE: 'proxy', NODE_NO_WARNINGS: '1', ...overrides }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     children.push(child); let output = '', exited = false;
     child.stdout.on('data', data => { output = (output + data.toString()).slice(-12_000); });
@@ -144,6 +144,12 @@ test('Node proxy subprocess: isolated origins, both native protocols, persisted 
     assert.ok(Date.now() - start < 7000);
     await until(() => sourceWs.clients.size === 0, 'upstream WebSockets leaked after shutdown');
   }
+  const rejected=await launch({BRIDGE_TRUSTED_PROXIES:'192.0.2.1/32'});
+  for(let i=0;i<2;i++)assert.equal((await request(port,displayHost,'/?synthetic-secret-path',{headers:{Cookie:'synthetic-secret-cookie','X-Real-IP':'198.51.100.42'}})).json.code,'UNTRUSTED_PROXY');
+  await stop(rejected);
+  assert.equal(rejected.logs().split('UNTRUSTED_PROXY:').length-1,1);
+  assert.match(rejected.logs(),/peer=127\.0\.0\.1/);
+  assert.doesNotMatch(rejected.logs(),/synthetic-secret|198\.51\.100\.42|synthetic-probe-token/);
   let running = await launch();
   assert.equal((await request(port, displayHost, '/', { forwarded: null })).status, 400);
   assert.equal((await request(port, displayHost, '/', { forwarded: 'http' })).status, 400);

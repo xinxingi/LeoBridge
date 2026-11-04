@@ -28,7 +28,7 @@ pnpm dev
 
 端口、代理等运行参数按需写入私有`.dev.vars`，参考[示例顶部的生效规则](../../.dev.vars.example)；运行参数每次启动读取，修改后Ctrl+C停止，再运行`pnpm dev`。已有文件直接编辑，不覆盖。更改管理界面源码后先`pnpm build`更新静态资源，再刷新浏览器。
 
-密码和数据源在后台修改，成功后立即生效，统一保存在`work/theme-store/state.json`，不在`.dev.vars`中配置。源码重建和重启保留状态。旧版本迁移及存储路径见[配置在哪里修改和保存](../configuration.md#配置在哪里修改和保存)。
+密码和数据源在后台修改，成功后立即生效，统一保存在`data/state.json`，不在`.dev.vars`中配置。源码重建和重启保留状态。旧版本迁移及存储路径见[配置在哪里修改和保存](../configuration.md#配置在哪里修改和保存)。
 
 ## 制作自带Node的运行包
 
@@ -58,7 +58,7 @@ docker build --tag leobridge:local --file deploy/docker/Dockerfile .
 node scripts/verify-release.mjs image leobridge:local
 ```
 
-容器检查创建独立临时容器和数据卷，验证空源启动、改密及重启持久化后清理；不会访问真实主控。
+容器检查实际复制交付Compose模板，用独立项目、端口和临时data绑定目录运行；验证只读配置预检查、HTTPS搭配direct通过、含路径的站点源拒绝、空源启动、改密及重建容器后的密码持久化，结束清理测试项目和目录。需要Docker Compose v2，不读取用户部署配置，不访问真实主控。配置及HTTP/WS代理回归由运行时测试覆盖；这不是实际Caddy/TLS或生产环境验收。
 
 默认基础镜像为`node:24-bookworm-slim`。需要可复现发行时，用`--build-arg NODE_IMAGE=<已审查的tag@sha256摘要>`固定基础镜像，记录源码提交、锁文件和镜像摘要。`.dockerignore`使用白名单，私有配置、原始响应、Git历史及参考源码不进入构建上下文。
 

@@ -13,7 +13,7 @@ export function presentationContext(item:Installation):PresentationContext {
     if(field&&typeof field==='object'&&typeof field.key==='string'&&Object.hasOwn(field,'default'))
       Object.defineProperty(settings,field.key,{value:structuredClone(field.default),enumerable:true,writable:true,configurable:true});
   }
-  return {theme:item.themeId??(typeof item.manifest?.short==='string'?item.manifest.short:'default'),settings};
+  return {...(item.ecosystem==='native'?{nativeTheme:item.nativeTheme??'source'}:{}),theme:item.themeId??(typeof item.manifest?.short==='string'?item.manifest.short:'default'),settings};
 }
 export interface ResourceAsset {bytes:Uint8Array;contentType:string;}
 type Transport = <T>(run:(fetcher:PublicFetcher)=>Promise<T>)=>Promise<T>;

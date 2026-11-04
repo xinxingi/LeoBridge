@@ -1,8 +1,9 @@
-import { mkdir,readFile,writeFile,rename,open,unlink } from 'node:fs/promises';
+import { mkdir,readFile,writeFile,rename,open,unlink,rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { applyThemeCommand,emptyThemeState,validAssetPath,validInstallationId,type ThemeStore,type ThemeState,type ThemeCommand } from '../themes/store.ts';
 import { BridgeError } from '../core/errors.ts';
 export class FileThemeStore implements ThemeStore {
+  readonly supportsUninstall=true;
   private pending=Promise.resolve();
   readonly root:string;
   constructor(root:string){this.root=resolve(root);}
@@ -21,10 +22,21 @@ export class FileThemeStore implements ThemeStore {
       try{
         result=applyThemeCommand(await this.state(),command);
         await writeFile(temp,JSON.stringify(result),{mode:0o600});await rename(temp,resolve(this.root,'state.json'));
-      }finally{await lock.close();await unlink(resolve(this.root,'state.lock'));}
+        if(command.type==='uninstall'){
+          // Publish the removal first. Failed/interrupted cleanup stays retryable and
+          // prevents the same package from being reinstalled until cleanup finishes.
+          try{
+            await this.removePackage(command.id);
+            const cleaned={...result,pendingAssetCleanup:result.pendingAssetCleanup?.filter(id=>id!==command.id)};
+            await writeFile(temp,JSON.stringify(cleaned),{mode:0o600});await rename(temp,resolve(this.root,'state.json'));
+            result=cleaned;
+          }catch{/* Keep the durable pending record; the UI offers a cleanup retry. */}
+        }
+      }finally{await rm(temp,{force:true}).catch(()=>{});await lock.close();await unlink(resolve(this.root,'state.lock'));}
     });
     this.pending=operation.catch(()=>{});await operation;return result;
   }
+  protected async removePackage(id:string){await rm(resolve(this.root,'packages',id),{recursive:true,force:true});}
   private path(id:string,path:string){if(!validInstallationId(id)||!validAssetPath(path))throw new BridgeError('INVALID_PATH',400,'主题资源路径无效。');return resolve(this.root,'packages',id,path);}
   async putAsset(id:string,path:string,bytes:Uint8Array,contentType:string){
     const file=this.path(id,path);await mkdir(resolve(file,'..'),{recursive:true,mode:0o700});

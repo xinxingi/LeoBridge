@@ -32,3 +32,11 @@ test-results/
 /docs/research/bridge-scope-review.md
 
 /docs/local/
+
+# Runtime state beside a checkout or deployment configuration
+/data/
+/deploy/docker/data/
+
+# Docker temporary build files
+/tmp/
+/deploy/docker/tmp/

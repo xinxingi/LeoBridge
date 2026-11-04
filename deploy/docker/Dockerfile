@@ -18,13 +18,18 @@ FROM dependencies AS production-dependencies
 RUN pnpm prune --prod
 
 FROM ${NODE_IMAGE} AS runtime
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    BRIDGE_NODE_MODE=direct \
+    BRIDGE_LISTEN_HOST=0.0.0.0 \
+    BRIDGE_LISTEN_PORT=8787 \
+    BRIDGE_THEME_STORE=/data \
+    BRIDGE_ACCESS=public
 WORKDIR /app
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json /app/LICENSE ./
 COPY --from=build --chown=node:node /app/dist/node.js ./dist/node.js
 COPY --from=build --chown=node:node /app/dist/bundled ./dist/bundled
-RUN mkdir -p /data/theme-store && chown node:node /data/theme-store && chmod 700 /data/theme-store
+RUN mkdir -p /data && chown node:node /data && chmod 700 /data
 USER node
 EXPOSE 8787
 STOPSIGNAL SIGTERM

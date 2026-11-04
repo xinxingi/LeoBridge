@@ -586,6 +586,19 @@ test('declared extensionless remote resources are resolved before HTML SPA fallb
   assert.equal(new TextDecoder().decode((await store.asset(item.id,'index.html'))!.bytes),'<html>synthetic theme</html>');
 });
 
+test('native source guidance reaches existing root and preview HTML without modifying stored assets',async()=>{
+  const store=new MemoryStore(),item=installation(0,{ecosystem:'native',protocolProfile:'mmwx-native-v1'});
+  await commitInstallation(store,item,files(),true);
+  const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test'});
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://synthetic.invalid',BRIDGE_ACCESS:'public'}),config,store,ui);
+  for(const suffix of ['',`?__preview=${item.id}`]){
+    const response=await site.fetch(new Request(config.displayOrigin+'/'+suffix));
+    assert.equal(response.status,200);assert.match(await response.text(),/请检查数据源 Token/);
+    assert.equal(response.headers.get('cache-control'),'no-store');
+  }
+  assert.equal(new TextDecoder().decode((await store.asset(item.id,'index.html'))!.bytes),'<html>synthetic theme</html>');
+});
+
 test('exact installation assets and observed CSS dependencies precede Komari namespace aliases',async()=>{
   const {ThemeResources}=await import('../src/themes/resources.ts');
   const local='themes/default/assets/local.woff',declared='themes/default/assets/declared.woff',observed='themes/default/assets/observed.woff';
@@ -611,4 +624,233 @@ test('exact installation assets and observed CSS dependencies precede Komari nam
   await get('themes/default/assets/logo/os-alma.svg');
   assert.deepEqual(calls.at(-1),{path:'assets/logo/os-alma.svg',defaultOnly:true});
   assert.equal((await get('themes/Other/dist/index.html')).status,404);
+});
+
+test('native selection requires auth, CSRF, valid installation and current generation; survives disk reload without changing packages or active version',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'leobridge-native-selection-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  const store=new FileThemeStore(root),item=installation(0,{ecosystem:'native',protocolProfile:'mmwx-native-v1'});
+  await commitInstallation(store,item,files(),true);await commitInstallation(store,installation(1),files());
+  const admin=new Admin(management(),store,ui),session=await login(admin),before=await store.state();
+  const body={id:item.id,generation:before.generation,theme:'flat'},path='/manage/api/native-theme';
+  assert.equal((await admin.handle(request(path,{method:'POST',body}))).status,401);
+  assert.equal((await admin.handle(request(path,{method:'POST',cookie:session.cookie,body}))).status,403);
+  assert.equal((await admin.handle(request(path,{method:'POST',...session,origin:'https://wrong.test',body}))).status,403);
+  for(const patch of [{theme:'bad value'},{theme:'a'.repeat(65)},{theme:{}},{id:ids[1]},{id:'missing'}])assert.equal((await admin.handle(request(path,{method:'POST',...session,body:{...body,...patch}}))).status,400);
+  assert.equal((await admin.handle(request(path,{method:'POST',...session,body}))).status,200);
+  assert.equal((await admin.handle(request(path,{method:'POST',...session,body:{...body,theme:'anime'}}))).status,409);
+  const reloaded=await new FileThemeStore(root).state();
+  assert.equal(reloaded.installations[item.id].nativeTheme,'flat');assert.equal(reloaded.active,before.active);assert.equal(reloaded.previous,before.previous);
+  assert.deepEqual({...reloaded.installations[item.id],nativeTheme:undefined},{...before.installations[item.id],nativeTheme:undefined});
+  assert.equal(reloaded.generation,before.generation+1);
+  assert.equal((await admin.handle(request(path,{method:'POST',...session,body:{...body,generation:reloaded.generation,theme:'source'}}))).status,200);
+  assert.equal((await store.state()).installations[item.id].nativeTheme,'source');
+});
+
+test('native site binds independent preview choices and closes old WS before forwarding a frame with stale appearance',async()=>{
+  const store=new MemoryStore();
+  for(let i=0;i<2;i++)await commitInstallation(store,installation(i,{ecosystem:'native',protocolProfile:'mmwx-native-v1',nativeTheme:i?'anime':'flat'}),files(),i===0);
+  const site=new Site(readConfig({MMWX_BASE_URL:'https://source.test',BRIDGE_ACCESS:'public'}),management(),store,ui);
+  let send:(data:string)=>void=()=>{},closed=false;const frames:string[]=[];
+  site.protocols['mmwx-native-v1']={websocketPaths:['/api/stream'],fetch:async(_request,presentation)=>Response.json(presentation),openRealtime:client=>{send=data=>client.send(data);return {close(){closed=true;}};}};
+  for(let i=0;i<2;i++){
+    const url=new URL(installationUrl(management(),ids[i],true));url.pathname='/api/probe';
+    assert.equal((await (await site.fetch(new Request(url))).json()).nativeTheme,i?'anime':'flat');
+  }
+  const url=new URL(installationUrl(management(),ids[0],true));url.pathname='/api/stream';
+  const protocol=await site.websocket(new Request(url));assert.ok(protocol);
+  const client={send:(data:string)=>frames.push(data),close:()=>{},onMessage:()=>{},onClose:()=>{},onError:()=>{}};
+  protocol.openRealtime(client,async()=>client,'/api/stream');send('old choice');await new Promise(r=>setImmediate(r));assert.deepEqual(frames,['old choice']);
+  store.value.installations[ids[0]].nativeTheme='premium';send('must not escape');await new Promise(r=>setImmediate(r));
+  assert.equal(closed,true);assert.deepEqual(frames,['old choice']);
+});
+
+test('uninstall guards active and rollback versions, validates session/CSRF/generation, removes files and persists pointers',async t=>{
+  const {access}=await import('node:fs/promises');
+  const root=await mkdtemp(join(tmpdir(),'leobridge-uninstall-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  const store=new FileThemeStore(root);await seed(store,3);
+  const admin=new Admin(management(),store,ui),auth=await login(admin);
+  await store.command({type:'activate',id:ids[1],expectedGeneration:(await store.state()).generation});
+  const before=await store.state(),body={id:ids[2],generation:before.generation,confirmed:true};
+  const post=(payload:unknown,options={...auth})=>admin.handle(request('/manage/api/uninstall',{method:'POST',...options,body:payload}));
+  assert.equal((await admin.handle(request('/manage/api/uninstall',{method:'POST',body}))).status,401);
+  assert.equal((await post(body,{...auth,csrf:''})).status,403);
+  assert.equal((await admin.handle(request('/manage/api/uninstall',{method:'POST',...auth,origin:'https://wrong.test',body}))).status,403);
+  assert.equal(await code(await post({...body,confirmed:false})),'BAD_REQUEST');
+  assert.equal(await code(await post({...body,id:'../state.json'})),'BAD_REQUEST');
+  assert.equal(await code(await post({...body,id:ids[1]})),'THEME_ACTIVE');
+  assert.equal(await code(await post({...body,id:ids[0]})),'THEME_PREVIOUS');
+  assert.deepEqual(await store.state(),before);
+  const responses=await Promise.all([post(body),post(body)]);
+  assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);
+  await assert.rejects(access(join(root,'packages',ids[2])),{code:'ENOENT'});
+  assert.equal(await store.asset(ids[2],'index.html'),null);
+  let after=await new FileThemeStore(root).state();
+  assert.equal(after.active,ids[1]);assert.equal(after.previous,ids[0]);assert.equal(after.installations[ids[2]],undefined);
+  assert.equal(await code(await post({...body,id:ids[0],acknowledgePrevious:true})),'REVISION_CONFLICT');
+  assert.equal((await post({...body,id:ids[0],generation:after.generation,acknowledgePrevious:true})).status,200);
+  after=await store.state();assert.equal(after.active,ids[1]);assert.equal(after.previous,null);assert.deepEqual(after.pendingAssetCleanup,[]);
+  assert.equal(after.events.at(-1)?.installationId,ids[0]);
+  assert.equal(await code(await admin.handle(request('/manage/api/rollback',{method:'POST',...auth,body:{generation:after.generation}}))),'THEME_NOT_INSTALLED');
+  await commitInstallation(store,installation(2),files());
+  assert.ok(await new FileThemeStore(root).asset(ids[2],'index.html'));
+});
+
+test('failed resource cleanup is durable, blocks reinstall and can be retried after restart',async t=>{
+  class FailingCleanupStore extends FileThemeStore {protected async removePackage(){throw new Error('synthetic disk error');}}
+  const root=await mkdtemp(join(tmpdir(),'leobridge-cleanup-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  const store=new FailingCleanupStore(root);await seed(store);
+  const admin=new Admin(management(),store,ui),auth=await login(admin);
+  const response=await admin.handle(request('/manage/api/uninstall',{method:'POST',...auth,body:{id:ids[1],generation:(await store.state()).generation,confirmed:true}}));
+  assert.equal(response.status,200);assert.equal((await response.json()).cleanupPending,true);
+  const restored=new FileThemeStore(root),state=await restored.state();
+  assert.equal(state.installations[ids[1]],undefined);assert.deepEqual(state.pendingAssetCleanup,[ids[1]]);
+  assert.equal(state.active,ids[0]);await assert.rejects(commitInstallation(restored,installation(1),files()),{code:'THEME_CLEANUP_PENDING'});
+  const nextAdmin=new Admin(management(),restored,ui);
+  const retry=await nextAdmin.handle(request('/manage/api/uninstall',{method:'POST',...auth,body:{id:ids[1],generation:state.generation,confirmed:true}}));
+  assert.equal(retry.status,200);assert.equal((await retry.json()).cleanupPending,false);
+  assert.deepEqual((await restored.state()).pendingAssetCleanup,[]);
+  await commitInstallation(restored,installation(1),files());assert.ok(await restored.asset(ids[1],'index.html'));
+});
+
+test('update follows stable catalog identity, confirms exact package, preserves old version and does not activate',async()=>{
+  const {StoreNetwork}=await import('../src/management/store-network.ts');
+  const {INSTALL_NOTICE_VERSION}=await import('../src/themes/store.ts');
+  const catalogRevision='d'.repeat(40),buildRevision='e'.repeat(40),digest='f'.repeat(64);
+  const store=new MemoryStore(),old=installation(0,{themeId:'stable-theme',pinnedVersion:'b'.repeat(40),packageDigest:'c'.repeat(64)});
+  await commitInstallation(store,old,files(),true);
+  const calls:any[]=[];let changed=false;
+  const network=new StoreNetwork(store,async(_settings,run)=>run(async input=>{
+    const url=String(input);calls.push(url);
+    if(url.includes('/commits/'))return Response.json({sha:catalogRevision});
+    return Response.json({schema:1,themes:[{id:'stable-theme',title:'Renamed theme',url:'https://github.com/example/theme',branch:'build'},{id:'other',title:old.title,url:'https://github.com/example/other',branch:'build'}]});
+  }));
+  network.install=async(ecosystem,id,options)=>{
+    calls.push({ecosystem,id,options});
+    return {id:digest.slice(0,32),digest:changed?'0'.repeat(64):digest,themeId:id,name:'Renamed theme',ecosystem,source:'https://github.com/example/theme',catalogSource:'https://github.com/example/catalog',catalogRevision,pinnedVersion:buildRevision,license:old.license,entry:'index.html',files:files(),compatibility:'unverified',audit:{staticReferencesChecked:true,dynamicReferencesRequireBrowser:true,notices:[]}};
+  };
+  const admin=new Admin(management(),store,ui,undefined,network),auth=await login(admin);
+  const post=(path:string,body:unknown)=>admin.handle(request('/manage/api/'+path,{method:'POST',...auth,body}));
+  assert.equal((await admin.handle(request('/manage/api/prepare-update',{method:'POST',body:{id:old.id}}))).status,401);
+  assert.equal((await admin.handle(request('/manage/api/prepare-update',{method:'POST',cookie:auth.cookie,body:{id:old.id}}))).status,403);
+  const before=await store.state(),review=await(await post('prepare-update',{id:old.id})).json();
+  assert.equal(review.status,'available');assert.equal(review.previousVersion,old.pinnedVersion);assert.equal(review.pinnedVersion,buildRevision);
+  assert.equal((await store.state()).generation,before.generation);assert.equal(Object.keys(store.value.installations).length,1);
+  const confirm={reviewId:review.reviewId,noticeVersion:INSTALL_NOTICE_VERSION,acknowledge:true};
+  changed=true;assert.equal(await code(await post('install',confirm)),'INSTALL_PACKAGE_CHANGED');assert.equal(store.value.active,old.id);
+  changed=false;const response=await post('install',confirm);assert.equal(response.status,200);const {id}=await response.json();
+  assert.equal(store.value.active,old.id);assert.equal(store.value.previous,null);assert.deepEqual(store.value.installations[old.id],old);
+  assert.equal(store.value.installations[id].title,'Renamed theme');assert.equal(store.value.installations[id].compatibility,'unverified');
+  assert.deepEqual(calls.filter(call=>typeof call!=='string').at(-1),{ecosystem:'cfsm',id:'stable-theme',options:{expectedCatalogRevision:catalogRevision,expectedBuildRevision:buildRevision}});
+  const current=await(await post('prepare-update',{id})).json();assert.equal(current.status,'current');
+  await store.command({type:'activate',id,expectedGeneration:store.value.generation,acknowledgeUnverified:true});
+  assert.equal(store.value.previous,old.id);await store.command({type:'rollback',expectedGeneration:store.value.generation});assert.equal(store.value.active,old.id);
+});
+
+test('native update checks upstream HEAD without rebuilding unchanged commits, and historical identities cannot be guessed',async()=>{
+  const {StoreNetwork}=await import('../src/management/store-network.ts');
+  const {CATALOG_SOURCES}=await import('../src/themes/catalog.ts');
+  const store=new MemoryStore();await commitInstallation(store,installation(0,{ecosystem:'native',protocolProfile:'mmwx-native-v1',themeId:'mmwx-probe',pinnedVersion:CATALOG_SOURCES.native.revision}),files());
+  await commitInstallation(store,installation(1),files());
+  let calls=0;const network=new StoreNetwork(store,async(_settings,run)=>run(async()=>{calls++;return Response.json({sha:CATALOG_SOURCES.native.revision})}));network.install=async()=>{throw Error('must not build')};
+  const admin=new Admin(management(),store,ui,undefined,network),auth=await login(admin);
+  const post=(id:string)=>admin.handle(request('/manage/api/prepare-update',{method:'POST',...auth,body:{id}}));
+  const result=await(await post(ids[0])).json();assert.equal(result.status,'current');assert.match(result.message,/上游最新/);assert.equal(calls,1);
+  assert.equal(await code(await post(ids[1])),'UPDATE_SOURCE_UNKNOWN');
+  assert.equal(await code(await post(ids[2])),'THEME_NOT_INSTALLED');
+  assert.equal(await code(await admin.handle(request('/manage/api/uninstall',{method:'POST',...auth,body:{id:ids[0],generation:store.value.generation,confirmed:true}}))),'UNINSTALL_UNSUPPORTED');
+});
+
+test('deleting a preview closes its realtime session for every protocol and removes HTTP access',async t=>{
+  for(const [ecosystem,profile] of [['cfsm','cfsm-609cc0b'],['komari','komari-adhesive-v1'],['native','mmwx-native-v1']] as const){
+    const root=await mkdtemp(join(tmpdir(),'leobridge-deleted-preview-'));t.after(()=>rm(root,{recursive:true,force:true}));
+    const store=new FileThemeStore(root);await seed(store,1);await commitInstallation(store,installation(1,{ecosystem,protocolProfile:profile}),files());
+    const config=managementConfig({BRIDGE_ORIGIN:'https://single.example.test'}),site=new Site(readConfig({MMWX_BASE_URL:'https://source.test',BRIDGE_ACCESS:'public'}),config,store,ui);
+    let closed=false,send:(data:string)=>void=()=>{};const frames:string[]=[];
+    site.protocols[profile]={websocketPaths:['/api/stream'],fetch:async()=>null,openRealtime:client=>{send=data=>client.send(data);return {close(){closed=true;}}}};
+    const ws=await site.websocket(new Request(config.displayOrigin+'/api/stream?__preview='+ids[1]));
+    let delivered:()=>void=()=>{};const delivery=new Promise<void>(resolve=>{delivered=resolve});
+    const client={send:(data:string)=>{frames.push(data);delivered();},close(){},onMessage(){},onClose(){},onError(){}};
+    ws!.openRealtime(client,async()=>client,'/api/stream');send('before');await delivery;assert.deepEqual(frames,['before']);
+    // Authenticate against the same store using the isolated admin helper.
+    const auth=await login(new Admin(management(),store,ui));
+    const singleCookie='__Secure-leobridge_admin_path='+auth.cookie.split('=')[1];
+    const response=await site.fetch(new Request(config.adminOrigin+'/admin/api/uninstall',{method:'POST',headers:{Origin:config.adminOrigin,'Content-Type':'application/json','X-CSRF-Token':auth.csrf,Cookie:singleCookie},body:JSON.stringify({id:ids[1],generation:(await store.state()).generation,confirmed:true})}));
+    assert.equal(response.status,200);assert.equal(closed,true);send('after');await new Promise(r=>setImmediate(r));assert.deepEqual(frames,['before']);
+    assert.equal((await site.fetch(new Request(config.displayOrigin+'/?__preview='+ids[1]))).status,404);
+    assert.equal((await site.fetch(new Request(config.displayOrigin+'/index.html?__preview='+ids[1]))).status,404);
+  }
+});
+
+test('native update confirmation inherits appearance only for new installs and rejects deleted source or revoked session',async()=>{
+  const {INSTALL_NOTICE_VERSION}=await import('../src/themes/store.ts');
+  const store=new MemoryStore(),old=installation(0,{ecosystem:'native',protocolProfile:'mmwx-native-v1',themeId:'mmwx-probe',nativeTheme:'anime'});
+  await commitInstallation(store,old,files());
+  const admin=new Admin(management(),store,ui),auth=await login(admin),sessionId=await sha256(auth.cookie.split('=')[1]);
+  const next=installation(1,{ecosystem:'native',protocolProfile:'mmwx-native-v1',themeId:old.themeId,catalogRevision:'d'.repeat(40),pinnedVersion:'e'.repeat(40),packageDigest:'f'.repeat(64),compatibility:'unverified'});
+  const review={id:'review',expires:Date.now()+60_000,ecosystem:'native' as const,themeId:old.themeId!,catalogRevision:next.catalogRevision!,pinnedVersion:next.pinnedVersion,digest:next.packageDigest!,noticeVersion:INSTALL_NOTICE_VERSION,updateOf:old.id};
+  await store.command({type:'review',sessionId,review});
+  await commitInstallation(store,next,files(),false,{sessionId,id:review.id});
+  assert.equal(store.value.installations[next.id].nativeTheme,'anime');
+  store.value.installations[next.id].nativeTheme='flat';
+  await store.command({type:'review',sessionId,review});
+  await commitInstallation(store,next,files(),false,{sessionId,id:review.id});
+  assert.equal(store.value.installations[next.id].nativeTheme,'flat');
+  await store.command({type:'review',sessionId,review});
+  await assert.rejects(store.command({type:'uninstall',id:old.id,expectedGeneration:store.value.generation,sessionId:'revoked'}),{code:'LOGIN_REQUIRED'});
+  await store.command({type:'uninstall',id:old.id,expectedGeneration:store.value.generation,sessionId});
+  await assert.rejects(commitInstallation(store,next,files(),false,{sessionId,id:review.id}),{code:'UPDATE_SOURCE_REMOVED'});
+  assert.equal(store.value.installations[next.id].nativeTheme,'flat');
+  await store.command({type:'logout',id:sessionId});
+  await assert.rejects(commitInstallation(store,next,files(),false,{sessionId,id:review.id}),{code:'INSTALL_REVIEW_EXPIRED'});
+});
+
+test('uninstall cannot race a download and a failed update does not change installed state',async t=>{
+  const {StoreNetwork}=await import('../src/management/store-network.ts');
+  const root=await mkdtemp(join(tmpdir(),'leobridge-update-race-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  const store=new FileThemeStore(root);await commitInstallation(store,installation(0,{themeId:'theme'}),files());
+  let release:()=>void=()=>{},entered:()=>void=()=>{};
+  const started=new Promise<void>(resolve=>{entered=resolve}),gate=new Promise<void>(resolve=>{release=resolve});
+  const network=new StoreNetwork(store,async(_settings,run)=>run(async input=>{
+    if(String(input).includes('/commits/')){entered();await gate;return Response.json({sha:'d'.repeat(40)});}
+    return new Response('synthetic failure',{status:503});
+  }));
+  const admin=new Admin(management(),store,ui,undefined,network),auth=await login(admin),before=await store.state();
+  const post=(path:string,body:unknown)=>admin.handle(request('/manage/api/'+path,{method:'POST',...auth,body}));
+  const checking=post('prepare-update',{id:ids[0]});await started;
+  assert.equal(await code(await post('uninstall',{id:ids[0],generation:before.generation,confirmed:true})),'INSTALL_BUSY');
+  release();assert.equal((await checking).status,502);assert.deepEqual(await store.state(),before);
+  assert.equal((await post('uninstall',{id:ids[0],generation:before.generation,confirmed:true})).status,200);
+});
+
+test('native update resolves upstream once and passes that exact commit through review and confirmed build',async()=>{
+  const {StoreNetwork}=await import('../src/management/store-network.ts');
+  const {INSTALL_NOTICE_VERSION}=await import('../src/themes/store.ts');
+  const store=new MemoryStore(),old=installation(0,{ecosystem:'native',protocolProfile:'mmwx-native-v1',themeId:'mmwx-probe',pinnedVersion:'a'.repeat(40),nativeTheme:'future-glass'});
+  await commitInstallation(store,old,files(),true);
+  let head='b'.repeat(40),headCalls=0;const builds:string[]=[];
+  const network=new StoreNetwork(store,async(_settings,run)=>run(async()=>{headCalls++;return Response.json({sha:head})}),async(_fetcher,revision)=>{
+    builds.push(revision);return {id:'f'.repeat(32),digest:'f'.repeat(64),themeId:old.themeId!,name:old.title,ecosystem:'native',source:'https://github.com/mmwx-group/mmwx-probe',catalogSource:'https://github.com/mmwx-group/mmwx-probe/tree/'+revision,catalogRevision:revision,pinnedVersion:revision,license:old.license,entry:'index.html',files:files(),compatibility:'unverified',audit:{staticReferencesChecked:true,dynamicReferencesRequireBrowser:true,notices:[]}};
+  });
+  const admin=new Admin(management(),store,ui,undefined,network),auth=await login(admin);
+  const post=(path:string,body:unknown)=>admin.handle(request('/manage/api/'+path,{method:'POST',...auth,body}));
+  const review=await(await post('prepare-update',{id:old.id})).json();assert.equal(review.status,'available');assert.equal(review.pinnedVersion,head);
+  head='c'.repeat(40);
+  const response=await post('install',{reviewId:review.reviewId,noticeVersion:INSTALL_NOTICE_VERSION,acknowledge:true});assert.equal(response.status,200);
+  const installed=store.value.installations[(await response.json()).id];assert.equal(installed.pinnedVersion,'b'.repeat(40));assert.equal(installed.nativeTheme,'future-glass');
+  assert.deepEqual(builds,['b'.repeat(40),'b'.repeat(40)]);assert.equal(headCalls,1);assert.equal(store.value.active,old.id);
+  const result=await post('native-theme',{id:installed.id,generation:store.value.generation,theme:'future-meow'});assert.equal(result.status,200);
+  assert.equal(store.value.installations[installed.id].nativeTheme,'future-meow');
+});
+
+test('authenticated state exposes appearance choices from each installed native package, including existing installs',async()=>{
+  const store=new MemoryStore(),admin=new Admin(management(),store,ui);
+  const themeFiles=[...files(),{path:'assets/main.css',bytes:encoder.encode(':root.theme-sweet{color:pink}'),contentType:'text/css'}];
+  const item=installation(0,{ecosystem:'native',protocolProfile:'mmwx-native-v1',nativeTheme:'future-custom',files:Object.fromEntries(themeFiles.map(f=>[f.path,{size:f.bytes.length,contentType:f.contentType}]))});
+  await commitInstallation(store,item,themeFiles);
+  assert.equal((await admin.handle(request('/manage/api/state'))).status,401);
+  const session=await login(admin),before=await store.state();
+  const response=await admin.handle(request('/manage/api/state',{cookie:session.cookie}));assert.equal(response.status,200);
+  const result=await response.json();
+  assert.deepEqual(result.nativeAppearances[item.id],{status:'detected',options:[{id:'sweet',label:'天真'}]});
+  assert.equal(result.installations[item.id].nativeTheme,'future-custom');assert.deepEqual(await store.state(),before);
 });

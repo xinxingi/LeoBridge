@@ -1,3 +1,4 @@
+import { isNativeTheme, type NativeTheme } from '../core/presentation.ts';
 import { BridgeError } from '../core/errors.ts';
 import { errorResponse,json } from '../core/http.ts';
 import { commitInstallation,publicThemeState,sha256,INSTALL_NOTICE_VERSION,INSTALL_NOTICE_TEXT,type ThemeStore,type Installation,type InstallReview } from '../themes/store.ts';
@@ -5,6 +6,7 @@ import { installationUrl,type ManagementConfig } from './config.ts';
 import { fetchCatalog,ThemePackageError } from '../themes/catalog.ts';
 import { StoreNetwork } from './store-network.ts';
 import { CatalogStars } from '../themes/stars.ts';
+import { NativeAppearanceIndex, type NativeAppearances } from '../themes/native-appearances.ts';
 import type { SourceManagement } from './source.ts';
 
 import { DEFAULT_ADMIN_PASSWORD,constantEqual,hashPassword,validatePassword,verifyPassword } from './password.ts';
@@ -13,6 +15,7 @@ export class Admin {
   private attempts=new Map<string,{count:number;until:number}>();
   private installing=false;
   private stars=new CatalogStars();
+  private nativeAppearances=new NativeAppearanceIndex();
   constructor(readonly config:ManagementConfig,readonly store:ThemeStore,private loadUi:(path:string)=>Promise<Response>,private source?:SourceManagement,private network=new StoreNetwork(store)){ }
   private cookieName(){return this.config.routing==='single'?(this.config.adminOrigin.startsWith('https:')?'__Secure-leobridge_admin_path':'leobridge_admin_path'):(this.config.adminOrigin.startsWith('https:')?'__Host-leobridge_admin':'leobridge_admin_local');}
   private cookie(value:string,maxAge=14400){return `${this.cookieName()}=${value}; Path=${this.config.routing==='single'?'/admin':'/'}; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${this.config.adminOrigin.startsWith('https:')?'; Secure':''}`;}
@@ -33,7 +36,7 @@ export class Admin {
       }
       if(!url.pathname.startsWith('/manage/api/')){
         if(request.method!=='GET')throw new BridgeError('METHOD_NOT_ALLOWED',405,'请求方法不支持。');
-        if(!['/','/app.js','/appearance.js','/styles.css','/logo.svg'].includes(url.pathname))return new Response('Not found',{status:404});
+        if(!['/','/app.js','/data-interfaces.js','/appearance.js','/styles.css','/logo.svg'].includes(url.pathname))return new Response('Not found',{status:404});
         return this.secure(await this.loadUi(url.pathname==='/'?'index.html':url.pathname.slice(1)));
       }
       if(request.method!=='GET'&&request.headers.get('origin')!==this.config.adminOrigin)throw new BridgeError('ORIGIN_REJECTED',403,'管理操作必须来自管理站本身。');
@@ -86,11 +89,33 @@ export class Admin {
       }
       if(url.pathname==='/manage/api/state'&&request.method==='GET'){
         const state=publicThemeState(await this.store.state());
-        return this.secure(json({...state,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:this.config.routing==='single'&&id===state.active?this.config.displayOrigin:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));
+        const nativeAppearances: Record<string, NativeAppearances> = {};
+        for(const item of Object.values(state.installations))if(item.ecosystem==='native')nativeAppearances[item.id]=await this.nativeAppearances.read(this.store,item);
+        return this.secure(json({...state,nativeAppearances,supportsUninstall:this.store.supportsUninstall===true,displayOrigin:this.config.displayOrigin,links:Object.fromEntries(Object.keys(state.installations).map(id=>[id,{display:this.config.routing==='single'&&id===state.active?this.config.displayOrigin:installationUrl(this.config,id),preview:installationUrl(this.config,id,true)}]))}));
       }
       if(url.pathname==='/manage/api/catalog'&&request.method==='GET'){
         const ecosystem=url.searchParams.get('ecosystem');if(ecosystem!=='cfsm'&&ecosystem!=='komari'&&ecosystem!=='native')throw new BridgeError('ECOSYSTEM',400,'请选择原生、CFSM或Komari主题。');
         return this.secure(json(await this.network.run(async fetcher=>this.stars.enrich(await fetchCatalog(ecosystem,fetcher,{latest:true,refresh:url.searchParams.get('refresh')==='1'}),fetcher,url.searchParams.get('refresh')==='1'))));
+      }
+      if(url.pathname==='/manage/api/prepare-update'&&request.method==='POST'){
+        if(typeof body.id!=='string')throw new BridgeError('BAD_REQUEST',400,'请选择已安装版本。');
+        const state=await this.store.state(),item=state.installations[body.id];
+        if(!item)throw new BridgeError('THEME_NOT_INSTALLED',404,'该版本已不存在，请刷新。');
+        if(!item.themeId||item.bundled)throw new BridgeError('UPDATE_SOURCE_UNKNOWN',409,'此历史安装没有可核对的商店标识，请从对应商店选择并安装新版。');
+        if(this.installing)throw new BridgeError('INSTALL_BUSY',409,'当前有下载或删除任务，请稍后重试。');
+        this.installing=true;
+        try{
+          const catalog=await this.network.run(fetcher=>fetchCatalog(item.ecosystem,fetcher,{latest:true,refresh:true,...(item.ecosystem==='native'?{nativeThemeId:item.themeId}:{})}));
+          const entry=catalog.entries.find(entry=>entry.id===item.themeId);
+          if(!entry)throw new BridgeError('UPDATE_NOT_LISTED',404,'官方目录已不再收录此主题，请保留现有版本或查看上游来源。');
+          if(!entry.canAttemptInstall)throw new BridgeError('UPDATE_UNAVAILABLE',409,'官方目录中的此主题当前不可安装，请查看商店说明。');
+          if(item.ecosystem==='native'&&item.pinnedVersion===entry.catalogRevision)return this.secure(json({status:'current',message:'已是上游最新原生主题版本。'}));
+          const pkg=await this.network.install(item.ecosystem,item.themeId,{expectedCatalogRevision:entry.catalogRevision});
+          if(pkg.digest===item.packageDigest)return this.secure(json({status:'current',message:'当前安装与商店提供的版本及内容一致，无需更新。'}));
+          const review:InstallReview={id:token(),expires:Date.now()+15*60_000,ecosystem:item.ecosystem,themeId:item.themeId,catalogRevision:entry.catalogRevision,pinnedVersion:pkg.pinnedVersion,digest:pkg.digest,noticeVersion:INSTALL_NOTICE_VERSION,updateOf:item.id};
+          await this.store.command({type:'review',sessionId:session.id,review});
+          return this.secure(json({status:'available',reviewId:review.id,expires:review.expires,name:pkg.name,source:pkg.source,catalogSource:pkg.catalogSource,pinnedVersion:pkg.pinnedVersion,previousVersion:item.pinnedVersion,license:pkg.license,digest:pkg.digest,noticeVersion:INSTALL_NOTICE_VERSION,noticeText:INSTALL_NOTICE_TEXT,resourceNotices:pkg.audit.notices}));
+        }finally{this.installing=false;}
       }
       if(url.pathname==='/manage/api/prepare-install'&&request.method==='POST'){
         const ecosystem=body.ecosystem;
@@ -119,6 +144,21 @@ export class Admin {
           const id=(await sha256(`${ecosystem}:${protocolProfile}:${pkg.id}`)).slice(0,32);
           const item:Installation={id,title:pkg.name,ecosystem,source:pkg.source,pinnedVersion:pkg.pinnedVersion,catalogRevision:review.catalogRevision,themeId:pkg.themeId,manifest:pkg.manifest,configuration:pkg.configuration,resourceNotices:pkg.audit.notices,remoteFiles:pkg.remoteFiles,dependencySources:pkg.dependencySources,protocolProfile,license:pkg.license,packageDigest:pkg.digest,entry:pkg.entry,installedAt:new Date().toISOString(),compatibility:'unverified',files:Object.fromEntries(pkg.files.map(f=>[f.path,{contentType:f.contentType,size:f.bytes.byteLength}])),bundled:false};
           await commitInstallation(this.store,item,pkg.files,false,{sessionId:session.id,id:review.id});return this.secure(json({ok:true,id}));
+        }finally{this.installing=false;}
+      }
+      if(url.pathname==='/manage/api/native-theme'&&request.method==='POST'){
+        if(typeof body.id!=='string'||!Number.isSafeInteger(body.generation)||!isNativeTheme(body.theme))throw new BridgeError('BAD_REQUEST',400,'原生外观或版本信息无效。');
+        const state=await this.store.command({type:'native-theme',id:body.id,theme:body.theme as NativeTheme,expectedGeneration:body.generation as number,sessionId:session.id});
+        return this.secure(json(publicThemeState(state)));
+      }
+      if(url.pathname==='/manage/api/uninstall'&&request.method==='POST'){
+        if(typeof body.id!=='string'||!Number.isSafeInteger(body.generation)||body.confirmed!==true)throw new BridgeError('BAD_REQUEST',400,'请确认要删除的主题版本。');
+        if(!this.store.supportsUninstall)throw new BridgeError('UNINSTALL_UNSUPPORTED',409,'当前运行环境尚不支持删除主题资源，请使用Node运行包或Docker。');
+        if(this.installing)throw new BridgeError('INSTALL_BUSY',409,'当前有下载或删除任务，请稍后重试。');
+        this.installing=true;
+        try{
+          const state=await this.store.command({type:'uninstall',id:body.id,expectedGeneration:body.generation as number,sessionId:session.id,acknowledgePrevious:body.acknowledgePrevious===true});
+          return this.secure(json({ok:true,cleanupPending:state.pendingAssetCleanup?.includes(body.id)===true}));
         }finally{this.installing=false;}
       }
       if(url.pathname==='/manage/api/activate'&&request.method==='POST'){

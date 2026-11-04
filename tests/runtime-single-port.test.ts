@@ -50,7 +50,7 @@ function request(port: number, host: string, path: string, options: { method?: s
   });
 }
 
-test('Node single port: root probe, admin path, active protocol switch and restart (synthetic only)', { timeout: 45_000 }, async t => {
+for(const scheme of ['http','https'] as const)test(`Node single port ${scheme}: root probe, admin path, active protocol switch and restart (synthetic only)`, { timeout: 45_000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'leobridge-node-runtime-'));
   const assets = join(directory, 'bundled'), store = join(directory, 'store'), envFile = join(directory, 'runtime.env');
   const children: ChildProcess[] = [], downstream = new Set<WebSocket>();
@@ -110,9 +110,9 @@ test('Node single port: root probe, admin path, active protocol switch and resta
   await writeFile(join(assets, 'index.json'), JSON.stringify(definitions));
   await mkdir(join(assets, '_management')); await writeFile(join(assets, '_management/index.html'), '<html>Synthetic admin fixture</html>');
   const configuration = {
-    BRIDGE_NODE_MODE: 'direct', BRIDGE_ROUTING: 'single', BRIDGE_ORIGIN: `http://${displayHost}`, BRIDGE_LISTEN_HOST: '127.0.0.1', BRIDGE_LISTEN_PORT: String(port), BRIDGE_ACCESS: 'public',
-    BRIDGE_ADMIN_ORIGIN: `http://${adminHost}`, BRIDGE_DISPLAY_ORIGIN: `http://${displayHost}`, BRIDGE_DISPLAY_DOMAIN: 'themes.example.test',
-    BRIDGE_PREVIEW_ORIGIN: 'http://preview.example.test', BRIDGE_ASSETS_DIR: assets, BRIDGE_THEME_STORE: store,
+    BRIDGE_NODE_MODE: 'direct', BRIDGE_ROUTING: 'single', BRIDGE_ORIGIN: `${scheme}://${displayHost}`, BRIDGE_LISTEN_HOST: '127.0.0.1', BRIDGE_LISTEN_PORT: String(port), BRIDGE_ACCESS: 'public',
+    BRIDGE_ADMIN_ORIGIN: `${scheme}://${adminHost}`, BRIDGE_DISPLAY_ORIGIN: `${scheme}://${displayHost}`, BRIDGE_DISPLAY_DOMAIN: 'themes.example.test',
+    BRIDGE_PREVIEW_ORIGIN: `${scheme}://preview.example.test`, BRIDGE_ASSETS_DIR: assets, BRIDGE_THEME_STORE: store,
   };
   await mkdir(store,{recursive:true});
   await writeFile(join(store,'state.json'),JSON.stringify({...emptyThemeState(),adminCredential:await hashPassword(password,1),source:{version:1,baseUrl:`http://127.0.0.1:${upstreamPort}`,token:'synthetic-probe-token',bindings:snapshot.servers.map((server:{name:string})=>({id:server.name,match:{name:server.name}})),pingTargets:{}}}),{mode:0o600});
@@ -121,7 +121,7 @@ test('Node single port: root probe, admin path, active protocol switch and resta
     // Whitelist the child environment: no inherited .dev.vars or network proxy settings.
     const entry = process.env.BRIDGE_TEST_BUILT_NODE === '1' ? ['dist/node.js'] : ['--import', 'tsx', 'src/runtime/node.ts'];
     const child = spawn(process.execPath, entry, {
-      cwd: root, env: { BRIDGE_ENV_FILE: envFile, BRIDGE_NODE_MODE: 'direct', BRIDGE_ROUTING: 'single', BRIDGE_ORIGIN: `http://${displayHost}`, NODE_NO_WARNINGS: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: root, env: { BRIDGE_ENV_FILE: envFile, BRIDGE_NODE_MODE: 'direct', BRIDGE_ROUTING: 'single', BRIDGE_ORIGIN: `${scheme}://${displayHost}`, NODE_NO_WARNINGS: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     children.push(child); let output = '', exited = false;
     child.stdout.on('data', data => { output = (output + data.toString()).slice(-12_000); });
@@ -159,7 +159,7 @@ test('Node single port: root probe, admin path, active protocol switch and resta
   assert.equal(response.status, 200); assert.equal(response.json.preview, true); assert.equal(response.json.id, cfsmId);
   assert.equal((await request(port, cfsmHost, '/admin/api/state')).status, 404);
   assert.equal((await request(port, adminHost, '/admin/api/state')).status, 401);
-  const adminHeaders = { Origin: `http://${adminHost}` };
+  const adminHeaders = { Origin: `${scheme}://${adminHost}` };
   response = await request(port, adminHost, '/admin/api/login', { method: 'POST', headers: adminHeaders, body: { username: 'admin', password } });
   assert.equal(response.status, 200, response.text);
   if(response.json.mustChangePassword){
@@ -171,10 +171,12 @@ test('Node single port: root probe, admin path, active protocol switch and resta
     assert.equal(response.status,200,response.text);
   }
   const setCookie = response.headers['set-cookie']![0]!;
-  assert.match(setCookie, /^leobridge_admin_path=/); assert.match(setCookie, /; Path=\/admin;/); assert.doesNotMatch(setCookie, /; Secure/); assert.match(setCookie, /; HttpOnly/); assert.doesNotMatch(setCookie, /Domain=/i);
+  assert.match(setCookie,scheme==='https'?/^__Secure-leobridge_admin_path=/:/^leobridge_admin_path=/); assert.match(setCookie, /; Path=\/admin;/); assert.equal(/; Secure/.test(setCookie),scheme==='https'); assert.match(setCookie, /; HttpOnly/); assert.doesNotMatch(setCookie, /Domain=/i);
   const session = { ...adminHeaders, Cookie: setCookie.split(';')[0]!, 'X-CSRF-Token': response.json.csrf };
+  assert.equal((await request(port,adminHost,'/admin/api/logout',{method:'POST',headers:{...session,Origin:'https://evil.example.test'},body:{}})).status,403);
+  assert.equal((await request(port,adminHost,'/admin/api/logout',{method:'POST',headers:{...session,'X-CSRF-Token':'invalid'},body:{}})).status,403);
   const state = await request(port, adminHost, '/admin/api/state', { headers: session });
-  assert.equal(state.json.links[komariId].preview,`http://${displayHost}/?__preview=${komariId}`);
+  assert.equal(state.json.links[komariId].preview,`${scheme}://${displayHost}/?__preview=${komariId}`);
   assert.equal((await request(port,displayHost,`/__bridge/version?__preview=${komariId}`)).json.id,komariId);
   assert.equal(state.json.active, cfsmId); assert.equal(Object.keys(state.json.installations).length, 2); assert.equal(state.json.sessions, undefined);
   response = await request(port, cfsmHost, '/api/history/all?id=fixture-online&hours=1');
@@ -185,7 +187,7 @@ test('Node single port: root probe, admin path, active protocol switch and resta
   assert.equal(historyRequests[0]!.searchParams.get('metric'), 'system'); assert.equal(historyRequests[0]!.searchParams.get('range'), '1h');
 
   async function openSocket(host: string, path: string) {
-    const socket = new WebSocket(`ws://127.0.0.1:${port}${path}`, { headers: { Host: host, Origin: `http://${host}`, 'X-Forwarded-Proto': 'https' }, handshakeTimeout: 3000 });
+    const socket = new WebSocket(`ws://127.0.0.1:${port}${path}`, { headers: { Host: host, Origin: `${scheme}://${host}` }, handshakeTimeout: 3000 });
     downstream.add(socket); const messages: any[] = []; const errors: Error[] = [];
     socket.on('message', data => messages.push(JSON.parse(data.toString()))); socket.on('error', error => errors.push(error));
     await new Promise<void>((accept, reject) => { socket.once('open', accept); socket.once('error', reject); });

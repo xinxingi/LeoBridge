@@ -1,6 +1,6 @@
 {
   "name": "leobridge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -19,7 +19,7 @@
     "verify:live": "node --import tsx scripts/verify-live.ts",
     "check:architecture": "node scripts/check-architecture.mjs",
     "build:worker": "esbuild src/runtime/worker.ts --bundle --platform=browser --format=esm --outfile=dist/worker.js",
-    "test:runtime": "node --import tsx --test tests/runtime-node.test.ts tests/runtime-single-port.test.ts tests/runtime-source-setup.test.ts",
+    "test:runtime": "node --import tsx --test tests/runtime-node.test.ts tests/runtime-single-port.test.ts tests/runtime-source-setup.test.ts tests/runtime-config.test.ts",
     "package:local": "node --import tsx scripts/package-local.ts"
   },
   "dependencies": {

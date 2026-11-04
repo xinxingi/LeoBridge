@@ -9,7 +9,10 @@ export function managementConfig(env:Env):ManagementConfig {
   const config: ManagementConfig = {routing,adminOrigin:routing === 'single' ? displayOrigin : env.BRIDGE_ADMIN_ORIGIN || 'http://admin.localhost:8786',displayOrigin,displayDomain:env.BRIDGE_DISPLAY_DOMAIN || 'display.localhost',previewOrigin:env.BRIDGE_PREVIEW_ORIGIN || (routing === 'single' ? displayOrigin : 'http://preview.localhost:8789'),username:env.BRIDGE_ADMIN_USERNAME || 'admin'};
   const local=(host:string)=>host==='localhost'||host.endsWith('.localhost')||host==='127.0.0.1';
   for(const key of ['adminOrigin','displayOrigin','previewOrigin'] as const){
-    const url=new URL(config[key]);if(url.origin!==config[key]||url.username||url.password||(!local(url.hostname)&&url.protocol!=='https:'&&!(routing==='single'&&env.BRIDGE_NODE_MODE==='direct'&&url.protocol==='http:')))throw new BridgeError('MANAGEMENT_CONFIGURATION',503,'管理和展示源必须是独立HTTPS源，本机可使用HTTP。');
+    let url:URL;
+    try{url=new URL(config[key]);}catch{throw new BridgeError('MANAGEMENT_CONFIGURATION',503,'站点源格式无效，请填写协议、主机及可选端口，不含路径、查询参数或凭据。');}
+    if(!['http:','https:'].includes(url.protocol)||url.origin!==config[key]||url.username||url.password)throw new BridgeError('MANAGEMENT_CONFIGURATION',503,'站点源须为 HTTP/HTTPS 地址，不含末尾斜杠、路径、查询参数或凭据。');
+    if(!local(url.hostname)&&url.protocol!=='https:'&&!(routing==='single'&&env.BRIDGE_NODE_MODE==='direct'))throw new BridgeError('MANAGEMENT_CONFIGURATION',503,'远程站点须使用 HTTPS 反代；HTTP 直连须显式设置 BRIDGE_NODE_MODE=direct 和 BRIDGE_ROUTING=single。');
   }
   const admin=new URL(config.adminOrigin),display=new URL(config.displayOrigin),preview=new URL(config.previewOrigin);
   if((routing!=='single'&&admin.hostname===display.hostname)||(admin.hostname===preview.hostname&&!(routing==='single'&&preview.origin===display.origin))||admin.hostname===config.displayDomain||admin.hostname.endsWith(`.${config.displayDomain}`)||admin.hostname.endsWith(`.${preview.hostname}`)||preview.hostname===config.displayDomain||!/^[a-z0-9.-]+$/.test(config.displayDomain))throw new BridgeError('ORIGIN_ISOLATION',503,'后台、展示与预览必须使用不同主机名，不能仅分端口或路径。');

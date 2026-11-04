@@ -1,16 +1,18 @@
-![LeoBridge — 一份探针数据，两种主题体验。妙妙屋X桥接 CFSM / Komari。](docs/assets/readme-banner.png)
+![LeoBridge — 一份探针数据，多种主题体验。妙妙屋 X / CFSM / Komari。](docs/assets/readme-banner.png)
 
 # LeoBridge
 
-让妙妙屋X的探针数据，使用 CF-Server-Monitor 和 Komari 的主题展示。
+一份妙妙屋X探针数据，自由选择官方原生、CF-Server-Monitor 或 Komari 主题。
 
-LeoBridge 只读访问妙妙屋X探针 API，提供独立的 CFSM / Komari 展示协议和主题管理后台。采集、服务器管理和历史保存仍由妙妙屋X负责，无需安装新的 Agent。
+LeoBridge 只读访问妙妙屋X探针 API，通过独立的原生、CFSM 和 Komari 展示协议，统一管理主题安装、预览、切换与回退。采集、服务器管理和历史保存仍由妙妙屋X负责，无需安装新的 Agent。
 
 ## 功能
 
 **网页配置数据源**：填写主控地址和 Token，检查连接、核对节点身份及 Ping 目标后保存。
 
 ![数据源设置：演示主控已连接并保存三个节点身份](docs/assets/screenshots/source-settings.jpg)
+
+**官方原生主题**：接入[妙妙屋 X 原生探针前台](docs/research/native-theme.md)，直接使用原生 API 展示数据。外观可跟随主控，也可按安装版本独立选择；已核对的源码提供像素、扁平、二次元和高级黑金外观。
 
 **双生态主题商店**：浏览 CFSM 与 Komari 主题，查看来源、固定版本和许可信息后按需安装。
 
@@ -20,18 +22,18 @@ LeoBridge 只读访问妙妙屋X探针 API，提供独立的 CFSM / Komari 展�
 
 **状态、历史与实时更新**：转换已有探针数据，缺失指标保持未知，历史空缺不补点；支持 WebSocket 和 HTTP 回退。
 
-源码已补充[妙妙屋 X 原生主题](docs/research/native-theme.md)，通过原生API展示，使用同一安装、预览、切换及回退流程；此功能尚未包含在下方v0.2.0发行产物中。
+以上介绍包含当前源码能力，发行产物的功能范围以对应版本的发行说明为准。若所选版本尚未包含所需功能，可按[开发构建指南](docs/development/build.md)运行当前源码。
 
 项目默认不内置第三方主题。商店收录或安装成功不代表兼容，具体能力以[兼容说明](docs/research/compatibility.md)为准。
 
 ## 快速开始
 
-当前版本为 **v0.2.0**，提供两种安装方式：
+发行产物提供两种安装方式，版本与更新说明见以下发布页面：
 
 | 方式 | 获取产物 | 安装说明 |
 | --- | --- | --- |
-| Linux 运行包 | [GitHub Release](https://github.com/xinxingi/LeoBridge/releases/tag/v0.2.0)，选择 x64 或 arm64 附件 | [下载、校验与启动](docs/deployment/local.md) |
-| Docker | [staractive/leobridge:0.2.0](https://hub.docker.com/r/staractive/leobridge/tags)，支持 amd64、arm64 | [Compose 部署](docs/deployment/docker.md) |
+| Linux 运行包 | [GitHub Releases](https://github.com/xinxingi/LeoBridge/releases)，选择所需版本的 x64 或 arm64 附件 | [下载、校验与启动](docs/deployment/local.md) |
+| Docker | [staractive/leobridge](https://hub.docker.com/r/staractive/leobridge/tags)，选择所需版本标签，支持 amd64、arm64 | [Compose 部署](docs/deployment/docker.md) |
 
 Release附件受GitHub仓库访问权限控制，私有仓库需先用有权限的账号登录；Docker Hub镜像可匿名拉取。
 
@@ -48,7 +50,11 @@ Release附件受GitHub仓库访问权限控制，私有仓库需先用有权限�
 3. 进入 CFSM 或 Komari 商店，点击「查看安装」，在弹窗阅读来源与许可信息，勾选确认后安装主题。
 4. 预览主题，确认显示正常后启用，打开 [展示首页](http://127.0.0.1:8787/)。
 
-新用户无需预填主控地址或Token到配置文件。日后改密码、换主控都在后台操作，保存后立即生效；后台不会回写配置文件。运行包默认把这些状态保存在 `work/theme-store`，Docker保存在持久卷，重启和升级继续沿用。密码和数据源统一保存到同一个`state.json`，不读取环境变量中的初始配置，详见[配置在哪里修改和保存](docs/configuration.md#配置在哪里修改和保存)。
+运行当前源码时，也可从「原生主题商店」安装官方原生前台，沿用上述预览与启用流程。
+
+通过Caddy/nginx域名访问时，只需填写实际HTTPS站点地址`BRIDGE_ORIGIN`，应用仍接收HTTP，按[Docker反代步骤](docs/deployment/docker.md#对接已有反向代理)完成配置与重载。
+
+新用户无需预填主控地址或Token到配置文件。日后改密码、换主控都在后台操作，保存后立即生效；后台不会回写配置文件。运行包、源码默认把这些状态保存在当前目录的 `./data`，Docker也绑定Compose旁的 `./data`（不使用命名卷），重启和升级继续沿用。密码和数据源统一保存到同一个`state.json`，不读取环境变量中的初始配置，详见[配置在哪里修改和保存](docs/configuration.md#配置在哪里修改和保存)。
 
 默认端口只供部署机器本机访问。在远程服务器部署时，先通过SSH隧道访问后台，或按[单域名反代](docs/deployment/reverse-proxy.md)配置HTTPS。展示、管理和预览默认同源，只应安装和预览可信主题。
 
@@ -73,6 +79,7 @@ Release附件受GitHub仓库访问权限控制，私有仓库需先用有权限�
 
 感谢以下项目的作者与贡献者：
 
+- [妙妙屋 X 原生探针前台](https://github.com/mmwx-group/mmwx-probe)：提供官方原生前台与原生外观。
 - [CF-Server-Monitor（CFSM）](https://github.com/huilang-me/CF-Server-Monitor)：提供前台、主题规范与主题生态。
 - [Komari](https://github.com/komari-monitor/komari)：提供公开展示协议、主题机制与主题生态。
 

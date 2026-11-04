@@ -95,9 +95,10 @@ Default admin URL: http://127.0.0.1:8787/admin/
 - BRIDGE_LISTEN_PORT、BRIDGE_ADMIN_USERNAME、BRIDGE_TITLE、BRIDGE_THEME_STORE等运行参数，
   修改后执行 ./leobridge.sh restart。环境变量优先于同名文件项。
 - 管理密码和数据源只在后台设置，统一保存在state.json，立即生效且不回写.dev.vars。
-- BRIDGE_THEME_STORE默认work/theme-store；切换目录不迁移原数据，升级须保留原目录。
-Data: work/theme-store (includes credentials). Logs and control state: work/local.
-Stop before backing up or upgrading. Preserve all of work/theme-store and your
+- BRIDGE_THEME_STORE默认data；切换目录不迁移原数据，升级须保留原目录。
+Older releases used work/theme-store. Move the full directory while stopped, or explicitly set BRIDGE_THEME_STORE to keep it.
+Data: ./data (includes credentials). Logs and control state: work/local.
+Stop before backing up or upgrading. Preserve all of data and your
 private configuration; never copy work/local control state to another instance.
 Start only one instance per data directory. No automatic restart or boot service.
 Node's notices are in runtime/LICENSE; dependency licenses are in node_modules.

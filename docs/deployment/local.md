@@ -62,16 +62,22 @@ cd leobridge-0.2.0-linux-x64
 
 `BRIDGE_ADMIN_USERNAME`始终决定用户名；管理密码与数据源只在后台设置，统一保存到状态文件，重启保留。旧初始化变量已移除，迁移见[配置在哪里修改和保存](../configuration.md#配置在哪里修改和保存)。
 
-默认`work/theme-store`保存全部主题、active/previous、管理密码摘要、会话及数据源凭据。可用`BRIDGE_THEME_STORE`指定独立持久目录。`work/local`仅保存日志和进程控制记录；不要在运行中删除它，也不要把它复制为新实例的控制记录。
+默认`data`保存全部主题、active/previous、管理密码摘要、会话及数据源凭据。可用`BRIDGE_THEME_STORE`指定独立持久目录。`work/local`仅保存日志和进程控制记录；不要在运行中删除它，也不要把它复制为新实例的控制记录。
 
-脚本始终以解压目录为工作目录。默认local模式读取该目录的私有`.dev.vars`；字段用途和分类可参考[.dev.vars示例](../../.dev.vars.example)，运行包的生效命令使用`./leobridge.sh restart`，无需执行示例中的开发命令。proxy/direct模式使用显式`BRIDGE_ENV_FILE`。环境变量优先于文件。端口默认8787，例如在`.dev.vars`写`PORT=8788`后restart生效；已有显式origin或监听配置优先。临时命令`PORT=8788 ./leobridge.sh start`不保存该变量，下次restart需要再次提供，因此长期参数建议保存在私有文件中。
+脚本始终以解压目录为工作目录。默认local模式读取该目录的私有`.dev.vars`；字段用途和分类可参考[.dev.vars示例](../../.dev.vars.example)，运行包的生效命令使用`./leobridge.sh restart`，无需执行示例中的开发命令。NODE_ENV=production或proxy/direct模式不自动读取`.dev.vars`，需要文件时使用显式`BRIDGE_ENV_FILE`。环境变量优先于文件。端口默认8787，例如在`.dev.vars`写`PORT=8788`后restart生效；已有显式origin或监听配置优先。临时命令`PORT=8788 ./leobridge.sh start`不保存该变量，下次restart需要再次提供，因此长期参数建议保存在私有文件中。
 
 配置文件、状态备份和日志应限制访问，不原样贴到工单。已有后台配置、管理密码和稳定节点ID均随业务状态保留，不随重启重新生成。
+
+启动前可按[配置预检查](../configuration.md#启动前检查新版)验证参数；该命令需包含部署优化的新版运行包。
+
+旧版本使用work/theme-store；升级前按[旧数据目录迁移](../configuration.md#旧数据目录迁移)处理，或显式沿用旧路径，避免生成空状态。
+
+若使用[systemd示例](../../deploy/systemd/leobridge.service)，程序目录为/opt/leobridge/current，配置与数据分别放在该目录的runtime.env和data；先由管理员创建data并将所有权交给leobridge服务账号、权限设为0700。服务使用包内Node，ReadWritePaths只放行该data目录。更换current指向前停机、完整迁移数据，或显式使用固定数据路径并同步ReadWritePaths。
 
 ## 备份、升级和回退
 
 1. 下载并核对新版本运行包，解压到新目录，保留旧版本。
-2. 在旧目录执行stop，备份完整`work/theme-store`及私有配置。只备份state.json或程序文件不够，主题资源也必须保留。
+2. 在旧目录执行stop，备份完整`data`及私有配置。只备份state.json或程序文件不够，主题资源也必须保留。
 3. 将完整业务状态和配置迁移到新目录，或让新包的`BRIDGE_THEME_STORE`指向原独立数据目录的绝对路径。不要复制旧work/local进程记录，不要同时启动两个写入者。
 4. 从新目录start，验证管理登录、数据源、主题资源及历史/实时功能，确认正常后再清理旧包。
 
@@ -81,4 +87,4 @@ cd leobridge-0.2.0-linux-x64
 
 应用只负责HTTP监听和持久化，不管理域名、DNS或证书。需要对外访问时，由部署者配置nginx或Caddy提供反向代理、HTTPS及证书续期；DNS在域名服务商处配置。默认single模式的展示、后台和预览只需同一个域名、同一个反代端口，配置示例见[单域名反代](reverse-proxy.md)。
 
-按[Node运行参数](../configuration.md#node运行参数)设置proxy模式、访问源和可信代理地址。连接、身份及图表问题见[排障指南](../troubleshooting.md)。
+按[Node运行参数](../configuration.md#node运行参数)设置访问源及展示策略；默认HTTP监听可接入HTTPS反代，无需设置proxy或可信代理地址。连接、身份及图表问题见[排障指南](../troubleshooting.md)。

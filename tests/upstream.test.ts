@@ -26,7 +26,7 @@ test('upstream uses only configured origin, puts token in headers, and rejects r
 
 test('HTTP, transport, schema and disabled errors remain distinct without exposing body or secrets', async () => {
   for (const [fetcher, code] of [
-    [async () => new Response('synthetic-secret at upstream.example.test', { status: 403 }), 'UPSTREAM_HTTP'],
+    [async () => new Response('synthetic-secret at upstream.example.test', { status: 403 }), 'UPSTREAM_AUTH'],
     [async () => { throw new Error('synthetic-secret at upstream.example.test'); }, 'UPSTREAM_UNAVAILABLE'],
     [async () => new Response('synthetic-secret invalid json'), 'UPSTREAM_SCHEMA'],
     [async () => Response.json({ enabled: true, servers: [null] }), 'UPSTREAM_SCHEMA'],
@@ -60,6 +60,21 @@ test('timeout aborts fetch and is reported separately from unavailable', async t
   t.mock.timers.tick(51);
   await result;
   assert.equal(signal?.aborted, true);
+});
+
+test('source access errors give actionable guidance without claiming every 404 means an expired token',async()=>{
+  for(const status of [401,403,404,500]){
+    const upstream=new Upstream(config(),async()=>new Response('synthetic-secret',{status}));
+    await assert.rejects(upstream.snapshot(),error=>{
+      assert.ok(error instanceof BridgeError);
+      assert.equal(error.status,502);
+      assert.equal(error.code,status===404?'UPSTREAM_NOT_FOUND':status===500?'UPSTREAM_HTTP':'UPSTREAM_AUTH');
+      assert.doesNotMatch(error.message,/synthetic-secret/);
+      if(status!==500)assert.match(error.message,/Token 可能已失效.*设置 → 数据源/);
+      if(status===404)assert.match(error.message,/主控地址.*独立探针接口/);
+      return true;
+    });
+  }
 });
 
 test('native connect, headers, body and socket timeouts become sanitized 504 responses before the bridge deadline', async t => {

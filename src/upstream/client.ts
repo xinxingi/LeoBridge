@@ -24,6 +24,8 @@ export class Upstream {
           if(attempt>0||controller.signal.aborted)throw error;
         }
       }
+      if ([401,403].includes(response.status)) throw new BridgeError('UPSTREAM_AUTH',502,'主控拒绝访问，数据源 Token 可能已失效或无权访问。请管理员在后台「设置 → 数据源」更新 Token，检查连接后保存。');
+      if (response.status===404) throw new BridgeError('UPSTREAM_NOT_FOUND',502,'主控接口返回 404，数据源 Token 可能已失效。请管理员在后台「设置 → 数据源」核对 Token 和主控地址，检查连接后保存；同时确认主控已开启独立探针接口。');
       if (!response.ok) throw new BridgeError('UPSTREAM_HTTP', 502, `上游读取失败（HTTP ${response.status}）。`);
       const text = await response.text();
       if (text.length > 12_000_000) throw new BridgeError('UPSTREAM_SCHEMA',502,'上游响应超过限制。');

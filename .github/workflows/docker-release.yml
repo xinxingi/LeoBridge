@@ -198,7 +198,6 @@ jobs:
           done
           cat *.sha256 > checksums.txt
           cp ../deploy/docker/compose.yaml compose.yaml
-          cp ../deploy/docker/.env.example docker.env.example
       - name: Create or reuse release and upload verified packages
         env:
           GH_TOKEN: ${{ github.token }}

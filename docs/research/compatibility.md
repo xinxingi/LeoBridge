@@ -1,6 +1,6 @@
 # 兼容范围与限制
 
-LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议。当前发行版本为v0.2.0。兼容证据分为历史适配包与商店原包，发布运行包或镜像不会自动扩大主题兼容范围。
+LeoBridge适配妙妙屋X探针数据，当前源码提供独立的原生、CFSM与Komari展示协议。下文v0.2.0发行产物不包含新增原生主题能力。兼容证据分为历史适配包与商店原包，发布运行包或镜像不会自动扩大主题兼容范围。
 
 ## 2026-11-03 桥接字段接入核对
 
@@ -16,7 +16,17 @@ LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议
 
 ## 原生主题（源码新增，尚未发布）
 
-新增[妙妙屋 X 原生主题](native-theme.md)，固定源码`mmwx-group/mmwx-probe@723427b18ea23a59a923a89155ebe1f3fa3fa824`，与CFSM/Komari一起使用安装、预览、启用和回退流程。数据使用独立原生路由和既有上游API，不经两个外部协议转换。外观跟随主控Pixel/Flat/Anime/Premium设置；不代理主控登录，不改变许可标记。真实11台首页、资源图表及原生实时帧已观察成功，四种外观完成合成浏览器检查；7d Ping接口成功但浏览器曾504后保留旧曲线，Premium部分缺值可显示0，完整边界仍未通过。新安装仍标记未验证；尚未发布到v0.2.0运行包或镜像。
+新增[妙妙屋 X 原生主题](native-theme.md)，历史验收源码`mmwx-group/mmwx-probe@723427b18ea23a59a923a89155ebe1f3fa3fa824`，与CFSM/Komari一起使用安装、预览、启用和回退流程。数据使用独立原生路由和既有上游API，不经两个外部协议转换。原生商店现可直接检查上游更新，无需等待桥接器发布；外观可跟随主控，也可按安装版本选择快捷项或填写上游主题标识；不代理主控登录，不改变许可标记。真实11台首页、资源图表及原生实时帧已观察成功，四种外观完成合成浏览器检查；7d Ping接口成功但浏览器曾504后保留旧曲线，Premium部分缺值可显示0，完整边界仍未通过。新安装仍标记未验证；尚未发布到v0.2.0运行包或镜像。
+
+### 2026-11-04 原生外观来源待澄清
+
+用户转述主控开发者确认主题都有。只读复核公开main `c666d2c3eda502d8174714d86235043b9ea2a8fb`：相对固定`723427b`仅新增Ping表头布局修复，公开分支列表仅main。当前App与styles仍只明确提供Pixel/Flat/Anime/Premium；合法自定义名称可透传成`theme-*`类，不等于具备相应视觉实现。已核对源码未找到Meow/液态玻璃入口，但不据此推断其他发布包或主控内部不存在。用户随后确认作者尚未将相关实现发布到GitHub；等待作者发布相关前台实现后直接安装更新。未更新固定来源、增加可选外观或扩大兼容声明。
+
+### 2026-11-04 社区 · Jiwo来源接入（源码，尚未发布）
+
+原生商店新增[Jiwo Probe · 鸡窝状态站](jiwo-native.md)，来源`chnnic/jiwo-probe`，商店标识`jiwo-probe`；原官方`mmwx-probe`保留。两者按各自main独立检查更新，按来源与固定提交隔离构建缓存；Jiwo整套前台作为一个安装，默认外观按安装版本选择；前台浏览器记住的手动选择优先，前台改选“跟随主控”后才采用后台设置，见[外观优先级](jiwo-native.md#外观优先级)。LeoBridge不收录或搬迁其源码，运行时临时下载构建后清理，仅保存静态产物、许可和资源索引。
+
+审计提交`62cf6932bea20b7ead20c3c2d3b0e44ffdc06b29`已完成真实源码构建：159个产物文件、3707项远程公共资源索引，包含Ran独立地图入口及来源NOTICE。此结果仅证明构建与静态包处理，浏览器及真实上游完整边界验收尚未完成；新安装仍为未验证，不能沿用官方前台或Komari同名主题的兼容结论。Jiwo可选显示配置沿用前台默认值，Node访客地理资料保持未知，不提供主控Passkey登录。仓库LICENSE为MSAL-1.0，安装前继续展示原文及来源声明，不套用LeoBridge的MIT。
 
 ## 历史适配包
 
@@ -27,7 +37,7 @@ LeoBridge适配妙妙屋X探针数据，提供独立的CFSM与Komari展示协议
 | CFSM默认前台 | `609cc0b0998793510453be8eadced2064b28ad7d` | 首页、详情、系统与Ping历史、实时更新 |
 | Komari 官方默认前台 | `bed58b589da63232a17681b1dbaed9eab2423078` | 首页、详情、系统与Ping/丢包历史、实时更新 |
 
-两个历史适配包曾通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见[来源档案](../references/retired-themes/README.md)。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。主题配置编辑、卸载及孤立资源清理UI尚未提供。Komari的raw/redirect声明保留但不在管理页执行，managed默认值按安装版本传入HTTP/WS；尚无配置编辑UI。
+两个历史适配包曾通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见[来源档案](../references/retired-themes/README.md)。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。Node已提供检查更新、单版本删除及失败清理重试；原生更新直接读取上游main并固定本次提交安装，Worker删除、主题配置编辑及失败安装孤立包自动清理尚未提供。Komari的raw/redirect声明保留但不在管理页执行，managed默认值按安装版本传入HTTP/WS；尚无配置编辑UI。
 
 LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服务器管理、终端、远程控制与告警功能。上游Token不提供给主题。single模式的正式主题及预览均与管理后台同源，只应预览和启用可信主题；需要隔离时使用isolated模式。
 
@@ -129,3 +139,31 @@ v0.2.0提供[Docker Hub镜像](../deployment/docker.md)和[Linux x64/arm64运行
 新增`core/prepared-data.ts`及CFSM/Komari的`bridge.data`扩展：资源衍生、带source/scope的流量、日账本汇总、价格月/年折算、UTC日期倒计时、完整源Ping目标桶摘要及公共元信息。中立历史保留累计U/D源桶，两个协议以`bridge.sourceCounters`提供，不假造精确区间增量；Komari扁平近期补load5/load15。标准价格/额度/累计字段和主题开关不强行映射，不扩大实际主题兼容声明。当前剩余基础缺口见[data-gap-audit](data-gap-audit.md)第2类，实施状态见[bridge-field-coverage](bridge-field-coverage.md)文首。
 
 验证：pnpm check（267测试、架构/类型/构建）、构建后Node运行时3项通过；20:44真实响应回放778+189项检查通过。未执行新增实时源调用、浏览器/WS验收、VPS/云部署、推送。价格缺4台、CPU型号缺3台等仍属节点资料/上报覆盖问题，不列为接口整体无能力。
+
+
+## 2026-11-03：部署配置与诊断修复（源码，待发布）
+
+用户反馈生产Caddy反代部署经调整为proxy及实际Docker网关后成功；这是用户提供的部署结果，本轮未操作生产服务器。源码现拒绝direct/local搭配HTTPS源，新增只读配置预检查、脱敏启动原因和首次不可信代理来源日志；NODE_ENV=production不自动读取开发文件。Host/Origin/CSRF与HTTP/WS信任边界保持，临时依赖空间默认调整为512MiB上限。
+
+本地273项测试、构建后4项运行时检查、macOS arm64实际运行包以及Compose配置/已创建网络查询通过；新镜像完整构建受Docker Hub元数据502阻塞，修改后的Compose镜像启动验收未完成。未重新验收真实Caddy/TLS、生产前台或容器原生主题安装，不扩大主题兼容声明。部署步骤见[Docker](../deployment/docker.md)与[反代](../deployment/reverse-proxy.md)。
+
+
+## 2026-11-04：统一配置与本地数据布局（源码，待发布）
+
+Node新实例使用./data，存在旧work/theme-store且未显式选目录时要求迁移；Docker采用`./data:/data:Z`普通目录映射，模板直接填值、不再需要.env。运行包、systemd、只读诊断及文档已同步；Worker示例统一single站点，但持久化仍为R2/DO。proxy内部默认8787与外部HTTPS端口分离，高级隔离配置仍兼容。
+
+274项测试、构建后4项运行时、macOS arm64运行包与实际data持久化通过；缓存完整运行镜像下的新Compose短映射、UID1000写入和重建持久化通过。未构建新镜像、验收SELinux实际标签、systemd服务、生产Caddy或云端，不扩展主题兼容声明。
+
+
+## 2026-11-04：默认HTTP接入简化（源码，待发布）
+
+本条取代前述direct+HTTPS拒绝策略。single的local/direct始终监听HTTP，使用显式站点源协议生成链接和Cookie，支持nginx/Caddy提供的HTTPS公开站点；不信任转发头，继续验证Host、Origin、CSRF，默认按socket来源限流。高级proxy仍保留严格来源/IP识别。Compose仅列BRIDGE_ORIGIN，其余运行默认值放回镜像和程序。
+
+275项测试、构建后5项运行时及新Linux arm64镜像的实际Compose检查通过；真实本机Caddy/TLS下管理登录、改密、Secure Cookie及Origin/CSRF拒绝通过，app只配置站点地址。本轮解除此前镜像构建502阻塞；未发布镜像或更新生产，不代表真实主题兼容或云端验收。
+
+
+## 2026-11-04：原生外观目录发现
+
+原生mmwx-probe固定提交38848348f91d73694894a873ab05f5c282074058已包含sweet（天真）样式；此前LeoBridge管理下拉框硬编码导致更新前台后仍漏项。当前管理state接口按已安装CSS根选择器和JS appearance.theme字面量分支发现选项；无须修改或重装已有包。上游该版本的Worker路由没有完整外观目录，当前appearance只代表当前选择，不能作为全部选项。未来若改变实现约定，静态发现可能不完整，保留自定义ID；不据此标记兼容。
+
+实际旧48e14d0包发现anime/flat/pixel/premium，新38848348包增加sweet。真实新前台在隔离合成源上经管理UI保存sweet，实际粉色波点、28px圆角及阴影显示通过。仅验证本轮选择与渲染，不代表真实主控全功能、新主题生态或生产部署通过。日志和截图work/native-options/；297项项目测试、5项构建后Node运行时、Worker本地打包通过，未执行云端部署。
