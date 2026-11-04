@@ -14,16 +14,16 @@ const request=(path:string)=>new Request('https://view.test'+path);
 test('native catalog resolves upstream main and pins chosen revisions without a bridge allowlist',async()=>{
   let revision='a'.repeat(40),calls=0;
   const fetcher=async()=>{calls++;return Response.json({sha:revision})};
-  const value=await fetchCatalog('native',fetcher,{latest:true,refresh:true});
+  const value=await fetchCatalog('native',fetcher,{latest:true,refresh:true,nativeThemeId:'mmwx-probe'});
   assert.equal(value.entries[0].repositoryUrl,'https://github.com/mmwx-group/mmwx-probe');assert.equal(value.entries[0].compatibility,'unverified');
   assert.equal(value.catalogRevision,revision);assert.equal(value.entries[0].catalogRevision,revision);assert.match(value.source,new RegExp(revision));
   revision='b'.repeat(40);
-  const cached=await fetchCatalog('native',fetcher,{latest:true});assert.equal(cached.catalogRevision,'a'.repeat(40));assert.equal(calls,1);
-  assert.equal((await fetchCatalog('native',fetcher,{latest:true,refresh:true})).catalogRevision,revision);
-  assert.equal((await fetchCatalog('native',fetcher)).catalogRevision,revision);
+  const cached=await fetchCatalog('native',fetcher,{latest:true,nativeThemeId:'mmwx-probe'});assert.equal(cached.catalogRevision,'a'.repeat(40));assert.equal(calls,1);
+  assert.equal((await fetchCatalog('native',fetcher,{latest:true,refresh:true,nativeThemeId:'mmwx-probe'})).catalogRevision,revision);
+  assert.equal((await fetchCatalog('native',fetcher,{nativeThemeId:'mmwx-probe'})).catalogRevision,revision);
   assert.equal((await fetchCatalog('native',fetcher,{revision:'f'.repeat(40)})).catalogRevision,'f'.repeat(40));assert.equal(calls,2);
   await assert.rejects(fetchCatalog('native',fetcher,{revision:'main'}),{code:'CATALOG_REVISION'});
-  await assert.rejects(fetchCatalog('native',async()=>new Response('offline',{status:503}),{latest:true,refresh:true}));
+  await assert.rejects(fetchCatalog('native',async()=>new Response('offline',{status:503}),{latest:true,refresh:true,nativeThemeId:'mmwx-probe'}));
 });
 test('native snapshot retains source units, zero/missing, appearance and source badge, but projects public fields',()=>{
   const service=new NativeService(config()),source=raw(),result=service.snapshot(normalizeSnapshot(source));

@@ -97,6 +97,14 @@ add('native','原生主题实时数据','WS /api/stream','向原生主题发送�
 add('native','原生主题转发链','GET /api/forward','经过公开范围筛选的链路数据。',{
   sources:[snapshotSource,'/api/public/probe-forward'],fields:forwardFields,processing:'查询前后检查名称公开设置与身份；链路字段按白名单输出。',limits:'名称隐藏时返回空链列表；真实链路完整验收尚未完成。',
 });
+add('native','Jiwo 显示配置','GET /api/theme-config','社区 Jiwo 前台的可选显示配置入口。',{
+  fields:[['响应对象 {}','使用当前安装前台自带的显示默认值','桥接生成','对象']],processing:'返回空配置，由 Jiwo 自身解析默认网速单位、延迟分组及连接图开关。',
+  limits:'仅 Jiwo 安装上下文提供；不读取主控配置，不提供 Worker 环境变量编辑。',
+});
+add('native','Jiwo 访客信息','GET /api/visitor','Ran 访客卡片的未知信息响应。',{
+  fields:[['ip / risk / proxy / type','UNKNOWN / null / unknown / 空字符串','桥接生成','未知值']],processing:'Node 没有可信 Cloudflare 地理信息，明确返回未知；不读取或转发访客提供的 CF 请求头。',
+  limits:'仅 Jiwo 安装上下文提供；不提供访客定位、IP 风险或代理检测。',
+});
 add('cfsm','节点列表与汇总','GET /api/servers','节点指标、地区分布和在线节点网络速率汇总。',{
   sources:[snapshotSource],fields:[...cfsmFields,['stats / regionStats','在线 / 离线 / 未知计数、已知在线速率合计、地区计数','桥接计算','个 / B/s']],
   processing:'显式身份映射、单位转换、Ping 槽位映射及可靠衍生计算。',status:'部分接入',limits:'标准价格、到期、流量显示开关关闭；相关可用数据位于 bridge.data，主题不一定消费。GPU / Swap / 磁盘 IO 等未提供。',

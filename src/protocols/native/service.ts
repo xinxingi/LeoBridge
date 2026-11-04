@@ -31,6 +31,7 @@ export class NativeService {
     if(isRecord(raw.appearance))result.appearance=pick(raw.appearance,['theme','color_mode','revision']);
     if(presentation?.nativeTheme&&presentation.nativeTheme!=='source')result.appearance={...(isRecord(result.appearance)?result.appearance:{}),theme:presentation.nativeTheme};
     if(isRecord(raw.license_badge))result.license_badge=pick(raw.license_badge,['name','display_name']);
+    else if(Array.isArray(raw.license_badge))result.license_badge=rows(raw.license_badge,['name','display_name']);
     if(isRecord(raw.tri_isp))result.tri_isp={...pick(raw.tri_isp,['enabled']),targets:rows(raw.tri_isp.targets,['isp','key','label'])};
     if(snapshot.showName&&Array.isArray(raw.forward))result.forward=forward(raw.forward);
     // Index is a native view slot, resolved via explicit bindings on each read.
@@ -48,6 +49,12 @@ export class NativeService {
   }
   async handle(request:Request,presentation?:PresentationContext):Promise<Response|null>{
     const url=new URL(request.url);
+    // Jiwo's frontend consumes optional Worker display/visitor helpers. Let its
+    // bundled defaults apply; Node has no trusted Cloudflare geolocation data.
+    if(presentation?.theme==='jiwo-probe'&&['/api/theme-config','/api/visitor'].includes(url.pathname)){
+      if(request.method!=='GET')throw new BridgeError('METHOD_NOT_ALLOWED',405,'原生探针仅提供只读接口。');
+      return json(url.pathname==='/api/theme-config'?{}:{ip:'UNKNOWN',risk:null,proxy:'unknown',type:''});
+    }
     if(!['/api/probe','/api/series','/api/forward'].includes(url.pathname))return null;
     if(request.method!=='GET')throw new BridgeError('METHOD_NOT_ALLOWED',405,'原生探针仅提供只读接口。');
     if(url.pathname==='/api/probe'){

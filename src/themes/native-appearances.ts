@@ -1,11 +1,36 @@
-import { tokenizer } from 'acorn';
+import { parse, tokenizer } from 'acorn';
 import { isNativeTheme } from '../core/presentation.ts';
 import type { Installation, ThemeStore } from './store.ts';
 
 export interface NativeAppearance { id:string; label:string }
 export interface NativeAppearances { options:NativeAppearance[]; status:'detected'|'unavailable' }
 // Labels translate known IDs, but never add capabilities absent from the package.
-const labels:Record<string,string>={pixel:'像素',flat:'扁平',anime:'二次元',premium:'高级黑金（付费许可证）',sweet:'天真'};
+const labels:Record<string,string>={glass:'玻璃',lumina:'Lumina',luminaplus:'LuminaPlus',ran:'岚 · Ran',glassmorphism:'Glassmorphism',emerald:'Emerald',lite:'Lite',nezha:'哪吒',pixel:'像素',flat:'扁平',anime:'二次元',premium:'高级黑金（付费许可证）',sweet:'天真'};
+/** Jiwo publishes its picker as literal {value,label,color} rows. Recognize the
+ * whole menu shape (including Follow Source), not arbitrary strings in the bundle. */
+function pickerAppearances(text:string,add:(id:unknown)=>void){
+  if(!text.includes('label')||!text.includes('color'))return;
+  try{
+    const stack:unknown[]=[parse(text,{ecmaVersion:'latest',sourceType:'module'})];
+    while(stack.length){
+      const node=stack.pop();if(!node||typeof node!=='object')continue;
+      const value=node as Record<string,any>;
+      if(value.type==='ArrayExpression'&&value.elements.length>=2){
+        const rows=value.elements.map((entry:any)=>{
+          if(entry?.type!=='ObjectExpression'||entry.properties.length!==3)return null;
+          const fields:Record<string,unknown>=Object.create(null);
+          for(const prop of entry.properties){
+            if(prop.type!=='Property'||prop.computed||prop.value?.type!=='Literal')return null;
+            fields[prop.key.name??prop.key.value]=prop.value.value;
+          }
+          return typeof fields.label==='string'&&typeof fields.color==='string'&&/^#[0-9a-f]{3,8}$/i.test(fields.color)&&(fields.value===null||isNativeTheme(fields.value))?fields:null;
+        });
+        if(rows.every((row:any)=>row!==null)&&rows.some((row:any)=>row.value===null))for(const row of rows)add(row.value);
+      }
+      for(const child of Object.values(value))if(child&&typeof child==='object'){if(Array.isArray(child))stack.push(...child);else stack.push(child);}
+    }
+  }catch{/* A nonliteral/future menu still allows entering custom appearance IDs. */}
+}
 /** Inspect installed assets, never execute upstream code or infer support from the latest catalog.
  * CSS root selectors cover upstream's class-based themes. Literal appearance.theme
  * branches cover its separate renderers (e.g. premium). Custom IDs remain available
@@ -21,6 +46,7 @@ export function detectNativeAppearances(assets:{path:string;bytes:Uint8Array}[])
         for(const match of rule[1]!.matchAll(/(?:^|[\s,])(?::root|html)\.theme-([A-Za-z0-9_-]+)(?=[\s.#:[>,+~]|$)/g))add(match[1]);
       }
     }else if(/\.m?js$/.test(asset.path)){
+      pickerAppearances(text,add);
       const window:{label:string;value:unknown}[]=[];
       try{
         for(const token of tokenizer(text,{ecmaVersion:'latest',sourceType:'module',allowHashBang:true})){

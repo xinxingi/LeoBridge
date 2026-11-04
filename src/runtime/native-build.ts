@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { mkdtemp, mkdir, writeFile, readFile, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { CATALOG_SOURCES, fetchCatalog, fetchPublicBytes, ThemePackageError, type PublicFetcher } from '../themes/catalog.ts';
+import { nativeSource, fetchCatalog, fetchPublicBytes, ThemePackageError, type PublicFetcher } from '../themes/catalog.ts';
 import { fetchNativeSource } from '../themes/native-source.ts';
 import { contentType, finish, sha256, type ThemeFile, type ThemePackage, type RemoteThemeFile } from '../themes/package.ts';
 
@@ -17,18 +17,21 @@ const require=createRequire(import.meta.url);
 export function createNativeBuilder(){
   const cached=new Map<string,ThemePackage>(),pending=new Map<string,Promise<ThemePackage>>();
   const controller=new AbortController();
-  const prepare=async(fetcher:PublicFetcher,revision:string):Promise<ThemePackage>=>{
+  const prepare=async(fetcher:PublicFetcher,revision:string,themeId='mmwx-probe'):Promise<ThemePackage>=>{
+    nativeSource(themeId);
+    const key=`${themeId}:${revision}`;
     if(!/^[a-f0-9]{40}$/.test(revision))throw new ThemePackageError('NATIVE_REVISION','原生源码版本必须为上游的固定提交。');
     if(controller.signal.aborted)throw new ThemePackageError('NATIVE_BUILD_STOPPED','原生主题构建器已停止。',503);
-    if(cached.has(revision))return structuredClone(cached.get(revision)!);
-    if(!pending.has(revision))pending.set(revision,compile(revision,(input,init)=>fetcher(input,{...init,signal:AbortSignal.any([controller.signal,...(init?.signal?[init.signal]:[])])}),controller.signal).then(value=>{cached.set(revision,value);while(cached.size>2)cached.delete(cached.keys().next().value!);return value;}).finally(()=>{pending.delete(revision);}));
-    return structuredClone(await pending.get(revision)!);
+    if(cached.has(key))return structuredClone(cached.get(key)!);
+    if(!pending.has(key))pending.set(key,compile(themeId,revision,(input,init)=>fetcher(input,{...init,signal:AbortSignal.any([controller.signal,...(init?.signal?[init.signal]:[])])}),controller.signal).then(value=>{cached.set(key,value);while(cached.size>2)cached.delete(cached.keys().next().value!);return value;}).finally(()=>{pending.delete(key);}));
+    return structuredClone(await pending.get(key)!);
   };
   return Object.assign(prepare,{close:()=>{controller.abort();cached.clear()}});
 }
-async function compile(revision:string,fetcher:PublicFetcher,signal:AbortSignal):Promise<ThemePackage>{
-  const source=`https://raw.githubusercontent.com/${CATALOG_SOURCES.native.repository}/${revision}/`;
-  const index=await fetchNativeSource(revision,fetcher);
+async function compile(themeId:string,revision:string,fetcher:PublicFetcher,signal:AbortSignal):Promise<ThemePackage>{
+  const selectedSource=nativeSource(themeId);
+  const source=`https://raw.githubusercontent.com/${selectedSource.repository}/${revision}/`;
+  const index=await fetchNativeSource(revision,fetcher,themeId);
   const root=await mkdtemp(join(tmpdir(),'leobridge-native-'));
   const remote:Record<string,RemoteThemeFile>={};
   const files:ThemeFile[]=[];
@@ -44,22 +47,29 @@ async function compile(revision:string,fetcher:PublicFetcher,signal:AbortSignal)
         const actual=Buffer.from(await crypto.subtle.digest('SHA-1',input)).toString('hex');
         if(bytes.length!==size||actual!==expected)throw new ThemePackageError('NATIVE_SOURCE_HASH','原生主题源码与固定提交不符。');
         await mkdir(dirname(join(root,path)),{recursive:true});await writeFile(join(root,path),bytes);
-        if(/^(LICENSE|LICENCE|COPYING|NOTICE)(?:[.][^/]+)?$/i.test(path)||path.startsWith('public/'))files.push({path:path.startsWith('public/')?path.slice(7):path,bytes,contentType:contentType(path)??'text/plain; charset=utf-8'});
+        if(/(?:^|\/)(LICENSE|LICENCE|COPYING|NOTICE)(?:[.][^/]+)?$/i.test(path)||path.startsWith('public/'))files.push({path:path.startsWith('public/')?path.slice(7):path,bytes,contentType:contentType(path)??'text/plain; charset=utf-8'});
       }
     }));
     const failed=downloads.find(result=>result.status==='rejected');if(failed?.status==='rejected')throw failed.reason;
     const lock=JSON.parse(await readFile(join(root,'package-lock.json'),'utf8'));
     await installDependencies(root,lock,fetcher,signal);
-    const output=await build({absWorkingDir:root,entryPoints:['src/main.tsx'],outdir:join(root,'dist'),bundle:true,write:false,format:'esm',splitting:true,platform:'browser',mainFields:['module','browser','main'],target:'es2022',jsx:'automatic',minify:true,legalComments:'linked',entryNames:'assets/[name]-[hash]',chunkNames:'assets/chunk-[hash]',assetNames:'assets/[name]-[hash]',define:{'process.env.NODE_ENV':'"production"','import.meta.env.DEV':'false','import.meta.env.PROD':'true'},plugins:[{name:'native-public-assets',setup(api){api.onResolve({filter:/^\//},args=>args.kind==='url-token'?{path:args.path,external:true}:undefined);}}],loader:{'.woff2':'file','.svg':'file','.png':'file','.webp':'file'},logLevel:'silent'});
+    const entries=[{html:'index.html',source:'src/main.tsx',name:'main'}];
+    if(themeId==='jiwo-probe'){
+      if(!index.some(([path])=>path==='map.html')||!index.some(([path])=>path==='src/ran/map-entry.tsx'))throw new ThemePackageError('NATIVE_ENTRY','Jiwo源码缺少独立地图入口。');
+      entries.push({html:'map.html',source:'src/ran/map-entry.tsx',name:'map-entry'});
+    }
+    const output=await build({absWorkingDir:root,entryPoints:entries.map(entry=>entry.source),...(themeId==='jiwo-probe'?{alias:{'@':join(root,'src/ran')}}:{}),outdir:join(root,'dist'),bundle:true,write:false,format:'esm',splitting:true,platform:'browser',mainFields:['module','browser','main'],target:'es2022',jsx:'automatic',minify:true,legalComments:'linked',entryNames:'assets/[name]-[hash]',chunkNames:'assets/chunk-[hash]',assetNames:'assets/[name]-[hash]',define:{'process.env.NODE_ENV':'"production"','import.meta.env.DEV':'false','import.meta.env.PROD':'true'},plugins:[{name:'native-public-assets',setup(api){api.onResolve({filter:/^\//},args=>args.kind==='url-token'?{path:args.path,external:true}:undefined);}}],loader:{'.woff2':'file','.svg':'file','.png':'file','.webp':'file'},logLevel:'silent'});
     for(const file of output.outputFiles){const path=file.path.slice(join(root,'dist').length+1);files.push({path,bytes:file.contents,contentType:contentType(path)??'application/octet-stream'});}
-    const entry=files.find(file=>/^assets\/main-.*\.js$/.test(file.path));
-    if(!entry)throw new Error('Missing frontend entry');
-    let html=await readFile(join(root,'index.html'),'utf8');
-    if(!html.includes('/src/main.tsx'))throw new Error('Unknown frontend entry');
-    html=html.replace('/src/main.tsx',`/${entry.path}`);
-    const css=files.find(file=>/^assets\/main-.*\.css$/.test(file.path));
-    if(css)html=html.replace('</head>',`<link rel="stylesheet" href="/${css.path}"></head>`);
-    files.push({path:'index.html',bytes:encoder.encode(html),contentType:'text/html; charset=utf-8'});
+    for(const page of entries){
+      const entry=files.find(file=>file.path.startsWith(`assets/${page.name}-`)&&file.path.endsWith('.js'));
+      if(!entry)throw new Error('Missing frontend entry');
+      let html=await readFile(join(root,page.html),'utf8');
+      if(!html.includes(`/${page.source}`))throw new Error('Unknown frontend entry');
+      html=html.replace(`/${page.source}`,`/${entry.path}`);
+      const css=files.find(file=>file.path.startsWith(`assets/${page.name}-`)&&file.path.endsWith('.css'));
+      if(css)html=html.replace('</head>',`<link rel="stylesheet" href="/${css.path}"></head>`);
+      files.push({path:page.html,bytes:encoder.encode(html),contentType:'text/html; charset=utf-8'});
+    }
     // Retain dependency license texts alongside the generated JS legal notices.
     async function licenses(dir:string,prefix=''){
       for(const node of await readdir(dir,{withFileTypes:true})){
@@ -73,8 +83,8 @@ async function compile(revision:string,fetcher:PublicFetcher,signal:AbortSignal)
     }
     await mkdir(join(root,'node_modules'),{recursive:true});await licenses(join(root,'node_modules'));
     const license=files.find(file=>/^(LICENSE|LICENCE|COPYING)(?:[.][^/]+)?$/i.test(file.path));
-    const catalog=await fetchCatalog('native',fetcher,{revision});
-    return await finish(catalog.entries[0]!,files,{spdx:'NOASSERTION',text:license?new TextDecoder().decode(license.bytes):'',source:source+(license?.path??''),sha256:await sha256(license?.bytes??new Uint8Array()),status:license?'found':'missing'},'https://github.com/mmwx-group/mmwx-probe',revision,undefined,remote);
+    const catalog=await fetchCatalog('native',fetcher,{revision,nativeThemeId:themeId});
+    return await finish(catalog.entries[0]!,files,{spdx:'NOASSERTION',text:license?new TextDecoder().decode(license.bytes):'',source:source+(license?.path??''),sha256:await sha256(license?.bytes??new Uint8Array()),status:license?'found':'missing'},`https://github.com/${selectedSource.repository}`,revision,undefined,remote);
   }catch(error){
     if(error instanceof ThemePackageError)throw error;
     throw Object.assign(new ThemePackageError('NATIVE_BUILD_FAILED','原生主题构建失败；请检查商店下载网络、磁盘空间及内存后重试。',502),{cause:error});

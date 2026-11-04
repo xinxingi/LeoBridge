@@ -75,14 +75,16 @@ NODE_ENV=production或direct/proxy模式默认不读取`.dev.vars`。配置来�
 
 ## 原生源码准备
 
-原生目录按官方main解析到本次固定提交；`themes/native-source.ts`动态读取该提交的完整Git树，验证前台源码/公共资源路径、类型、blob摘要、大小及入口，不再保存固定版本白名单。`runtime/native-build.ts`在Node按需下载、安装锁定依赖并用自有esbuild配置构建原生前台，缓存和并发任务按提交隔离。npm生命周期脚本禁用，不执行上游Worker/构建配置。管理层经`StoreNetwork`传入确认的提交和下载传输，Worker不能导入npm/esbuild或Node构建器。原生协议在`protocols/native`独立访问上游；展示槽位映射显式绑定，历史前后仍核对源身份顺序。研究参考清单仍保存历史审计版本，不作为运行时更新门槛。
+原生目录登记官方`mmwx-group/mmwx-probe`（`mmwx-probe`）与社区`chnnic/jiwo-probe`（`jiwo-probe`），按各自main解析到本次固定提交；`themes/native-source.ts`动态读取该提交的完整Git树，验证前台源码/公共资源路径、类型、blob摘要、大小及入口，不再保存固定版本白名单。`runtime/native-build.ts`在Node按需下载、安装锁定依赖并用自有esbuild配置构建原生前台，缓存和并发任务按来源标识与提交共同隔离。npm生命周期脚本禁用，不执行上游Worker/构建配置。Jiwo的主页面和Ran独立`map.html`一起构建，`@`别名由桥接器配置为临时源码中的`src/ran`。源码不进入LeoBridge仓库；下载与依赖安装只使用临时目录，成功或失败均清理，持久化安装仅保留静态产物、许可与固定资源索引。管理层经`StoreNetwork`传入确认的来源标识、提交和下载传输，Worker不能导入npm/esbuild或Node构建器。原生协议在`protocols/native`独立访问上游；展示槽位映射显式绑定，历史前后仍核对源身份顺序。研究参考清单仍保存历史审计版本，不作为运行时更新门槛。
+
+Jiwo的可选`/api/theme-config`和`/api/visitor`辅助接口仅在该安装的展示上下文提供：空显示配置沿用前台自带默认值，访客资料明确为UNKNOWN/null等未知值；Node不伪造Cloudflare地理信息，不代理主控登录。数据快照、历史和实时继续使用独立原生协议。
 
 原生外观选择保存在Installation.nativeTheme中，旧安装缺省为source；管理事务校验会话、原生协议及generation。展示上下文传递给原生HTTP/WS，仅覆盖appearance.theme。Site在原生WS发送前核对对应安装的设置，设置变更后关闭旧连接，避免旧快照覆盖新HTTP外观；预览和版本主机同样适用。原生资源包和摘要不因外观选择变化。
 
 
 ## 安装版本更新与删除
 
-管理层prepare-update按Installation.ecosystem/themeId解析最新官方目录并准备固定包，与原安装digest比较；复用session review、许可确认和commitInstallation，新包不自动激活。原生直接查询上游main；只有最新提交与已安装提交相同时才跳过重建并报告最新，其他提交进入按需构建。确认安装继续使用review内的提交，不重新解析main。更新关联保存在review.updateOf，最终事务校验原安装仍存在并继承原生外观；已经存在的新安装保留自身设置。管理state通过themes/native-appearances按每个已安装包的CSS根选择器及JS appearance.theme字面量比较返回动态外观列表；只读本地资源、按不可变安装缓存，不改包摘要或安装状态。已知ID中文翻译不作为能力清单，接受符合上游约定的自定义标识。静态发现依赖上游实现约定，不能替代完整目录或实际兼容验收。
+管理层prepare-update按Installation.ecosystem/themeId解析最新官方目录并准备固定包，与原安装digest比较；复用session review、许可确认和commitInstallation，新包不自动激活。原生按安装的themeId查询对应上游main；只有最新提交与已安装提交相同时才跳过重建并报告最新，其他提交进入按需构建。确认安装继续使用review内的提交，不重新解析main。更新关联保存在review.updateOf，最终事务校验原安装仍存在并继承原生外观；已经存在的新安装保留自身设置。管理state通过themes/native-appearances按每个已安装包的CSS根选择器、JS appearance.theme字面量比较及具有固定字段结构的原生主题菜单返回动态外观列表；只读本地资源、按不可变安装缓存，不改包摘要或安装状态。已知ID中文翻译不作为能力清单，接受符合上游约定的自定义标识。静态发现依赖上游实现约定，不能替代完整目录或实际兼容验收。
 
 Node的uninstall在同一文件事务锁内校验会话、generation、当前启用和上一版本确认，先公布元数据删除及pendingAssetCleanup，再删除packages/<id>，最后原子移除待清理记录。失败或进程中断后可重试，待清理期间禁止重新安装相同ID。管理层将下载、安装、删除串行化；仍以单站单进程单副本为部署约束。Worker未声明supportsUninstall，不提供仅删除元数据却遗留R2对象的入口。
 

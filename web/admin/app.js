@@ -38,7 +38,7 @@ function startProgress(){
 function stopProgress(){clearInterval(progressTimer);progressTimer=null;$('task-progress').hidden=true;restoreProgress();}
 function requestMessage(path,body){
   const action=path.split('?')[0];
-  const messages={session:'正在读取登录状态…',login:'正在登录…',logout:'正在退出登录…',password:'正在保存新密码…',state:'正在刷新主题状态…',source:'正在读取设置…','store-proxy':body?'正在保存下载设置…':'正在读取设置…',catalog:'正在读取官方主题目录…','prepare-update':'正在核对商店版本及主题内容；如需构建，可能需要数分钟…','prepare-install':body?.ecosystem==='native'?'正在下载并构建原生主题，首次准备可能需要数分钟…':'正在读取主题及许可信息…',install:'正在核对版本并安装，请稍候…',activate:'正在启用主题…',rollback:'正在回退上一版本…','native-theme':'正在保存原生外观…',uninstall:'正在删除版本并清理资源…','source/check':'正在连接主控并读取公开节点…','source/save':'正在复核节点并保存配置…'};
+  const messages={session:'正在读取登录状态…',login:'正在登录…',logout:'正在退出登录…',password:'正在保存新密码…',state:'正在刷新主题状态…',source:'正在读取设置…','store-proxy':body?'正在保存下载设置…':'正在读取设置…',catalog:'正在读取主题目录…','prepare-update':'正在核对商店版本及主题内容；如需构建，可能需要数分钟…','prepare-install':body?.ecosystem==='native'?'正在下载并构建原生主题，首次准备可能需要数分钟…':'正在读取主题及许可信息…',install:'正在核对版本并安装，请稍候…',activate:'正在启用主题…',rollback:'正在回退上一版本…','native-theme':'正在保存原生外观…',uninstall:'正在删除版本并清理资源…','source/check':'正在连接主控并读取公开节点…','source/save':'正在复核节点并保存配置…'};
   return messages[action]||'正在处理，请稍候…';
 }
 async function api(path,body){progressMessage(requestMessage(path,body));const response=await fetch(apiRoot+path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:body===undefined?undefined:JSON.stringify(body)});const data=await response.json();if(!response.ok){if(response.status===401)await showLogin();if(data.code==='PASSWORD_CHANGE_REQUIRED')showPasswordChange(true);throw new Error(data.message||data.error||'请求失败')}return data}
@@ -54,7 +54,7 @@ async function refreshState(){state=await api('state');$('display-link').href=st
 function renderActive(){const host=$('active');host.replaceChildren();const item=state.installations[state.active];const current=element('div',undefined,'current');current.append(element('div',item?(item.ecosystem==='native'?'M':item.ecosystem==='komari'?'K':'C'):'L','icon'));const info=element('div');info.append(element('p','当前启用 / ACTIVE THEME','eyebrow'),element('h2',item?.title||'尚未启用主题'),element('p',item?`${item.ecosystem.toUpperCase()} · 固定版本 ${item.pinnedVersion.slice(0,16)} · 第 ${state.generation} 次状态修订`:'安装主题并完成预览后启用'));current.append(info);host.append(current);const actions=element('div',undefined,'actions');if(item)actions.append(link('查看 ↗',state.links[item.id].display));if(state.previous)actions.append(button('回退上一版本',async()=>{await api('rollback',{generation:state.generation});await refreshState();await render();notice('已回退。新打开的展示站将使用上一版本。')}));host.append(actions)}
 function installedCard(item){
   const card=element('article',undefined,'card installed-card'),top=element('div',undefined,'card-top');
-  top.append(element('span',item.ecosystem.toUpperCase(),'ecosystem'),element('span',item.compatibility==='verified'?'实测兼容':'未验证兼容',`badge ${item.compatibility==='verified'?'':'unknown'}`));
+  top.append(element('span',item.ecosystem==='native'?(item.themeId==='jiwo-probe'?'社区 · Jiwo':'官方 · 原生'):item.ecosystem.toUpperCase(),'ecosystem'),element('span',item.compatibility==='verified'?'实测兼容':'未验证兼容',`badge ${item.compatibility==='verified'?'':'unknown'}`));
   const info=element('div',undefined,'installed-info');
   info.append(element('h3',item.title),element('p',item.bundled?'随项目构建 · 保留上游来源与适配记录':'商店安装 · 固定来源已校验'),element('p',`版本 ${item.pinnedVersion}`,'version'),element('small',`${item.license.status==='missing'?'未发现明确许可文件':`许可信息 ${item.license.spdx}`} · ${new Set([...Object.keys(item.files),...Object.keys(item.remoteFiles||{})]).size} 个资源`));
   card.append(top,info);
@@ -91,8 +91,9 @@ function installedCard(item){
   footer.append(detail,buttons);card.append(footer);return card;
 }
 function nativeThemeControl(item){
-  const control=element('div',undefined,'native-theme-control'),label=element('label','原生外观'),select=element('select');
-  select.setAttribute('aria-label','原生外观');
+  const isJiwo=item.themeId==='jiwo-probe',appearanceLabel=isJiwo?'默认外观':'原生外观';
+  const control=element('div',undefined,'native-theme-control'),label=element('label',appearanceLabel),select=element('select');
+  select.setAttribute('aria-label',appearanceLabel);
   const appearances=state.nativeAppearances?.[item.id],options=appearances?.options||[];
   for(const [value,text]of [['source','跟随主控'],...options.map(option=>[option.id,option.label]),['custom','自定义主题标识']]){
     const option=element('option',text);option.value=value;select.append(option);
@@ -102,11 +103,12 @@ function nativeThemeControl(item){
   const customLabel=element('label','主题标识'),custom=element('input');custom.type='text';custom.maxLength=64;custom.setAttribute('aria-label','主题标识');custom.value=preset?'':current;customLabel.append(custom);customLabel.hidden=select.value!=='custom';
   select.addEventListener('change',()=>{customLabel.hidden=select.value!=='custom'});
   control.append(label,customLabel,element('small',appearances?.status==='detected'?'外观列表来自已安装前台；也可填写上游提供的自定义主题标识。':'未能从已安装前台识别外观列表；可跟随主控或填写上游提供的主题标识。'));
+  if(isJiwo)control.append(element('small','鸡窝前台的手动选择优先，并由浏览器记住。请在前台的“外观主题”菜单选择“跟随主控”，再刷新页面，即可使用这里的默认外观。这里也选“跟随主控”时，才沿用真实主控的外观。'));
   const save=button('保存外观',async()=>{
     const theme=select.value==='custom'?custom.value.trim():select.value;
     if(!/^[A-Za-z0-9_-]{1,64}$/.test(theme))throw new Error('主题标识须为1–64位字母、数字、下划线或连字符。');
     await api('native-theme',{id:item.id,generation:state.generation,theme});
-    await refreshState();await render();notice('原生外观已保存。请刷新展示或预览页面。');
+    await refreshState();await render();notice(isJiwo?'默认外观已保存。请在鸡窝前台选择“跟随主控”，再刷新展示或预览页面。':'原生外观已保存。请刷新展示或预览页面。');
   },true);
   return {control,save};
 }
@@ -182,7 +184,7 @@ function cleanupCard(id){
 }
 function catalogCard(entry,ecosystem){
   const card=element('article',undefined,'card catalog-card'),top=element('div',undefined,'card-top');
-  top.append(element('span',ecosystem.toUpperCase(),'ecosystem'),element('span','未验证兼容','badge unknown'));
+  top.append(element('span',entry.tag||ecosystem.toUpperCase(),'ecosystem'),element('span','未验证兼容','badge unknown'));
   const title=displayText(entry.title||entry.name)||entry.id;
   card.append(top,element('h3',title),element('p',displayText(entry.description)||'来自生态官方目录。','catalog-description'));
   const meta=element('div',undefined,'catalog-meta');
@@ -193,7 +195,7 @@ function catalogCard(entry,ecosystem){
   const buttons=element('div',undefined,'buttons');
   if(entry.repositoryUrl){const source=link('上游项目 ↗',entry.repositoryUrl);source.className='text-link';buttons.append(source)}
   if(entry.canAttemptInstall!==false){const prepare=button('查看安装',async()=>{
-    const review=await api('prepare-install',{ecosystem,id:entry.id,catalogRevision:catalogCache[ecosystem].catalogRevision});
+    const review=await api('prepare-install',{ecosystem,id:entry.id,catalogRevision:entry.catalogRevision});
     showInstallReview(title,review,prepare);notice('');
   },true);buttons.append(prepare)}else buttons.append(element('span','当前不可安装','badge unknown'));
   card.append(buttons);return card;
@@ -215,7 +217,7 @@ async function render(){
     if(failure)throw failure.reason;
     return;
   }
-document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===view));$('heading').textContent=view==='installed'?'主题工作台':view==='native'?'妙妙屋 X 原生主题':`${view==='cfsm'?'CFSM':'Komari'} 主题商店`;$('section-title').textContent=view==='installed'?'已安装版本':'探索主题';$('section-note').textContent=view==='installed'?'资源和协议一起切换。切换后请刷新展示页面。':'目录收录不代表已安装或兼容；包安全、许可信息和实际兼容性分别记录。';const cards=$('cards');cards.className=view==='installed'?'cards installed-cards':'cards';cards.replaceChildren();if(view==='installed'){Object.values(state.installations).forEach(item=>cards.append(installedCard(item)));if(state.supportsUninstall)for(const id of state.pendingAssetCleanup||[])cards.append(cleanupCard(id));if(!cards.children.length)cards.append(element('p','尚未安装主题。','empty'));return}if(!catalogCache[view]){cards.append(element('p','正在读取官方主题目录…','empty'));try{catalogCache[view]=await api(`catalog?ecosystem=${view}&refresh=1`)}catch(error){cards.replaceChildren(element('p','目录读取失败，请检查网络或“设置”中的商店下载配置后刷新。','empty'));throw error}}const data=catalogCache[view];$('section-note').textContent=view==='native'?`固定源码 ${data.catalogRevision.slice(0,12)} · 首次准备会下载依赖并构建，请稍候；安装后可在主题工作台独立选择外观。`:`官方目录 ${data.catalogRevision.slice(0,12)} · ${data.entries.length} 个主题 · 按 Star 数从多到少排序，未获取到的排最后。Star 数缓存 1 小时；兼容性另行验证。`;cards.replaceChildren();const entries=data.entries||data.themes||[];entries.forEach(entry=>cards.append(catalogCard(entry,view)));if(!entries.length)cards.append(element('p','目录没有可显示条目。','empty'))}
+document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===view));$('heading').textContent=view==='installed'?'主题工作台':view==='native'?'妙妙屋 X 原生主题':`${view==='cfsm'?'CFSM':'Komari'} 主题商店`;$('section-title').textContent=view==='installed'?'已安装版本':'探索主题';$('section-note').textContent=view==='installed'?'资源和协议一起切换。切换后请刷新展示页面。':'目录收录不代表已安装或兼容；包安全、许可信息和实际兼容性分别记录。';const cards=$('cards');cards.className=view==='installed'?'cards installed-cards':'cards';cards.replaceChildren();if(view==='installed'){Object.values(state.installations).forEach(item=>cards.append(installedCard(item)));if(state.supportsUninstall)for(const id of state.pendingAssetCleanup||[])cards.append(cleanupCard(id));if(!cards.children.length)cards.append(element('p','尚未安装主题。','empty'));return}if(!catalogCache[view]){cards.append(element('p','正在读取主题目录…','empty'));try{catalogCache[view]=await api(`catalog?ecosystem=${view}&refresh=1`)}catch(error){cards.replaceChildren(element('p','目录读取失败，请检查网络或“设置”中的商店下载配置后刷新。','empty'));throw error}}const data=catalogCache[view];$('section-note').textContent=view==='native'?`${data.entries.length} 个原生前台 · 官方与社区来源分别更新 · 首次准备会下载依赖并构建，请稍候；安装后可在主题工作台独立选择外观。`:`官方目录 ${data.catalogRevision.slice(0,12)} · ${data.entries.length} 个主题 · 按 Star 数从多到少排序，未获取到的排最后。Star 数缓存 1 小时；兼容性另行验证。`;cards.replaceChildren();const entries=data.entries||data.themes||[];entries.forEach(entry=>cards.append(catalogCard(entry,view)));if(!entries.length)cards.append(element('p','目录没有可显示条目。','empty'))}
 async function showLogin(){progressMessage('正在读取登录信息…');closeInstallReview(false);closeHeaderMenus();csrf='';state=null;sourceStatus=null;networkStatus=null;clearSourceReview();$('source-form').reset();$('network-form').reset();$('network-url').value='';for(const key of Object.keys(catalogCache))delete catalogCache[key];for(const id of ['sidebar','account-menu','workspace','settings','data-interfaces','password-change','logout','display-link','change-password'])$(id).hidden=true;$('login').hidden=false;$('password-form').reset();$('initial-password-hint').hidden=true;const request=++loginHintRequest;try{const response=await fetch(apiRoot+'login-info',{cache:'no-store'});if(!response.ok)return;const data=await response.json();if(request===loginHintRequest&&!$('login').hidden){const message=data.credentialSource==='default'?'初始密码：admin。登录后请设置新密码。':'';$('initial-password-hint').textContent=message||'';$('initial-password-hint').hidden=!message}}catch{/* Keep initialization guidance hidden when its status is unavailable. */}}
 function showPasswordChange(required){closeInstallReview(false);closeHeaderMenus();$('account-menu').hidden=false;state=null;for(const id of ['sidebar','login','workspace','settings','data-interfaces','display-link','change-password'])$(id).hidden=true;$('password-change').hidden=false;$('logout').hidden=false;$('cancel-password').hidden=required;$('password-heading').textContent=required?'设置高强度密码':'修改管理密码';$('password-error').hidden=true;$('password-error').textContent='';$('password-intro').textContent=required?'当前使用默认密码 admin，必须先更改后才能使用管理功能。':'改密后所有已登录会话将退出，请使用新密码重新登录。'}
 async function signedIn(){const session=await api('session');csrf=session.csrf;$('account-menu').hidden=false;if(session.mustChangePassword){showPasswordChange(true);return}$('login').hidden=true;$('password-change').hidden=true;$('workspace').hidden=false;$('logout').hidden=false;$('change-password').hidden=false;await refreshState();sourceStatus=await api('source');if(!sourceStatus.configured)view='settings';await render();$('sidebar').hidden=false}

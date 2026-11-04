@@ -140,6 +140,9 @@ export class Site {
         if(path==='komari-theme.json'&&!defaultOnly&&item.manifest)return json(item.manifest);
         path=path.startsWith('dist/')?path.slice(5):Object.hasOwn(item.files,`.komari/${path}`)?`.komari/${path}`:path;
       }
+      // Native frontends may ship several HTML entries. Resolve their clean URLs
+      // before falling back to the SPA root (e.g. Jiwo's /map -> map.html).
+      if(item.ecosystem==='native'&&!path.split('/').at(-1)?.includes('.')&&Object.hasOwn(item.files,`${path}.html`))path=`${path}.html`;
       let asset=!defaultOnly&&Object.hasOwn(item.files,path)?await this.store.asset(item.id,path):null;
       if(!asset&&(this.resources.has(item,path)||path.split('/').at(-1)?.includes('.')))asset=await this.resources.get(item,path,defaultOnly);
       if(!asset&&request.headers.get('accept')?.includes('text/html')&&!path.split('/').at(-1)?.includes('.'))asset=await this.store.asset(item.id,item.entry);

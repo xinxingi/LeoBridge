@@ -9,8 +9,17 @@ export const CATALOG_SOURCES = Object.freeze({
   cfsm: { repository: 'huilang-me/CFSM-Theme-Store', file: 'themes.json', branch: 'main', id: 'cfsm-official', revision: '6377a65414a2527bbab1e323348bf715dc51f116', url: 'https://raw.githubusercontent.com/huilang-me/CFSM-Theme-Store/6377a65414a2527bbab1e323348bf715dc51f116/themes.json', license: 'MIT (catalog repository only)' },
   komari: { repository: 'komari-monitor/theme-market', file: 'v1.json', branch: 'main', id: 'komari-official', revision: '3f889543f6b839cb2452464e04306253f77791bd', url: 'https://raw.githubusercontent.com/komari-monitor/theme-market/3f889543f6b839cb2452464e04306253f77791bd/v1.json', license: 'No catalog LICENSE found at audited revision; theme licenses checked independently' },
 });
+/** Curated native frontend sources. Repository identity never comes from request URLs. */
+export const NATIVE_SOURCES = Object.freeze({
+  'mmwx-probe': { repository: 'mmwx-group/mmwx-probe', branch: 'main', sourceId: 'mmwx-native', name: '妙妙屋 X 原生主题', tag: '官方', description: '官方原生前台；按选定提交构建安装，外观可跟随主控。' },
+  'jiwo-probe': { repository: 'chnnic/jiwo-probe', branch: 'main', sourceId: 'jiwo-native', name: 'Jiwo Probe · 鸡窝状态站', tag: '社区 · Jiwo', description: '社区作者 chnnic 基于原生前台开发的多主题版本，包含玻璃、LuminaPlus、岚、哪吒等外观；整套安装，独立检查更新。' },
+});
+export function nativeSource(id: string = 'mmwx-probe') {
+  if (!Object.hasOwn(NATIVE_SOURCES, id)) throw new ThemePackageError('THEME_NOT_FOUND', '原生主题来源不存在。', 404);
+  return NATIVE_SOURCES[id as keyof typeof NATIVE_SOURCES];
+}
 export interface CatalogEntry {
-  id: string; ecosystem: Ecosystem; sourceId: string; name: string; description: string;
+  id: string; ecosystem: Ecosystem; sourceId: string; name: string; description: string; tag?: string;
   catalogRevision: string; catalogSource: string;
   repositoryUrl: string | null; branch?: string; version?: string; downloadUrl?: string; sha256?: string;
   canAttemptInstall: boolean; blockReasons: string[]; licenseStatus: 'unverified'; compatibility: 'unverified';
@@ -149,6 +158,8 @@ export function parseKomariCatalog(raw: unknown): CatalogEntry[] {
   }));
 }
 export interface CatalogReadOptions {
+  /** Scope native updates and fixed builds to the selected curated repository. */
+  nativeThemeId?: string;
   /** Resolve the official main branch with a short cache; never an arbitrary source. */
   latest?: boolean;
   /** Explicit refresh resolves main again, bypassing a previously cached result. */
@@ -159,17 +170,18 @@ export interface CatalogReadOptions {
 export const CATALOG_CACHE_MS = 60_000;
 interface CatalogCache { at?: number; value?: Catalog; pending?: Promise<Catalog>; }
 // Keep independent runtimes/test fetchers isolated, and coalesce concurrent reads.
-const latestCatalogs = new WeakMap<PublicFetcher, Map<Ecosystem, CatalogCache>>();
+const latestCatalogs = new WeakMap<PublicFetcher, Map<string, CatalogCache>>();
 function validateRevision(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-fA-F0-9]{40}$/.test(value)) throw new ThemePackageError('CATALOG_REVISION', '目录版本必须为官方仓库的40位Git提交。');
   return value.toLowerCase();
 }
-async function catalogAtRevision(ecosystem: Ecosystem, revision: string, fetcher: PublicFetcher): Promise<Catalog> {
+async function catalogAtRevision(ecosystem: Ecosystem, revision: string, fetcher: PublicFetcher, nativeThemeId = 'mmwx-probe'): Promise<Catalog> {
   const source = CATALOG_SOURCES[ecosystem];
   const url = `https://raw.githubusercontent.com/${source.repository}/${revision}/${source.file}`;
   if(ecosystem==='native'){
-    const entry={...baseEntry('native','mmwx-probe','妙妙屋 X 原生主题','直接使用妙妙屋 X 原生前台；检查上游更新后按选定提交构建安装，外观可跟随主控。'),catalogRevision:revision,catalogSource:`https://github.com/${source.repository}/tree/${revision}`,repositoryUrl:`https://github.com/${source.repository}`,version:revision};
-    return {ecosystem,source:entry.catalogSource,sourceId:source.id,pinnedVersion:revision,catalogRevision:revision,catalogLicense:source.license,catalogLicenseRevision:revision,fetchedAt:new Date().toISOString(),fromCache:false,entries:[entry]};
+    const selected=nativeSource(nativeThemeId);
+    const entry={...baseEntry('native',nativeThemeId,selected.name,selected.description),tag:selected.tag,sourceId:selected.sourceId,catalogRevision:revision,catalogSource:`https://github.com/${selected.repository}/tree/${revision}`,repositoryUrl:`https://github.com/${selected.repository}`,version:revision};
+    return {ecosystem,source:entry.catalogSource,sourceId:selected.sourceId,pinnedVersion:revision,catalogRevision:revision,catalogLicense:'See the selected repository license documents before installation',catalogLicenseRevision:revision,fetchedAt:new Date().toISOString(),fromCache:false,entries:[entry]};
   }
   const raw = await fetchPublicJson(url, { fetcher, maxBytes: 2_000_000 });
   const entries = (ecosystem === 'cfsm' ? parseCfsmCatalog(raw) : parseKomariCatalog(raw)).map(entry => ({ ...entry, catalogRevision: revision, catalogSource: url }));
@@ -181,23 +193,41 @@ async function catalogAtRevision(ecosystem: Ecosystem, revision: string, fetcher
 export async function fetchCatalog(ecosystem: Ecosystem, fetcher: PublicFetcher = fetch, options: CatalogReadOptions = {}): Promise<Catalog> {
   if (ecosystem !== 'cfsm' && ecosystem !== 'komari' && ecosystem !== 'native') throw new ThemePackageError('ECOSYSTEM', '未知主题生态。');
   if (!options || (options.latest !== undefined && typeof options.latest !== 'boolean') || (options.refresh !== undefined && typeof options.refresh !== 'boolean')) throw new ThemePackageError('CATALOG_OPTIONS', '目录读取选项无效。');
+  if (options.nativeThemeId !== undefined) {
+    if (ecosystem !== 'native') throw new ThemePackageError('CATALOG_OPTIONS', '只有原生目录支持来源选择。');
+    nativeSource(options.nativeThemeId);
+  }
+  if (ecosystem === 'native' && options.nativeThemeId === undefined && options.revision === undefined) {
+    const ids=Object.keys(NATIVE_SOURCES);
+    const results=await Promise.allSettled(ids.map(nativeThemeId=>fetchCatalog('native',fetcher,{...options,nativeThemeId})));
+    const available=results.filter(result=>result.status==='fulfilled');
+    if(!available.length)throw (results[0] as PromiseRejectedResult).reason;
+    const entries=results.flatMap((result,index)=>{
+      if(result.status==='fulfilled')return result.value.entries;
+      const id=ids[index]!,source=nativeSource(id);
+      return [{...baseEntry('native',id,source.name,source.description),tag:source.tag,sourceId:source.sourceId,repositoryUrl:`https://github.com/${source.repository}`,catalogSource:`https://github.com/${source.repository}`,catalogRevision:'',canAttemptInstall:false,blockReasons:['来源暂时不可读取，请稍后刷新。']}];
+    });
+    return {...available[0]!.value,sourceId:'native-store',fromCache:available.length===results.length&&available.every(result=>result.value.fromCache),entries};
+  }
   if (options.revision !== undefined) {
     if (options.latest || options.refresh) throw new ThemePackageError('CATALOG_OPTIONS', '固定目录版本不能同时请求最新版本。');
-    return catalogAtRevision(ecosystem, validateRevision(options.revision), fetcher);
+    return catalogAtRevision(ecosystem, validateRevision(options.revision), fetcher, options.nativeThemeId);
   }
   const source = CATALOG_SOURCES[ecosystem];
   if (ecosystem!=='native'&&!options.latest&&!options.refresh)return catalogAtRevision(ecosystem,source.revision,fetcher);
   let scoped = latestCatalogs.get(fetcher);
   if (!scoped) { scoped = new Map(); latestCatalogs.set(fetcher, scoped); }
-  let cached = scoped.get(ecosystem);
-  if (!cached) { cached = {}; scoped.set(ecosystem, cached); }
+  const cacheKey = ecosystem === 'native' ? `native:${options.nativeThemeId ?? 'mmwx-probe'}` : ecosystem;
+  let cached = scoped.get(cacheKey);
+  if (!cached) { cached = {}; scoped.set(cacheKey, cached); }
   if (cached.pending) return structuredClone(await cached.pending);
   if (!options.refresh && cached.value && Date.now() - cached.at! < CATALOG_CACHE_MS) return { ...structuredClone(cached.value), fromCache: true };
   // A failed explicit refresh must not masquerade as a newly fetched old catalog.
   if (options.refresh) { cached.value = undefined; cached.at = undefined; }
   const task = (async () => {
-    const revision = await repositoryRevision(source.repository, source.branch, fetcher);
-    return catalogAtRevision(ecosystem, revision, fetcher);
+    const selected = ecosystem === 'native' ? nativeSource(options.nativeThemeId) : source;
+    const revision = await repositoryRevision(selected.repository, selected.branch, fetcher);
+    return catalogAtRevision(ecosystem, revision, fetcher, options.nativeThemeId);
   })();
   cached.pending = task;
   try { const catalog = await task; cached.value = catalog; cached.at = Date.now(); return structuredClone(catalog); }
