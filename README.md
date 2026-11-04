@@ -22,18 +22,18 @@ LeoBridge 只读访问妙妙屋X探针 API，通过独立的原生、CFSM 和 Ko
 
 **状态、历史与实时更新**：转换已有探针数据，缺失指标保持未知，历史空缺不补点；支持 WebSocket 和 HTTP 回退。
 
-以上介绍包含当前源码能力。官方原生主题尚未包含在下方 **v0.2.0** 发行产物中；使用此功能请按[开发构建指南](docs/development/build.md)运行当前源码。
+以上介绍包含当前源码能力，发行产物的功能范围以对应版本的发行说明为准。若所选版本尚未包含所需功能，可按[开发构建指南](docs/development/build.md)运行当前源码。
 
 项目默认不内置第三方主题。商店收录或安装成功不代表兼容，具体能力以[兼容说明](docs/research/compatibility.md)为准。
 
 ## 快速开始
 
-以下 **v0.2.0** 发行产物提供两种安装方式：
+发行产物提供两种安装方式，版本与更新说明见以下发布页面：
 
 | 方式 | 获取产物 | 安装说明 |
 | --- | --- | --- |
-| Linux 运行包 | [GitHub Release](https://github.com/xinxingi/LeoBridge/releases/tag/v0.2.0)，选择 x64 或 arm64 附件 | [下载、校验与启动](docs/deployment/local.md) |
-| Docker | [staractive/leobridge:0.2.0](https://hub.docker.com/r/staractive/leobridge/tags)，支持 amd64、arm64 | [Compose 部署](docs/deployment/docker.md) |
+| Linux 运行包 | [GitHub Releases](https://github.com/xinxingi/LeoBridge/releases)，选择所需版本的 x64 或 arm64 附件 | [下载、校验与启动](docs/deployment/local.md) |
+| Docker | [staractive/leobridge](https://hub.docker.com/r/staractive/leobridge/tags)，选择所需版本标签，支持 amd64、arm64 | [Compose 部署](docs/deployment/docker.md) |
 
 Release附件受GitHub仓库访问权限控制，私有仓库需先用有权限的账号登录；Docker Hub镜像可匿名拉取。
 

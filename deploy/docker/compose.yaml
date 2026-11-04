@@ -11,19 +11,12 @@ services:
     ports:
       - '127.0.0.1:8787:8787'
     environment:
-      # 浏览器实际访问地址；HTTPS 由 nginx/Caddy 提供，不加 /admin/ 或末尾 /。
+      # 浏览器实际访问地址；HTTPS 由 nginx/Caddy 提供
       BRIDGE_ORIGIN: http://127.0.0.1:8787
     # 数据就在 compose.yaml 旁边的 data 目录；不是 Docker 命名卷。
     volumes:
       - ./data:/data
       - ./tmp:/tmp # 下载、解压和构建的临时文件，使用当前目录的磁盘空间。
-    healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:8787/healthz',{signal:AbortSignal.timeout(2000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 3s
-      start_period: 30s
-      retries: 3
-    stop_grace_period: 30s
     logging:
       driver: json-file
       options:
