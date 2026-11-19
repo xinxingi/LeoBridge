@@ -75,7 +75,7 @@ NODE_ENV=production或direct/proxy模式默认不读取`.dev.vars`。配置来�
 
 ## 原生源码准备
 
-原生目录登记官方`mmwx-group/mmwx-probe`（`mmwx-probe`）与社区`chnnic/jiwo-probe`（`jiwo-probe`），按各自main解析到本次固定提交；`themes/native-source.ts`动态读取该提交的完整Git树，验证前台源码/公共资源路径、类型、blob摘要、大小及入口，不再保存固定版本白名单。`runtime/native-build.ts`在Node按需下载、安装锁定依赖并用自有esbuild配置构建原生前台，缓存和并发任务按来源标识与提交共同隔离。npm生命周期脚本禁用，不执行上游Worker/构建配置。Jiwo的主页面和Ran独立`map.html`一起构建，`@`别名由桥接器配置为临时源码中的`src/ran`。源码不进入LeoBridge仓库；下载与依赖安装只使用临时目录，成功或失败均清理，持久化安装仅保留静态产物、许可与固定资源索引。管理层经`StoreNetwork`传入确认的来源标识、提交和下载传输，Worker不能导入npm/esbuild或Node构建器。原生协议在`protocols/native`独立访问上游；展示槽位映射显式绑定，历史前后仍核对源身份顺序。研究参考清单仍保存历史审计版本，不作为运行时更新门槛。
+原生目录登记官方`mmwx-group/mmwx-probe`（`mmwx-probe`）与社区`chnnic/jiwo-probe`（`jiwo-probe`），按各自main解析到选定的固定提交；`themes/native-source.ts`动态读取该提交的完整Git树，验证前台源码/公共资源路径、类型、blob摘要、大小及入口，不再保存固定版本白名单。`runtime/native-build.ts`在Node按需下载、安装锁定依赖并用自有esbuild配置构建原生前台，缓存和并发任务按来源标识与提交共同隔离。npm生命周期脚本禁用，不执行上游Worker/构建配置。Jiwo的主页面和Ran独立`map.html`一起构建，`@`别名由桥接器配置为临时源码中的`src/ran`。源码不进入LeoBridge仓库；下载与依赖安装只使用临时目录，成功或失败均清理，持久化安装仅保留静态产物、许可与固定资源索引。管理层经`StoreNetwork`传入确认的来源标识、提交和下载传输，Worker不能导入npm/esbuild或Node构建器。原生协议在`protocols/native`独立访问上游；展示槽位映射显式绑定，历史前后仍核对源身份顺序。研究参考清单仍保存历史审计版本，不作为运行时更新门槛。
 
 Jiwo的可选`/api/theme-config`和`/api/visitor`辅助接口仅在该安装的展示上下文提供：空显示配置沿用前台自带默认值，访客资料明确为UNKNOWN/null等未知值；Node不伪造Cloudflare地理信息，不代理主控登录。数据快照、历史和实时继续使用独立原生协议。
 

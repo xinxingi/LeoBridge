@@ -2,7 +2,7 @@
 
 普通用户下载对应系统、架构的运行包，解压后直接启停。包内带有Node、应用、生产依赖和管理资源，目标机器无需安装Node、npm或pnpm，也不需要编译。
 
-从[GitHub Release v0.2.0](https://github.com/xinxingi/LeoBridge/releases/tag/v0.2.0)下载Linux运行包及对应`.sha256`附件。不要下载GitHub自动生成的`Source code`源码归档作为运行包。其他版本从[版本列表](https://github.com/xinxingi/LeoBridge/releases)选择；macOS自行构建见[开发文档](../development/build.md)，当前发布流程不生成macOS或Windows运行包。
+从[GitHub Releases](https://github.com/xinxingi/LeoBridge/releases)选择版本，下载Linux运行包及对应`.sha256`附件。不要把自动生成的`Source code`源码归档当作运行包。macOS自行构建见[开发文档](../development/build.md)；发布流程不生成macOS或Windows运行包。
 
 ## 获取和启动
 
@@ -10,17 +10,18 @@ Release附件受GitHub仓库权限控制。私有仓库需先登录有访问权�
 
 先用`uname -m`确认目标机器架构：
 
-| 系统输出 | v0.2.0附件 |
+| 系统输出 | 运行包附件 |
 | --- | --- |
-| `x86_64` | `leobridge-0.2.0-linux-x64.tar.gz`及同名`.sha256` |
-| `aarch64` / `arm64` | `leobridge-0.2.0-linux-arm64.tar.gz`及同名`.sha256` |
+| `x86_64` | `leobridge-<版本>-linux-x64.tar.gz`及同名`.sha256` |
+| `aarch64` / `arm64` | `leobridge-<版本>-linux-arm64.tar.gz`及同名`.sha256` |
 
-Linux官方Node运行时需要glibc；Alpine等环境建议使用[Docker镜像](docker.md)。将运行包和对应校验文件下载到同一目录，以下以x64为例，arm64替换两处包名及目录名：
+Linux官方Node运行时需要glibc；Alpine等环境可使用[Docker镜像](docker.md)。将运行包和校验文件放在同一目录。以下将包名替换为实际下载的文件名：
 
 ```sh
-sha256sum -c leobridge-0.2.0-linux-x64.tar.gz.sha256
-tar -xzf leobridge-0.2.0-linux-x64.tar.gz
-cd leobridge-0.2.0-linux-x64
+package_file='leobridge-<版本>-linux-x64.tar.gz'
+sha256sum -c "$package_file.sha256"
+tar -xzf "$package_file"
+cd "${package_file%.tar.gz}"
 ./leobridge.sh start
 ```
 

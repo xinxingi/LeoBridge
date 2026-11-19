@@ -1,92 +1,41 @@
 # 兼容范围与限制
 
-LeoBridge适配妙妙屋X探针数据，当前源码提供独立的原生、CFSM与Komari展示协议。下文v0.2.0发行产物不包含新增原生主题能力。兼容证据分为历史适配包与商店原包，发布运行包或镜像不会自动扩大主题兼容范围。
-
-## 2026-11-03 桥接字段接入核对
-
-详见[字段覆盖矩阵](bridge-field-coverage.md)。对20:44真实11台响应运行当前三个协议，778项等值/单位检查通过：原生保留全部55种实际服务器字段及11项系统历史；CFSM/Komari仅接入其中9项系统历史，累计流量丢弃。原生已支持价格/到期、周期与开机流量、回程及解锁；两个外部协议尚未映射。CFSM价格/到期/流量显示开关固定false，Komari最新状态Ping摘要为空。
-
-实际经临时回环只读代理查看原站首页、资源历史、周期日流量及解锁详情，页面确认上述数据存在；“近14天”日流量由daily_traffic聚合，不等于system/Ping提供14天历史。代理未转发WS，原域名浏览器直接访问曾持续空白；这不是双生态主题的新兼容验收。
-
-## 2026-11-03 数据字段复核
-
-新增[CFSM/Komari与妙妙屋数据差异分类](data-gap-audit.md)，区分源字段已提供、实例缺值和桥接尚未映射。本轮真实11台快照及单台1h/7d系统/Ping历史复核成功；这不是主题兼容或WS复验。价格字段在文档和固定消费者中存在：20:34基线11台均缺省，用户补充主控信息后20:44复核7台已返回有效原币价格、币种及CNY折算价，另4台仍缺省；同时7台返回非空unlocks共28条。CPU型号仍8/11，服务商仍2/11，单台抽查历史字段未变。不能因桥接价格为null而称上游没有价格能力；此次复核没有修改桥接映射。
-
-文档差异：探针API文档的系统历史字段表未列磁盘、TCP/UDP，实际接口均返回；文档范围仅列1h/6h/24h，实际声明7天并返回7d；`cumulative_*`文档写“当前周期”，实际显式scope为`current_boot`，流量口径专页也说明开机累计。按实际scope解释，不混用Xray计费周期与网卡流量。已有累计、价格、周期等源字段尚未映射的限制继续保留，不能把本次字段审计当作已实现。
+LeoBridge只读访问妙妙屋X公开探针接口，提供独立的原生、CFSM和Komari展示协议。采集、服务器管理和历史保存由源端负责，不实现原主控的登录、终端、远程控制或告警系统。
 
 ## 原生主题（两个来源均已验证兼容）
 
-2026-11-04用户确认：原生主题商店的官方`mmwx-group/mmwx-probe`与社区`chnnic/jiwo-probe`两个来源全部已验证兼容。这是用户提供的验收结论，按用户要求落实为两个原生来源的兼容状态：商店卡片、新安装及已有安装均显示绿色“已验证兼容”，启用时不再要求未验证确认。状态匹配生态、来源标识和仓库地址，已有安装另核对原生协议；明确标记不兼容的安装不被覆盖。此标记表示来源支持，不表示每个上游提交都重新完成逐项浏览器验收。下方保留首次接入时的实际观察与限制，旧记录中的未完成项不再代表两个来源的当前总体验收状态。
+支持官方`mmwx-group/mmwx-probe`和社区`chnnic/jiwo-probe`，协议均为`mmwx-native-v1`。2026-11-04的来源级验收结论由项目所有者确认；商店、新安装及已有安装据此显示`verified`，明确的`incompatible`状态不被覆盖。该结论没有附逐提交验收清单，不表示所有未来提交都已重新测试。
 
-新增[妙妙屋 X 原生主题](native-theme.md)，历史验收源码`mmwx-group/mmwx-probe@723427b18ea23a59a923a89155ebe1f3fa3fa824`，与CFSM/Komari一起使用安装、预览、启用和回退流程。数据使用独立原生路由和既有上游API，不经两个外部协议转换。原生商店现可直接检查上游更新，无需等待桥接器发布；外观可跟随主控，也可按安装版本选择快捷项或填写上游主题标识；不代理主控登录，不改变许可标记。真实11台首页、资源图表及原生实时帧已观察成功，四种外观完成合成浏览器检查；7d Ping接口成功但浏览器曾504后保留旧曲线，Premium部分缺值可显示0，首次验收时完整边界未通过。当前两来源的兼容结论和界面状态以上方说明为准。v0.2.0运行包或镜像不含此新增能力。
+两个来源分别按固定提交安装和更新。接口、构建及外观设置见[原生主题](native-theme.md)和[Jiwo](jiwo-native.md)。已知原主题显示限制仍保留：部分外观把缺失网速或费用显示为0，源请求失败后可能保留旧曲线。
 
-### 2026-11-04 原生外观来源待澄清
+## CFSM与Komari商店主题
 
-用户转述主控开发者确认主题都有。只读复核公开main `c666d2c3eda502d8174714d86235043b9ea2a8fb`：相对固定`723427b`仅新增Ping表头布局修复，公开分支列表仅main。当前App与styles仍只明确提供Pixel/Flat/Anime/Premium；合法自定义名称可透传成`theme-*`类，不等于具备相应视觉实现。已核对源码未找到Meow/液态玻璃入口，但不据此推断其他发布包或主控内部不存在。用户随后确认作者尚未将相关实现发布到GitHub；等待作者发布相关前台实现后直接安装更新。未更新固定来源、增加可选外观或扩大兼容声明。
+下表为2026-11-03在本地Node、真实妙妙屋X数据和实际前台中观察的结果。缺值、离线及故障补充检查使用合成源；这些原包均未通过完整边界验收，保持`unverified`。安装成功不等于协议兼容。
 
-### 2026-11-04 社区 · Jiwo首次来源接入记录
-
-原生商店新增[Jiwo Probe · 鸡窝状态站](jiwo-native.md)，来源`chnnic/jiwo-probe`，商店标识`jiwo-probe`；原官方`mmwx-probe`保留。两者按各自main独立检查更新，按来源与固定提交隔离构建缓存；Jiwo整套前台作为一个安装，默认外观按安装版本选择；前台浏览器记住的手动选择优先，前台改选“跟随主控”后才采用后台设置，见[外观优先级](jiwo-native.md#外观优先级)。LeoBridge不收录或搬迁其源码，运行时临时下载构建后清理，仅保存静态产物、许可和资源索引。
-
-审计提交`62cf6932bea20b7ead20c3c2d3b0e44ffdc06b29`已完成真实源码构建：159个产物文件、3707项远程公共资源索引，包含Ran独立地图入口及来源NOTICE。此首次构建结果仅证明构建与静态包处理，当时尚未完成浏览器及真实上游完整边界验收；当前Jiwo已获用户独立确认兼容，见本节开头。新安装记录已验证状态，依据Jiwo独立确认，不沿用官方前台或Komari同名主题的兼容结论。Jiwo可选显示配置沿用前台默认值，Node访客地理资料保持未知，不提供主控Passkey登录。仓库LICENSE为MSAL-1.0，安装前继续展示原文及来源声明，不套用LeoBridge的MIT。
-
-## 历史适配包
-
-以下前台曾完成浏览器验收，现已不随项目交付；它们包含的适配不能转移为商店原版的兼容结论：
-
-| 主题 | 固定上游版本 | 展示能力 |
+| 原包 | 已观察到的能力 | 已知限制 |
 | --- | --- | --- |
-| CFSM默认前台 | `609cc0b0998793510453be8eadced2064b28ad7d` | 首页、详情、系统与Ping历史、实时更新 |
-| Komari 官方默认前台 | `bed58b589da63232a17681b1dbaed9eab2423078` | 首页、详情、系统与Ping/丢包历史、实时更新 |
+| CFSM Emerald `0939eb9d6e7638ea301f9dd18a218eedba2420c2` | 首页、详情、1h图表、实时变化 | 7D触发原主题管理登录；未知字段可显示0、长期或无限 |
+| Komari Adhesive Note 1.0.0 | 首页、详情、实时、7d系统与Ping曲线 | 未知流量、进程、费用可显示0、Free或No expiry；历史缺口及故障未完整验收 |
+| CFSM Horizon `36253a8e90026b2bf22bc2625413a54c3ce9c861` | 首页、详情、7d系统与Ping曲线、实时变化 | 顶部统计可保留旧值；未知值和历史缺口可显示0；实时重绘会关闭范围菜单 |
+| Komari ServerStatus-Hotaru 1.0.0 | 实时表格、硬件明细、资源加载 | 无独立历史页面；未知值显示0，离线显示维护中；已打开页面在故障后可保留旧值 |
+| Komari Emerald 1.0.16 build-9f9a076 | 首页、详情、1h/7d系统、7d Ping曲线及实时变化 | 缺load/load5/load15时调用toFixed报错，相关卡片无法渲染；费用/流量可显示null、0或无限 |
 
-两个历史适配包曾通过本地真实数据与浏览器验证，官方 Komari 前台结果见[验收记录](komari-default-acceptance.md)。官方前端许可未声明为 MIT，详见[来源档案](../references/retired-themes/README.md)。旧 Adhesive Note 安装的协议保留。商店原包与内置适配包不同；发现或安装成功不代表兼容。Node已提供检查更新、单版本删除及失败清理重试；原生更新直接读取上游main并固定本次提交安装，Worker删除、主题配置编辑及失败安装孤立包自动清理尚未提供。Komari的raw/redirect声明保留但不在管理页执行，managed默认值按安装版本传入HTTP/WS；尚无配置编辑UI。
+固定Komari ZIP的SHA-256：
 
-LeoBridge提供独立的主题管理站，不提供CFSM或Komari的采集、服务器管理、终端、远程控制与告警功能。上游Token不提供给主题。single模式的正式主题及预览均与管理后台同源，只应预览和启用可信主题；需要隔离时使用isolated模式。
+| 原包 | SHA-256 |
+| --- | --- |
+| Adhesive Note 1.0.0 | `94f69c657413e7b3204cfea0bce94f1ee5deb1f897364664b27367b592d49c80` |
+| ServerStatus-Hotaru 1.0.0 | `b5d86521b2614b2ddd85ec049a80f2e9e739a1de77992fd43a15db049facd5d2` |
+| Emerald 1.0.16 build-9f9a076 | `f7fdf4f0af5849b425d7e1c4e91e50d39573c4de41136eb436e66cf8e5fe7794` |
 
-## 当前主题获取方式
+历史适配包CFSM默认前台`609cc0b0998793510453be8eadced2064b28ad7d`和Komari官方前台`bed58b589da63232a17681b1dbaed9eab2423078`曾验证首页、详情、系统/Ping历史与实时。Komari最终包的7d重复检查曾因上游超时失败；较早构建的成功不能代替该次检查。这些包已不随项目交付，其结果不适用于商店原包。来源、许可及补丁见[历史档案](../references/retired-themes/README.md)。
 
-默认不内置第三方主题，由管理员从商店按需安装。先展示实际固定版本、来源和许可文件，再主动勾选确认；安装时重新校验同一版本及摘要。记录知情决定，不作授权判断。许可信息缺失不代替包安全与兼容性检查；两个已确认的原生来源标为已验证，其他商店包默认未验证，详见[主题管理](../themes.md#主题获取与许可信息)。历史适配包兼容结论不覆盖商店原版。
+## 字段与协议
 
-已检查的固定商店原包如下，全部保留未验证状态，不宣称完整边界兼容。不同生态中的Emerald是不同主题：
-
-| 原包 | 已观察到的能力 | 已知限制与证据 |
-| --- | --- | --- |
-| CFSM Emerald `0939eb9d` | 真实首页、详情、1h图表和实时变化 | 7D触发原主题管理登录，未知字段可显示0/无限；[按需安装记录](theme-store-transition.md) |
-| Komari Adhesive Note 1.0.0 | 真实首页、详情、实时及7d系统/Ping曲线 | 未知字段可显示0/免费，完整故障和历史缺口边界未验收；[按需安装记录](theme-store-transition.md) |
-| CFSM Horizon `36253a8e` | 真实首页、详情、7d系统/Ping曲线及实时变化 | 全局统计可保留初始值，未知/历史缺口可显示0；[通用桥接记录](theme-bridge-acceptance.md) |
-| Komari ServerStatus-Hotaru 1.0.0 | 真实实时表格、硬件明细及资源加载 | 没有独立历史页面，未知值可显示0，离线显示维护中；[通用桥接记录](theme-bridge-acceptance.md) |
-| Komari Emerald 1.0.16 | 真实首页、详情、1h/7d系统与7d Ping曲线 | 缺负载时原主题toFixed报错，无法渲染相关卡片；费用/流量可显示null、0或无限；[通用桥接记录](theme-bridge-acceptance.md) |
-
-## 2026-11-03 通用资源与协议修复
-
-资源完整性不再等同于“所有依赖必须在ZIP里”。支持主题固定来源按需拉取、官方公共图像回退、公共CSS库字体依赖及HTTPS外链；仍核对摘要、路径及大小，详见[主题管理](../themes.md)和[资源来源](../references/theme-resource-sources.md)。不按主题名改写原包，不伪装完整CFSM/Komari管理后端。
-
-真实妙妙屋X快照11/11节点具有有效CPU、内存、磁盘和网络速率；同一快照与中立模型、CFSM、Komari转换比较0差异，CPU真零保留。此前Fixture Missing是缺值合成节点，不能当作真实源缺CPU的证据。
-
-按用户最新要求，展示页已移除“数据说明”，保留原主题显示逻辑；不支持的指标及原主题可能显示0、免费或无限的限制继续记录在本文。Komari Ping统计省略无法推导的可选分位数等字段，避免原主题对null调用toFixed，不伪造统计值。CFSM提供原生is_online别名，避免Horizon把离线误当在线。Emerald 1.0.16原版对缺失负载直接调用toFixed，合成缺值/离线节点会无法渲染卡片，属于已确认的原主题缺值边界限制；真实11台节点负载完整。具体原包浏览器复验结果见[通用桥接验收](theme-bridge-acceptance.md)。
-
-## 协议与来源
-
-- CFSM：`/api/config`、`/api/servers`、`/api/server`、`/api/history/all`和`/api/ws`；见[消费者契约](frontend-contract.md)。
-- Komari：`/api/rpc2`的HTTP与WebSocket JSON-RPC，以及有限REST兼容接口；见[协议说明](komari-protocol.md)和[主题前台](komari-frontend.md)。
-- 上游字段与历史格式见[输入契约](upstream-contract.md)，第三方来源与许可见[声明](../references/retired-themes/README.md)。
-
-## 数据转换
-
-
-| 源端事实 | 桥接及CFSM行为 | 证据/限制 |
-| --- | --- | --- |
-| `cpu_pct` | 百分比；0保留，缺失/无效为未知 | 源文档、真实结构及转换测试；不是重新采集 |
-| `mem_* / disk_*` | 中立模型byte，CFSM容量除以1024²为MiB | 已对照默认前台格式化消费 |
-| `download_speed / upload_speed` | `net_in_speed / net_out_speed`，B/s不缩放 | 源文档与默认前台消费一致 |
-| `cpu_threads` | 逻辑核心；不把物理`cpu_cores`无条件当逻辑线程 | 未知保持缺省 |
-| `online` | 显式true/false/null优先 | 上游不可达、数据过期不是服务器离线 |
-| `last_seen / uptime` | 离线源时间转毫秒；在线采用桥接观察时间；启动时间标记推算 | 不声称取得源端精确在线采样时间或开机时刻 |
-| `region_country / region` | 已知国家编码/Emoji转地区代码；未知不编造 | 图标优先来自主题，缺失时读取固定官方公共资源 |
-| Ping目标 | 显式key→CFSM槽位，不按数组位置或ISP唯一性推断 | 源目标数量可变；桥接最多8槽，未选目标不展示 |
-| Ping `-1` | 无数据；保持CFSM `false`/空点语义 | 不能改为0延迟；只有明确100%丢包且无有效RTT才表示超时 |
-| `traffic_* / cumulative_*` | 累计、月流量和计费字段当前不映射，显示未知 | 计费用量为configured_period、来源xray；网卡/开机累计为current_boot。不同口径不得混用 |
-| Swap/GPU/磁盘IO/进程等 | 未支持，不填0或编造历史 | 协议保留未知；各主题的实际显示需单独验收 |
+- [数据字段](data-fields.md)：单位、标准字段、`bridge.data`扩展和源端缺口。
+- [输入契约](upstream-contract.md)：妙妙屋X快照、历史及实时格式。
+- [CFSM消费者契约](frontend-contract.md)：REST与`/api/ws`。
+- [Komari协议](komari-protocol.md)：`/api/rpc2` HTTP/WebSocket及有限REST接口。
 
 ## 历史范围
 
@@ -125,47 +74,12 @@ timestamp_ms = (floor(generated_at / bucket_sec) * bucket_sec
 
 Token仅用于服务端访问配置的源，拒绝重定向。展示站的local/public/private策略与主题管理认证独立；private保护HTML、资源、HTTP和WebSocket。
 
-## 部署边界
+## 主题管理与部署边界
 
-v0.2.0提供[Docker Hub镜像](../deployment/docker.md)和[Linux x64/arm64运行包](../deployment/local.md)，下载入口见[部署方式](../deployment-checklist.md)。文件存储按单站、单进程、单副本运行。Node实时访客连接上限为50；尚无生产容量或高可用保证。跨应用版本升级/降级尚未完成完整验证。
+Node支持安装、预览、启用、回退、检查更新和版本删除；更新安装不会自动启用。Komari配置使用managed默认值，保留raw/redirect声明但不执行其管理界面；尚无主题配置编辑UI。安装与资源加载规则见[主题管理](../themes.md)。
 
-本地`leobridge.sh`只负责后台启停和状态/日志管理，不下载Node、不安装pnpm或依赖、不构建。运行包包含Node、已构建应用及生产依赖。脚本不提供开机自启或崩溃自动拉起；管理与打包检查不增加主题兼容结论。发布工作流在Linux x64/arm64原生运行器检查运行包和容器的启动、默认改密及重启持久化，具体运行结果以对应Actions任务为准；这不能替代用户目标服务器、真实源或前台验收。历史macOS arm64本地运行包测试不表示当前Release提供macOS附件。
+默认single模式的展示、预览与管理同源，只应安装可信主题；需要独立源时使用isolated。Token只在服务端保存。来源与许可见[参考资料](../references/README.md)，安全边界见[安全说明](../../SECURITY.md)。
 
-[Cloudflare Workers](../deployment/workers.md)留待后续适配，当前不作为已支持的部署方式。保留实现中，R2存主题静态包，单站Durable Object存主题元数据、管理会话及私有数据源配置；不使用D1，不持久化采集历史。Workers尚无跨isolate共享限流。
+Node文件存储按单站、单进程、单副本运行，实时访客连接上限为50。没有生产容量、高可用或跨应用版本状态降级保证。运行包脚本不提供开机自启或崩溃拉起；升级前需备份完整状态，见[部署指南](../deployment-checklist.md)。
 
-每个部署环境都应检查上游访问和前台行为；本地部署无需域名或证书。对外访问时，域名、TLS及反向代理由部署者配置并单独验证。构建、合成测试或本地运行不能替代目标环境验证。架构设计见[ADR 001](../decisions/001-theme-protocol-boundaries.md)。
-
-
-## 2026-11-03：中立数据准备与可靠衍生
-
-新增`core/prepared-data.ts`及CFSM/Komari的`bridge.data`扩展：资源衍生、带source/scope的流量、日账本汇总、价格月/年折算、UTC日期倒计时、完整源Ping目标桶摘要及公共元信息。中立历史保留累计U/D源桶，两个协议以`bridge.sourceCounters`提供，不假造精确区间增量；Komari扁平近期补load5/load15。标准价格/额度/累计字段和主题开关不强行映射，不扩大实际主题兼容声明。当前剩余基础缺口见[data-gap-audit](data-gap-audit.md)第2类，实施状态见[bridge-field-coverage](bridge-field-coverage.md)文首。
-
-验证：pnpm check（267测试、架构/类型/构建）、构建后Node运行时3项通过；20:44真实响应回放778+189项检查通过。未执行新增实时源调用、浏览器/WS验收、VPS/云部署、推送。价格缺4台、CPU型号缺3台等仍属节点资料/上报覆盖问题，不列为接口整体无能力。
-
-
-## 2026-11-03：部署配置与诊断修复（源码，待发布）
-
-用户反馈生产Caddy反代部署经调整为proxy及实际Docker网关后成功；这是用户提供的部署结果，本轮未操作生产服务器。源码现拒绝direct/local搭配HTTPS源，新增只读配置预检查、脱敏启动原因和首次不可信代理来源日志；NODE_ENV=production不自动读取开发文件。Host/Origin/CSRF与HTTP/WS信任边界保持，临时依赖空间默认调整为512MiB上限。
-
-本地273项测试、构建后4项运行时检查、macOS arm64实际运行包以及Compose配置/已创建网络查询通过；新镜像完整构建受Docker Hub元数据502阻塞，修改后的Compose镜像启动验收未完成。未重新验收真实Caddy/TLS、生产前台或容器原生主题安装，不扩大主题兼容声明。部署步骤见[Docker](../deployment/docker.md)与[反代](../deployment/reverse-proxy.md)。
-
-
-## 2026-11-04：统一配置与本地数据布局（源码，待发布）
-
-Node新实例使用./data，存在旧work/theme-store且未显式选目录时要求迁移；Docker采用`./data:/data:Z`普通目录映射，模板直接填值、不再需要.env。运行包、systemd、只读诊断及文档已同步；Worker示例统一single站点，但持久化仍为R2/DO。proxy内部默认8787与外部HTTPS端口分离，高级隔离配置仍兼容。
-
-274项测试、构建后4项运行时、macOS arm64运行包与实际data持久化通过；缓存完整运行镜像下的新Compose短映射、UID1000写入和重建持久化通过。未构建新镜像、验收SELinux实际标签、systemd服务、生产Caddy或云端，不扩展主题兼容声明。
-
-
-## 2026-11-04：默认HTTP接入简化（源码，待发布）
-
-本条取代前述direct+HTTPS拒绝策略。single的local/direct始终监听HTTP，使用显式站点源协议生成链接和Cookie，支持nginx/Caddy提供的HTTPS公开站点；不信任转发头，继续验证Host、Origin、CSRF，默认按socket来源限流。高级proxy仍保留严格来源/IP识别。Compose仅列BRIDGE_ORIGIN，其余运行默认值放回镜像和程序。
-
-275项测试、构建后5项运行时及新Linux arm64镜像的实际Compose检查通过；真实本机Caddy/TLS下管理登录、改密、Secure Cookie及Origin/CSRF拒绝通过，app只配置站点地址。本轮解除此前镜像构建502阻塞；未发布镜像或更新生产，不代表真实主题兼容或云端验收。
-
-
-## 2026-11-04：原生外观目录发现
-
-原生mmwx-probe固定提交38848348f91d73694894a873ab05f5c282074058已包含sweet（天真）样式；此前LeoBridge管理下拉框硬编码导致更新前台后仍漏项。当前管理state接口按已安装CSS根选择器和JS appearance.theme字面量分支发现选项；无须修改或重装已有包。上游该版本的Worker路由没有完整外观目录，当前appearance只代表当前选择，不能作为全部选项。未来若改变实现约定，静态发现可能不完整，保留自定义ID；不据此标记兼容。
-
-实际旧48e14d0包发现anime/flat/pixel/premium，新38848348包增加sweet。真实新前台在隔离合成源上经管理UI保存sweet，实际粉色波点、28px圆角及阴影显示通过。仅验证本轮选择与渲染，不代表真实主控全功能、新主题生态或生产部署通过。日志和截图work/native-options/；297项项目测试、5项构建后Node运行时、Worker本地打包通过，未执行云端部署。
+Cloudflare Workers仍为实验实现，未完成云端验收，不列为支持的部署方式。本地构建、合成测试及CI通过不能代替目标服务器和真实主题验证。

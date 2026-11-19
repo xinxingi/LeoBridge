@@ -12,14 +12,14 @@
 
 该历史适配阶段支持相对历史范围，拒绝任意起止日期及非源桶聚合请求；当时 `public:getPingMetricStats` 返回空统计及明确限制，丢包率由独立源桶曲线呈现。当前协议已提供可由真实源桶计算的摘要，仍不伪造逐包计数或分位数，见[现行统计语义](komari-protocol.md#ping统计可选值与原生差异)。管理、终端、安装恢复页面、临时密钥 cookie 入口与 PWA 注册未纳入公共应用。
 
-固定安装 profile 为 `komari-default-bed58b5`，适配包为 `LeoBridgeKomariDefault / bed58b5-leobridge.1`。验收见[官方前台验收](komari-default-acceptance.md)。这些标识仅用于识别历史适配安装；当前构建不会生成或自动导入该包。
+固定安装 profile 为 `komari-default-bed58b5`，适配包为 `LeoBridgeKomariDefault / bed58b5-leobridge.1`。验收见[兼容清单](compatibility.md)。这些标识仅用于识别历史适配安装；当前构建不会生成或自动导入该包。
 
 ## 旧便签纸适配记录
 
 以下为Adhesive Note适配包的来源与契约，不代表商店原包已完整兼容。
 
 
-2026-11-02。选用官方Komari商店目录中的 **Adhesive Note v1.0.0**，仓库 [stqfdyr/komari-theme-adhesive-note](https://github.com/stqfdyr/komari-theme-adhesive-note/tree/8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914)，固定提交 `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914`。不是自造占位界面。
+2026-11-02。选用官方Komari商店目录中的 **Adhesive Note v1.0.0**，仓库 [stqfdyr/komari-theme-adhesive-note](https://github.com/stqfdyr/komari-theme-adhesive-note/tree/8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914)，固定提交 `8ac4fd2fe4fb4cabde84ddc31c8cd9e9df966914`。
 
 Adhesive Note代码采用MIT，字体与图形适用各自条款，见[第三方素材说明](../references/retired-themes/komari/THIRD_PARTY.md)。
 

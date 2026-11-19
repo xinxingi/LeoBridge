@@ -1,6 +1,6 @@
 # 安全说明
 
-LeoBridge当前发行版本为v0.2.0，仍处于早期阶段，没有经过独立安全审计或生产容量、高可用验证。发行包和镜像的发布不代表这些验证已完成。部署方式及限制见[部署说明](docs/deployment-checklist.md)。
+LeoBridge尚未经过独立安全审计、生产容量或高可用验证。部署方式及限制见[部署说明](docs/deployment-checklist.md)。
 
 ## 报告问题
 

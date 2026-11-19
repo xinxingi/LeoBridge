@@ -78,6 +78,12 @@ chmod 600 backups/*.tar.gz
 docker compose up -d
 ```
 
+## 旧命名卷迁移
+
+从命名卷改为`./data`目录前，先停止旧容器并备份整个卷。将卷内全部内容复制到Compose旁的空`data`目录，保留`state.json`与`packages/`层级，再按容器运行用户设置所有权（默认UID/GID为1000）和目录权限。
+
+确认Compose挂载`./data:/data`后启动，检查原管理密码、数据源和已安装主题仍可用。验收前保留旧卷和备份；不要把两套状态合并，也不要让新旧实例同时写入。回退时停机并恢复原配置和对应备份。
+
 ## 升级与排障
 
 升级前备份data及Compose；`docker compose pull app`后执行`docker compose up -d --no-build`，保持同一data目录。
