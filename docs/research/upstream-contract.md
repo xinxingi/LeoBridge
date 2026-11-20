@@ -1,6 +1,6 @@
 # 妙妙屋X实测输入契约
 
-核验日期：2026-11-02。依据为授权主控的只读响应和其页面实际引用的探针脚本片段；主控/Agent版本仍未知。本文件不包含地址、Token、服务器名称、真实指标值或原始响应。原始材料只在被忽略的 `work/private/live-contract/`。
+核验日期：2026-11-02。依据为授权主控的只读响应和其页面实际引用的探针脚本片段；主控/Agent版本仍未知。原始响应含私有数据，不随仓库分发。
 
 ## 历史范围与时间
 
@@ -32,7 +32,7 @@ bucketTimestampSeconds = generated_at - generated_at % bucket_sec
 
 ## 流量、缺省与目标身份
 
-文档字节单位与当前字段一致；本次只读观察没有改变采集配置或制造计数变化，单位结论主要来自文档，不能描述为独立标定实验。
+字节单位依据上游文档；只读响应核对不构成独立单位标定。
 
 - `traffic_source=xray`、`traffic_used_scope=configured_period`，观察到 `traffic_stats_mode=both|upload`。这是计费配置口径，不能当成网卡累计流量，也不能冒充自然月流量。
 - `boot_traffic_scope=current_boot` 和 `cumulative_traffic_scope=current_boot`；本主控当前启动周期累计网卡流量可对应同口径展示，勿与套餐用量混用。

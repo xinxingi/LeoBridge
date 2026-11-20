@@ -8,7 +8,7 @@
 - 实际消费证据：该提交 `src/api/queries.ts`、`src/api/types.ts`、`src/lib/rpc2.ts`。该主题优先复用 `/api/rpc2` WebSocket，按请求 ID 收取 JSON-RPC 2.0 响应；无法连接时用同路径 HTTP POST。心跳是无 ID 的 `rpc.ping` notification。
 - Komari 核心参考：`komari-monitor/komari@96cf0f79d8cfdf6cc8be54fd1976bbc026d58f7f` 的 `web/rpc/jsonrpc/public.go`、`common.go`、`web/api/ws.go`、`protocol/v2/jsonrpc.go`、`database/models/models.go`、`web/router/router.go`。仅作只读协议参考，桥接器不运行 Komari 后端或 Agent。
 - 历史官方前台固定 `komari-monitor/komari-web@bed58b589da63232a17681b1dbaed9eab2423078`，原应用副本已移除。无独立 LICENSE，保留 README 的二次开发说明并标为 NOASSERTION，不能用核心 MIT 代替前端许可。
-- 官方消费者及限制见[前台契约](komari-frontend.md)，浏览器结果见[验收](komari-default-acceptance.md)。
+- 官方消费者及限制见[前台契约](komari-frontend.md)，浏览器结果见[兼容清单](compatibility.md)。
 
 ## 已实现的独立输出协议
 

@@ -2,9 +2,9 @@
 
 普通用户使用预编译产物，目标机器不安装开发工具或编译。
 
-| 方式 | 操作 | 当前交付状态 |
+| 方式 | 操作 | 产物 |
 | --- | --- | --- |
-| [本地运行包](deployment/local.md) | 下载对应平台的运行包，校验后解压并用脚本启停 | [v0.2.0 Release](https://github.com/xinxingi/LeoBridge/releases/tag/v0.2.0)，Linux x64 / arm64 |
+| [本地运行包](deployment/local.md) | 下载对应平台的运行包，校验后解压并用脚本启停 | [GitHub Releases](https://github.com/xinxingi/LeoBridge/releases)，Linux x64 / arm64 |
 | [Docker Hub镜像](deployment/docker.md) | 默认使用latest镜像，Compose拉取并运行，配置直接写在Compose，数据保存到旁边的./data | [Docker Hub标签](https://hub.docker.com/r/staractive/leobridge/tags)，linux/amd64、linux/arm64；可用固定版本或摘要锁定 |
 
 构建源码、制作运行包和自行构建镜像统一见[开发文档](development/build.md)。Cloudflare Workers暂未作为支持的部署方式。
